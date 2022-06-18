@@ -7,6 +7,7 @@ use self::lexer::{TokenType, Token};
 type ParseResult<T> = Result<T, ParseError>;
 #[derive(Debug, PartialEq)]
 pub(crate) enum ParseError {
+    LexingError(String),
     UnexpectedEOF(TokenType),
     UnexpectedToken(TokenType, TokenType),
 }
@@ -14,8 +15,10 @@ pub(crate) enum ParseError {
 impl Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::LexingError(msg) =>
+                write!(f, "LexingError: {:?}", msg),
             Self::UnexpectedEOF(expected) =>
-            write!(f, "Unexpected End of File: Expected {:?}", expected),
+                write!(f, "Unexpected End of File: Expected {:?}", expected),
             Self::UnexpectedToken(expected, found) =>
                 write!(f, "Unexpected Token: Expected {:?}. Found {:?}.", expected, found),
         }
