@@ -69,7 +69,7 @@ impl<'a> Parser<'a> {
         !self.is_eof() && self.peek().token_type == token_type
     }
 
-    fn peek_match(&self, expected_token_type: TokenType) -> Result<&Token, ParseError> {
+    fn take(&self, expected_token_type: TokenType) -> Result<&Token, ParseError> {
         if self.is_eof() {
             return Err(ParseError::UnexpectedEOF(expected_token_type));
         }
@@ -89,7 +89,7 @@ impl<'a> Parser<'a> {
 
     // COMMENT        = ('#' | ';') ANY* NL
     fn parse_comment(&mut self) -> ParseResult<()> {
-        let _ = self.peek_match(TokenType::Comment)?;
+        let _ = self.take(TokenType::Comment)?;
 
         self.advance();
         Ok(())
@@ -105,14 +105,14 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_section_header(&mut self) -> ParseResult<SectionHeader> {
-        let _ = self.peek_match(TokenType::SectionHeaderStart)?;
+        let _ = self.take(TokenType::SectionHeaderStart)?;
         self.advance();
 
-        let token = self.peek_match(TokenType::Text)?;
+        let token = self.take(TokenType::Text)?;
         let section_header: SectionHeader = token.content.into();
         self.advance();
 
-        let _ = self.peek_match(TokenType::SectionHeaderEnd)?;
+        let _ = self.take(TokenType::SectionHeaderEnd)?;
         self.advance();
 
         Ok(section_header)
