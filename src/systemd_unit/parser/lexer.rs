@@ -1,15 +1,17 @@
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub(crate) enum TokenType {
-    Comment,
+    Comment, // #... or ;...
     SectionHeaderStart, // [
     SectionHeaderEnd,  // ]
     Text,
     KVSeparator, // =
     NL,  // \n
-    ContiueNL,  // \\\n
+    WS,  // \s+
+    ContinueNL,  // \\\n
     QuoteDouble,  // "
     QuoteSingle,  // '
-    //EscapeSequence, // "\a"
+    //EscapeSequence, // e.g. "\a"
+    EOF,
 }
 
 #[derive(Debug)]
@@ -27,9 +29,9 @@ impl<'a> Token<'a> {
     }
 }
 
-pub(crate) struct Tokenizer;
+pub(crate) struct Lexer;
 
-impl Tokenizer {
+impl Lexer {
     pub(crate) fn tokens_from(data: &str) -> Vec<Token> {
         Vec::new()
     }

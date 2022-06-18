@@ -1,8 +1,8 @@
-pub(crate) mod tokenizer;
+pub(crate) mod lexer;
 
 use std::{fmt::Display};
 
-use self::tokenizer::{TokenType, Token};
+use self::lexer::{TokenType, Token};
 
 type ParseResult<T> = Result<T, ParseError>;
 #[derive(Debug, PartialEq)]
