@@ -528,7 +528,6 @@ mod tests {
         }
 
         #[test]
-        #[ignore]
         fn test_with_interspersed_comments_succeeds() {
             let tokens = vec![
                 Token::new(TokenType::SectionHeaderStart, "["),
