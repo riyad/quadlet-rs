@@ -100,9 +100,7 @@ KeyOne = value 1.2";
             assert!(result.is_err());
         }
 
-        #[test]
-        #[ignore]
-        fn test_systemd_syntax_example_1_succeeds() {
+        #[test]        fn test_systemd_syntax_example_1_succeeds() {
             let data = "[Section A]
 KeyOne=value 1
 KeyTwo=value 2

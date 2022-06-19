@@ -64,7 +64,12 @@ impl Lexer {
                 continue;
             } else {
                 // TODO: we could check if any of the previous lines was a ContinueNL
-                tokens.push(Token::new(TokenType::Text, line));
+                if line.ends_with('\\') {
+                    tokens.push(Token::new(TokenType::Text, &line[0..line.len()-1]));
+                    tokens.push(Token::new(TokenType::ContinueNL, &line[line.len()-1..line.len()]));
+                } else {
+                    tokens.push(Token::new(TokenType::Text, line));
+                }
                 continue;
             }
             // TODO: tokenize quotes
@@ -158,6 +163,24 @@ Else";
             assert_eq!(tokens[2], Token::new(TokenType::Text, "Something "));
             assert_eq!(tokens[3], Token::new(TokenType::ContinueNL, "\\"));
             assert_eq!(tokens[4], Token::new(TokenType::Text, "Else"));
+            assert_eq!(tokens.last().unwrap().token_type, TokenType::EOF);
+        }
+
+        #[test]
+        fn test_with_empty_line_continuations_succeeds() {
+            let data = "KeyOne = \\
+\\
+late text";
+
+            let tokens = Lexer::tokens_from(data).unwrap();
+            assert_eq!(tokens.len(), 8);
+            assert_eq!(tokens[0], Token::new(TokenType::Text, "KeyOne"));
+            assert_eq!(tokens[1], Token::new(TokenType::KVSeparator, "="));
+            assert_eq!(tokens[2], Token::new(TokenType::Text, ""));
+            assert_eq!(tokens[3], Token::new(TokenType::ContinueNL, "\\"));
+            assert_eq!(tokens[4], Token::new(TokenType::Text, ""));
+            assert_eq!(tokens[5], Token::new(TokenType::ContinueNL, "\\"));
+            assert_eq!(tokens[6], Token::new(TokenType::Text, "late text"));
             assert_eq!(tokens.last().unwrap().token_type, TokenType::EOF);
         }
 

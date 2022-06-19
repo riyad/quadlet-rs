@@ -176,14 +176,33 @@ impl<'a> Parser<'a> {
         Ok(unit)
     }
 
-    // VALUE          = [QUOTE WS | ANY*]* CONTINUE_NL VALUE | [QUOTE | ANY*]* NL
-    // NOTE: this is not what the code does ATM (at all!
-    // more like: VALUE = ANY* NL
+    // VALUE          = [QUOTE WS | ANY*]* CONTINUE_NL [COMMENT]* VALUE | [QUOTE | ANY*]* NL
+    // NOTE: this is not what the code does ATM (at all)!
+    // more like: VALUE = ANY* CONTINUE_NL [COMMENT]* VALUE
     fn parse_value(&mut self) -> ParseResult<String> {
-        let value: String = self.take(TokenType::Text)?.content.into();
+        let mut value: String = self.take(TokenType::Text)?.content.into();
         self.advance();
 
-        // TODO: parse line continuations
+        if !self.is_eof() {
+            match self.peek().token_type {
+                TokenType::ContinueNL => {
+                    self.advance();
+
+                    while !self.is_eof() {
+                        match self.parse_comment() {
+                            Ok(_) => {},
+                            Err(_) => break,
+                        }
+                    }
+
+                    let more_value = self.parse_value()?;
+                    value += format!(" {more_value}").as_str();
+
+                },
+                _ => {},
+            }
+        }
+
         // TODO: parse quotes
         // TODO: parse escape sequences
 
@@ -716,7 +735,6 @@ mod tests {
         }
 
         #[test]
-        #[ignore]
         fn test_turn_continuation_into_space() {
             let tokens = vec![
                 Token::new(TokenType::Text, "this is some text"),
@@ -730,6 +748,45 @@ mod tests {
                 Ok("this is some text more text".into())
             );
             assert_eq!(parser.pos, old_pos+3);
+        }
+
+        #[test]
+        fn test_with_empty_line_continuations_succeeds() {
+            let tokens = vec![
+                Token::new(TokenType::Text, ""),
+                Token::new(TokenType::ContinueNL, "\\"),
+                Token::new(TokenType::Text, ""),
+                Token::new(TokenType::ContinueNL, "\\"),
+                Token::new(TokenType::Text, "late text"),
+            ];
+            let mut parser = Parser::new(tokens);
+            let old_pos = parser.pos;
+            assert_eq!(
+                parser.parse_value(),
+                Ok("  late text".into())
+            );
+            assert_eq!(parser.pos, old_pos+5);
+        }
+
+        #[test]
+        fn test_with_interspersed_comments_suceeds() {
+            let tokens = vec![
+                Token::new(TokenType::Text, "some text"),
+                Token::new(TokenType::ContinueNL, "\\"),
+                Token::new(TokenType::Comment, "# foo"),
+                Token::new(TokenType::Comment, "; bar"),
+                Token::new(TokenType::Text, "more text"),
+                Token::new(TokenType::ContinueNL, "\\"),
+                Token::new(TokenType::Comment, "; baz"),
+                Token::new(TokenType::Text, "some more"),
+            ];
+            let mut parser = Parser::new(tokens);
+            let old_pos = parser.pos;
+            assert_eq!(
+                parser.parse_value(),
+                Ok("some text more text some more".into())
+            );
+            assert_eq!(parser.pos, old_pos+8);
         }
     }
 }

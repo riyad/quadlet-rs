@@ -14,7 +14,7 @@ This is a rough grammar extracted from the text in https://www.freedesktop.org/s
 > SECTION_HEADER = '[' ANY+ ']' NL
 > ENTRY          = KEY WS* '=' WS* VALUE NL
 > KEY            = [A-Za-z0-9-]
-> VALUE          = [QUOTE WS | ANY*]* CONTINUE_NL [VALUE | COMMENT] | [QUOTE | ANY*]* NL
+> VALUE          = [QUOTE WS | ANY*]* CONTINUE_NL [COMMENT]* VALUE | [QUOTE | ANY*]* NL
 > QUOTE          =  '"' QUOTE_DQ* '"' | '\'' QUOTE_SQ* '\''
 > QUOTE_DQ       = [^"]* | [^"]* CONTINUE_NL QUOTE_DQ_MORE
 > QUOTE_DQ_MORE  = COMMENT | QUOTE_DQ
@@ -38,7 +38,7 @@ After that we only have "significant" data to parse:
 > SECTION_HEADER = '[' [^]]+ ']'NL
 > ENTRY          = KEY WS* '=' WS* VALUE NL
 > KEY            = [A-Za-z0-9-]
-> VALUE          = [QUOTE WS | ANY*]* CONTINUE_NL VALUE | [QUOTE | ANY*]* NL
+> VALUE          = [QUOTE WS | ANY*]* CONTINUE_NL [COMMENT]* VALUE | [QUOTE | ANY*]* NL
 > QUOTE          =  '"' QUOTE_DQ* '"' | '\'' QUOTE_SQ* '\''
 > QUOTE_DQ       = [^"]* | [^"]* CONTINUE_NL QUOTE_DQ
 > QUOTE_SQ       = [^']* | [^']* CONTINUE_NL QUOTE_SQ
