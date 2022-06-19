@@ -14,37 +14,21 @@ This is a rough grammar extracted from the text in https://www.freedesktop.org/s
 > SECTION_HEADER = '[' ANY+ ']' NL
 > ENTRY          = KEY WS* '=' WS* VALUE NL
 > KEY            = [A-Za-z0-9-]
-> VALUE          = [QUOTE WS | ANY*]* CONTINUE_NL [COMMENT]* VALUE | [QUOTE | ANY*]* NL
-> QUOTE          =  '"' QUOTE_DQ* '"' | '\'' QUOTE_SQ* '\''
-> QUOTE_DQ       = [^"]* | [^"]* CONTINUE_NL QUOTE_DQ_MORE
-> QUOTE_DQ_MORE  = COMMENT | QUOTE_DQ
-> QUOTE_SQ       = [^']* | [^"]* CONTINUE_NL QUOTE_SQ_MORE
-> QUOTE_SQ_MORE  = COMMENT | QUOTE_SQ
+> VALUE          = ANY* CONTINUE_NL [COMMENT]* VALUE
 > ANY            = . <-- all characters except NL
 > WS             = \s
 > NL             = \n
 > CONTINUE_NL    = '\' NL
 
-Especially the '\' line continuations make things comlicated. :/
+Especially the '\' line continuations make things complicated. :/
 
-## Simplification
+## Quotes
 
-IMHO the grammar is a lot simpler when we filter the comments out first.
-I.e. we split at '\n' and remove empty and comment lines.
-After that we only have "significant" data to parse:
+Quoting is only allowed for certain settings.
+For optional unquoting we can extract the following grammar from the text in https://www.freedesktop.org/software/systemd/man/systemd.syntax.html#Quoting .
 
-> UNIT           = SECTION*
-> SECTION        = SECTION_HEADER [ENTRY]*
-> SECTION_HEADER = '[' [^]]+ ']'NL
-> ENTRY          = KEY WS* '=' WS* VALUE NL
-> KEY            = [A-Za-z0-9-]
-> VALUE          = [QUOTE WS | ANY*]* CONTINUE_NL [COMMENT]* VALUE | [QUOTE | ANY*]* NL
-> QUOTE          =  '"' QUOTE_DQ* '"' | '\'' QUOTE_SQ* '\''
-> QUOTE_DQ       = [^"]* | [^"]* CONTINUE_NL QUOTE_DQ
-> QUOTE_SQ       = [^']* | [^']* CONTINUE_NL QUOTE_SQ
-> ANY            = . <-- all characters except NL
-> WS             = \s
-> NL             = \n
-> CONTINUE_NL    = '\' NL
-
-We still can't get rid of line continuations though.
+> VALUE_TEXT = ITEM [WS ITEM]* NL
+> ITEM       = QUOTE | [^WS]*
+> QUOTE      = '"' (ESCAPE_SEQ | [^"])* '"' | '\'' (ESCAPE_SEQ | [^'])* '\''
+> ESCAPE_SEQ = '\' ([abfnrtv\"'s] | 'x' HEX{2} | 'u' HEX{4} | 'U' HEX{8} )
+> WS         = \s
