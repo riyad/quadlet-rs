@@ -8,7 +8,7 @@ use super::{SystemdUnit, Entry, Section};
 type ParseResult<T> = Result<T, ParseError>;
 #[derive(Debug, PartialEq)]
 pub(crate) enum ParseError {
-    CannotContinue(String),
+    General(String),
     InvalidKey(String),
     LexingError(String),
     UnexpectedEOF(TokenType),
@@ -18,7 +18,7 @@ pub(crate) enum ParseError {
 impl Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::CannotContinue(msg) =>
+            Self::General(msg) =>
                 write!(f, "{msg:?}"),
             Self::InvalidKey(key) =>
                 write!(f, "Invalid key {key:?}. Allowed characters are A-Za-z0-9-"),
@@ -124,11 +124,8 @@ impl<'a> Parser<'a> {
                     let _ = self.parse_comment();
                 },
                 TokenType::Text => {
-                    match self.parse_entry() {
-                        Ok(entry) => section.entries.push(entry),
-                        Err(ParseError::CannotContinue(_)) => {},
-                        Err(e) => return Err(e),
-                    }
+                    let entry = self.parse_entry()?;
+                    section.entries.push(entry);
                 },
                 _ => break,
             }
@@ -163,13 +160,10 @@ impl<'a> Parser<'a> {
                     let _ = self.parse_comment();
                 },
                 TokenType::SectionHeaderStart => {
-                    match self.parse_section() {
-                        Ok(section) => unit.sections.push(section),
-                        Err(ParseError::CannotContinue(_)) => {},
-                        Err(e) => return Err(e),
-                    }
+                    let section = self.parse_section()?;
+                    unit.sections.push(section);
                 },
-                _ => return Err(ParseError::CannotContinue("Expected comment or section".into())),
+                _ => return Err(ParseError::General("Expected comment or section".into())),
             };
         }
 
