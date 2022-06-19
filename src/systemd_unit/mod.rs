@@ -35,10 +35,10 @@ impl SystemdUnit {
 
     fn section_entries(&self, section_name: &str) -> Vec<Entry> {
         self.sections.iter()
-          .filter(|s| s.name == section_name)
-          .map(|s| s.entries.clone())
-          .flatten()
-          .collect()
+            .filter(|s| s.name == section_name)
+            .map(|s| s.entries.clone())
+            .flatten()
+            .collect()
     }
 }
 
@@ -101,15 +101,56 @@ KeyOne = value 1.2";
         }
 
         #[test]
-        fn test_spaces_around_equals_should_be_ignored() {
+        #[ignore]
+        fn test_systemd_syntax_example_1_succeeds() {
+            let data = "[Section A]
+KeyOne=value 1
+KeyTwo=value 2
+
+# a comment
+
+[Section B]
+Setting=\"something\" \"some thing\" \"…\"
+KeyTwo=value 2 \\
+      value 2 continued
+
+[Section C]
+KeyThree=value 3\\
+# this line is ignored
+; this line is ignored too
+      value 3 continued";
+
+            let unit = SystemdUnit::from_string(data).unwrap();
+
+            assert_eq!(unit.sections.len(), 3);
+            assert_eq!(
+                unit,
+                SystemdUnit {
+                    sections: vec![
+                        Section {
+                            name: "Section A".into(),
+                            entries: vec![
+                                ("KeyOne".into(), "value 1".into()),
+                                ("KeyTwo".into(), "value 2".into()),
+                            ],
+                        },
+                        Section {
+                            name: "Section B".into(),
+                            entries: vec![
+                                ("Setting".into(), "\"something\" \"some thing\" \"…\"".into()),
+                                ("KeyTwo".into(), "value 2        value 2 continued".into()),
+                            ],
+                        },
+                        Section {
+                            name: "Section C".into(),
+                            entries: vec![
+                                ("KeyThree".into(), "value 3       value 3 continued".into()),
+                            ],
+                        },
+                    ],
+                }
+            );
         }
 
-        #[test]
-        fn test_multi_line_values_should_work() {
-        }
-
-        #[test]
-        fn test_multi_line_values_with_comments_in_between_should_work() {
-        }
     }
 }

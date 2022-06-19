@@ -199,7 +199,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn test_comment_consumes_token() {
+        fn test_success_consumes_token() {
             let tokens = vec![
                 Token::new(TokenType::Comment, "# foo"),
                 Token::new(TokenType::Comment, "; bar"),
@@ -243,7 +243,7 @@ mod tests {
         }
 
         #[test]
-        fn test_success_with_no_value() {
+        fn test_with_no_value_succeeds() {
             let tokens = vec![
                 Token::new(TokenType::Text, "KeyOne"),
                 Token::new(TokenType::KVSeparator, "="),
@@ -277,7 +277,7 @@ mod tests {
         }
 
         #[test]
-        fn test_fails_with_illegal_character() {
+        fn test_with_illegal_character_fails() {
             let tokens = vec![
                 Token::new(TokenType::Text, "Key_One"),
             ];
@@ -305,7 +305,7 @@ mod tests {
         }
 
         #[test]
-        fn test_with_empty_section() {
+        fn test_with_empty_section_succeeds() {
             let tokens = vec![
                 Token::new(TokenType::SectionHeaderStart, "["),
                 Token::new(TokenType::Text, "Section A"),
@@ -326,7 +326,7 @@ mod tests {
         }
 
         #[test]
-        fn test_with_section_with_entries() {
+        fn test_with_section_with_entries_succeeds() {
             let tokens = vec![
                 Token::new(TokenType::SectionHeaderStart, "["),
                 Token::new(TokenType::Text, "Section A"),
@@ -357,7 +357,7 @@ mod tests {
 
 
         #[test]
-        fn test_with_multiple_sections() {
+        fn test_with_multiple_sections_succeeds() {
             let tokens = vec![
                 Token::new(TokenType::SectionHeaderStart, "["),
                 Token::new(TokenType::Text, "Section A"),
@@ -395,7 +395,7 @@ mod tests {
         }
 
         #[test]
-        fn test_with_same_section_occuring_mutlimple_times() {
+        fn test_with_same_section_occuring_mutlimple_times_succeeds() {
             let tokens = vec![
                 Token::new(TokenType::SectionHeaderStart, "["),
                 Token::new(TokenType::Text, "Section A"),
@@ -459,7 +459,7 @@ mod tests {
         }
 
         #[test]
-        fn test_success_with_multiple_entries() {
+        fn test_with_multiple_entries_succeeds() {
             let tokens = vec![
                 Token::new(TokenType::SectionHeaderStart, "["),
                 Token::new(TokenType::Text, "Section A"),
@@ -487,7 +487,7 @@ mod tests {
         }
 
         #[test]
-        fn test_success_with_multiple_entries_with_same_key() {
+        fn test_with_multiple_entries_with_same_key_succeeds() {
             let tokens = vec![
                 Token::new(TokenType::SectionHeaderStart, "["),
                 Token::new(TokenType::Text, "Section A"),
@@ -515,7 +515,41 @@ mod tests {
         }
 
         #[test]
-        fn test_fail_with_extra_line() {
+        #[ignore]
+        fn test_with_interspersed_comments_succeeds() {
+            let tokens = vec![
+                Token::new(TokenType::SectionHeaderStart, "["),
+                Token::new(TokenType::Text, "Section A"),
+                Token::new(TokenType::SectionHeaderEnd, "]"),
+                Token::new(TokenType::Comment, "# foo"),
+                Token::new(TokenType::Text, "KeyOne"),
+                Token::new(TokenType::KVSeparator, "="),
+                Token::new(TokenType::Text, "value 1"),
+                Token::new(TokenType::Comment, "; bar"),
+                Token::new(TokenType::Text, "KeyOne"),
+                Token::new(TokenType::KVSeparator, "="),
+                Token::new(TokenType::Text, "value 2"),
+                Token::new(TokenType::ContinueNL, "\\"),
+                Token::new(TokenType::Comment, "# baz"),
+                Token::new(TokenType::Text, "value 2 continued"),
+            ];
+            let mut parser = Parser::new(tokens);
+            let old_pos = parser.pos;
+            assert_eq!(
+                parser.parse_section(),
+                Ok(Section{
+                    name: "Section A".into(),
+                    entries: vec![
+                        ("KeyOne".into(), "value 1".into()),
+                        ("KeyOne".into(), "value 2 value 2 continued".into()),
+                    ],
+                })
+            );
+            assert_eq!(parser.pos, old_pos+14);
+        }
+
+        #[test]
+        fn test_with_extra_line_fails() {
             let tokens = vec![
                 Token::new(TokenType::SectionHeaderStart, "["),
                 Token::new(TokenType::Text, "Section A"),
@@ -535,7 +569,7 @@ mod tests {
         }
 
         #[test]
-        fn test_fail_without_kv_separator() {
+        fn test_without_kv_separator_fails() {
             let tokens = vec![
                 Token::new(TokenType::SectionHeaderStart, "["),
                 Token::new(TokenType::Text, "Section A"),
@@ -654,7 +688,7 @@ mod tests {
         }
 
         #[test]
-        fn test_success_with_empty_text() {
+        fn test_with_empty_text_succeeds() {
             let tokens = vec![
                 Token::new(TokenType::Text, ""),
             ];
@@ -668,7 +702,7 @@ mod tests {
         }
 
         #[test]
-        fn test_success_with_multiple_spaces() {
+        fn test_with_multiple_spaces_succeeds() {
             let tokens = vec![
                 Token::new(TokenType::Text, "this is some text"),
             ];

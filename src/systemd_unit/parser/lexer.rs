@@ -98,7 +98,7 @@ mod tests {
         }
 
         #[test]
-        fn test_comments() {
+        fn test_with_comments_succeeds() {
             let data = "
 # foo
 
@@ -111,7 +111,7 @@ mod tests {
         }
 
         #[test]
-        fn test_section() {
+        fn test_with_section_header_succeeds() {
             let data = "[Section A]";
 
             let tokens = Lexer::tokens_from(data).unwrap();
@@ -123,7 +123,7 @@ mod tests {
         }
 
         #[test]
-        fn test_entry() {
+        fn test_entry_with_whitespace_succeeds() {
             let data = "KeyOne = Something";
 
             let tokens = Lexer::tokens_from(data).unwrap();
@@ -135,7 +135,7 @@ mod tests {
         }
 
         #[test]
-        fn test_entry_with_empty_value() {
+        fn test_entry_with_empty_value_succeeds() {
             let data = "KeyOne = ";
 
             let tokens = Lexer::tokens_from(data).unwrap();
@@ -147,7 +147,7 @@ mod tests {
         }
 
         #[test]
-        fn test_entry_with_continuation() {
+        fn test_entry_with_continuation_succeeds() {
             let data = "KeyOne = Something \\
 Else";
 
@@ -162,7 +162,7 @@ Else";
         }
 
         #[test]
-        fn test_systemd_syntax_example_1() {
+        fn test_systemd_syntax_example_1_succeeds() {
             // see https://www.freedesktop.org/software/systemd/man/systemd.syntax.html#
             let data = "[Section A]
 KeyOne=value 1
