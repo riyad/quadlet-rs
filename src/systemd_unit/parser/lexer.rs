@@ -5,12 +5,7 @@ pub(crate) enum TokenType {
     SectionHeaderEnd,  // ]
     Text,
     KVSeparator, // =
-    //NL,  // \n
-    //WS,  // \s+
-    ContinueNL,  // \\\n
-    //QuoteDouble,  // "
-    //QuoteSingle,  // '
-    //EscapeSequence, // e.g. "\a"
+    ContinueNL,  // \\
     EOF,
 }
 
@@ -72,9 +67,6 @@ impl Lexer {
                 }
                 continue;
             }
-            // TODO: tokenize quotes
-            // TODO: tokenize white space
-            // TODO: tokenize escape sequences
         }
 
         tokens.push(Token::new(TokenType::EOF, ""));
