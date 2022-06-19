@@ -11,8 +11,9 @@ This is a rough grammar extracted from the text in https://www.freedesktop.org/s
 > UNIT           = [COMMENT | SECTION]*
 > COMMENT        = ('#' | ';') ANY* NL
 > SECTION        = SECTION_HEADER [ENTRY]*
-> SECTION_HEADER = '[' ANY+ ']' WS* NL
+> SECTION_HEADER = '[' ANY+ ']' NL
 > ENTRY          = KEY WS* '=' WS* VALUE NL
+> KEY            = [A-Za-z0-9-]
 > VALUE          = [QUOTE WS | ANY*]* CONTINUE_NL [VALUE | COMMENT] | [QUOTE | ANY*]* NL
 > QUOTE          =  '"' QUOTE_DQ* '"' | '\'' QUOTE_SQ* '\''
 > QUOTE_DQ       = [^"]* | [^"]* CONTINUE_NL QUOTE_DQ_MORE
@@ -34,8 +35,9 @@ After that we only have "significant" data to parse:
 
 > UNIT           = SECTION*
 > SECTION        = SECTION_HEADER [ENTRY]*
-> SECTION_HEADER = '[' [^]]+ ']' WS* NL
+> SECTION_HEADER = '[' [^]]+ ']'NL
 > ENTRY          = KEY WS* '=' WS* VALUE NL
+> KEY            = [A-Za-z0-9-]
 > VALUE          = [QUOTE WS | ANY*]* CONTINUE_NL VALUE | [QUOTE | ANY*]* NL
 > QUOTE          =  '"' QUOTE_DQ* '"' | '\'' QUOTE_SQ* '\''
 > QUOTE_DQ       = [^"]* | [^"]* CONTINUE_NL QUOTE_DQ

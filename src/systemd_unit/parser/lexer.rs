@@ -5,11 +5,11 @@ pub(crate) enum TokenType {
     SectionHeaderEnd,  // ]
     Text,
     KVSeparator, // =
-    NL,  // \n
-    WS,  // \s+
+    //NL,  // \n
+    //WS,  // \s+
     ContinueNL,  // \\\n
-    QuoteDouble,  // "
-    QuoteSingle,  // '
+    //QuoteDouble,  // "
+    //QuoteSingle,  // '
     //EscapeSequence, // e.g. "\a"
     EOF,
 }
@@ -131,6 +131,18 @@ mod test {
             assert_eq!(tokens[0], Token::new(TokenType::Text, "KeyOne"));
             assert_eq!(tokens[1], Token::new(TokenType::KVSeparator, "="));
             assert_eq!(tokens[2], Token::new(TokenType::Text, "Something"));
+            assert_eq!(tokens.last().unwrap().token_type, TokenType::EOF);
+        }
+
+        #[test]
+        fn test_entry_with_empty_value() {
+            let data = "KeyOne = ";
+
+            let tokens = Lexer::tokens_from(data).unwrap();
+            assert_eq!(tokens.len(), 4);
+            assert_eq!(tokens[0], Token::new(TokenType::Text, "KeyOne"));
+            assert_eq!(tokens[1], Token::new(TokenType::KVSeparator, "="));
+            assert_eq!(tokens[2], Token::new(TokenType::Text, ""));
             assert_eq!(tokens.last().unwrap().token_type, TokenType::EOF);
         }
 

@@ -3,10 +3,12 @@ pub(crate) mod lexer;
 use std::{fmt::Display};
 
 use self::lexer::{TokenType, Token};
+use super::{SystemdUnit, Entry, Section};
 
 type ParseResult<T> = Result<T, ParseError>;
 #[derive(Debug, PartialEq)]
 pub(crate) enum ParseError {
+    InvalidKey(String),
     LexingError(String),
     UnexpectedEOF(TokenType),
     UnexpectedToken(TokenType, TokenType),
@@ -15,6 +17,8 @@ pub(crate) enum ParseError {
 impl Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::InvalidKey(key) =>
+                write!(f, "Invalid key {:?}. Allowed characters are A-Za-z0-9-", key),
             Self::LexingError(msg) =>
                 write!(f, "LexingError: {:?}", msg),
             Self::UnexpectedEOF(expected) =>
@@ -29,28 +33,6 @@ pub(crate) struct Parser<'a> {
     tokens: Vec<Token<'a>>,
     pos: usize
 }
-
-// output types
-#[derive(Debug, PartialEq)]
-pub(crate) struct SystemdUnit {
-    sections: Vec<Section>,
-}
-
-impl SystemdUnit {
-    fn new() -> Self {
-        SystemdUnit { sections: Vec::default() }
-    }
-}
-
-#[derive(Debug, PartialEq)]
-struct Section {
-    header: SectionHeader,
-    entries: Vec<Entry>,
-}
-type SectionHeader = String;
-type Entry = (Key, Value);
-type Key = String;
-type Value = String;
 
 impl<'a> Parser<'a> {
     pub fn new(tokens: Vec<Token<'a>>) -> Self {
@@ -98,27 +80,60 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
+    // ENTRY          = KEY WS* '=' WS* VALUE NL
+    // NOTE: whitespace around '=' has already been stripped in the lexer
     fn parse_entry(&mut self) -> ParseResult<Entry> {
-        todo!()
+        let key = self.parse_key()?;
+
+        let _ = self.take(TokenType::KVSeparator)?;
+        self.advance();
+
+        let value = self.parse_value()?;
+
+        Ok((key, value))
+    }
+
+    // KEY            = [A-Za-z0-9-]
+    fn parse_key(&mut self) -> ParseResult<String> {
+        let key: String = self.take(TokenType::Text)?.content.into();
+        if !key.chars().all(|c| c.is_ascii_alphabetic() || c == '-') {
+            return Err(ParseError::InvalidKey(key.into()))
+        }
+        self.advance();
+
+        Ok(key)
     }
 
     // SECTION        = SECTION_HEADER [ENTRY]*
     fn parse_section(&mut self) -> ParseResult<Section> {
-        todo!()
+        let name = self.parse_section_header()?;
+
+        let mut section = Section {
+            name: name,
+            entries: Vec::default(),
+        };
+
+        while !self.is_eof() {
+            let entry = self.parse_entry()?;
+            section.entries.push(entry);
+        }
+
+        Ok(section)
     }
 
-    fn parse_section_header(&mut self) -> ParseResult<SectionHeader> {
+    // SECTION_HEADER = '[' ANY+ ']' NL
+    fn parse_section_header(&mut self) -> ParseResult<String> {
         let _ = self.take(TokenType::SectionHeaderStart)?;
         self.advance();
 
         let token = self.take(TokenType::Text)?;
-        let section_header: SectionHeader = token.content.into();
+        let section_name = token.content.into();
         self.advance();
 
         let _ = self.take(TokenType::SectionHeaderEnd)?;
         self.advance();
 
-        Ok(section_header)
+        Ok(section_name)
     }
 
     // UNIT           = [COMMENT | SECTION]*
@@ -127,14 +142,30 @@ impl<'a> Parser<'a> {
 
         while !self.is_eof() {
             // ignore comments
-            let _ = self.parse_comment();
+            while let Ok(_) = self.parse_comment() {}
 
-        //     let section = self.parse_section()?;
+            if let Ok(section) = self.parse_section() {
+                unit.sections.push(section);
+            }
 
-        //     unit.sections.push(section);
+            // TODO: return error if both err out
         }
 
         Ok(unit)
+    }
+
+    // VALUE          = [QUOTE WS | ANY*]* CONTINUE_NL VALUE | [QUOTE | ANY*]* NL
+    // NOTE: this is not what the code does ATM (at all!
+    // more like: VALUE = ANY* NL
+    fn parse_value(&mut self) -> ParseResult<String> {
+        let value: String = self.take(TokenType::Text)?.content.into();
+        self.advance();
+
+        // TODO: parse line continuations
+        // TODO: parse quotes
+        // TODO: parse escape sequences
+
+        Ok(value)
     }
 
     pub(crate) fn parse(&mut self) -> ParseResult<SystemdUnit> {
@@ -176,10 +207,70 @@ mod test {
 
     mod parse_entry {
         use super::*;
+
+        #[test]
+        fn test_success_consumes_tokens() {
+            let tokens = vec![
+                Token::new(TokenType::Text, "KeyOne"),
+                Token::new(TokenType::KVSeparator, "="),
+                Token::new(TokenType::Text, "value 1"),
+            ];
+            let mut parser = Parser::new(tokens);
+            let old_pos = parser.pos;
+            assert_eq!(
+                parser.parse_entry(),
+                Ok(("KeyOne".into(), "value 1".into()))
+            );
+            assert_eq!(parser.pos, old_pos+3);
+        }
+
+        #[test]
+        fn test_success_with_no_value() {
+            let tokens = vec![
+                Token::new(TokenType::Text, "KeyOne"),
+                Token::new(TokenType::KVSeparator, "="),
+                Token::new(TokenType::Text, ""),  // the lexer does this thankfully
+            ];
+            let mut parser = Parser::new(tokens);
+            let old_pos = parser.pos;
+            assert_eq!(
+                parser.parse_entry(),
+                Ok(("KeyOne".into(), "".into()))
+            );
+            assert_eq!(parser.pos, old_pos+3);
+        }
     }
 
     mod parse_key {
         use super::*;
+
+        #[test]
+        fn test_success_consumes_tokens() {
+            let tokens = vec![
+                Token::new(TokenType::Text, "KeyOne"),
+            ];
+            let mut parser = Parser::new(tokens);
+            let old_pos = parser.pos;
+            assert_eq!(
+                parser.parse_key(),
+                Ok("KeyOne".into())
+            );
+            assert_eq!(parser.pos, old_pos+1);
+        }
+
+        #[test]
+        fn test_fails_with_illegal_character() {
+            let tokens = vec![
+                Token::new(TokenType::Text, "Key_One"),
+            ];
+            let mut parser = Parser::new(tokens);
+            let old_pos = parser.pos;
+            assert_eq!(
+                parser.parse_key(),
+                Err(ParseError::InvalidKey("Key_One".into()))
+            );
+            assert_eq!(parser.pos, old_pos);
+        }
     }
 
     mod parse_unit {
@@ -198,6 +289,123 @@ mod test {
 
     mod parse_section {
         use super::*;
+
+        #[test]
+        fn test_success_consumes_tokens() {
+            let tokens = vec![
+                Token::new(TokenType::SectionHeaderStart, "["),
+                Token::new(TokenType::Text, "Section A"),
+                Token::new(TokenType::SectionHeaderEnd, "]"),
+                Token::new(TokenType::Text, "KeyOne"),
+                Token::new(TokenType::KVSeparator, "="),
+                Token::new(TokenType::Text, "value 1"),
+            ];
+            let mut parser = Parser::new(tokens);
+            let old_pos = parser.pos;
+            assert_eq!(
+                parser.parse_section(),
+                Ok(Section{
+                    name: "Section A".into(),
+                    entries: vec!(("KeyOne".into(), "value 1".into())),
+                })
+            );
+            assert_eq!(parser.pos, old_pos+6);
+        }
+
+        #[test]
+        fn test_success_with_multiple_entries() {
+            let tokens = vec![
+                Token::new(TokenType::SectionHeaderStart, "["),
+                Token::new(TokenType::Text, "Section A"),
+                Token::new(TokenType::SectionHeaderEnd, "]"),
+                Token::new(TokenType::Text, "KeyOne"),
+                Token::new(TokenType::KVSeparator, "="),
+                Token::new(TokenType::Text, "value 1"),
+                Token::new(TokenType::Text, "KeyTwo"),
+                Token::new(TokenType::KVSeparator, "="),
+                Token::new(TokenType::Text, "value 2"),
+            ];
+            let mut parser = Parser::new(tokens);
+            let old_pos = parser.pos;
+            assert_eq!(
+                parser.parse_section(),
+                Ok(Section{
+                    name: "Section A".into(),
+                    entries: vec!(
+                        ("KeyOne".into(), "value 1".into()),
+                        ("KeyTwo".into(), "value 2".into()),
+                    ),
+                })
+            );
+            assert_eq!(parser.pos, old_pos+9);
+        }
+
+        #[test]
+        fn test_success_with_multiple_entries_with_same_key() {
+            let tokens = vec![
+                Token::new(TokenType::SectionHeaderStart, "["),
+                Token::new(TokenType::Text, "Section A"),
+                Token::new(TokenType::SectionHeaderEnd, "]"),
+                Token::new(TokenType::Text, "KeyOne"),
+                Token::new(TokenType::KVSeparator, "="),
+                Token::new(TokenType::Text, "value 1"),
+                Token::new(TokenType::Text, "KeyOne"),
+                Token::new(TokenType::KVSeparator, "="),
+                Token::new(TokenType::Text, "value 2"),
+            ];
+            let mut parser = Parser::new(tokens);
+            let old_pos = parser.pos;
+            assert_eq!(
+                parser.parse_section(),
+                Ok(Section{
+                    name: "Section A".into(),
+                    entries: vec!(
+                        ("KeyOne".into(), "value 1".into()),
+                        ("KeyOne".into(), "value 2".into()),
+                    ),
+                })
+            );
+            assert_eq!(parser.pos, old_pos+9);
+        }
+
+        #[test]
+        fn test_fail_with_extra_line() {
+            let tokens = vec![
+                Token::new(TokenType::SectionHeaderStart, "["),
+                Token::new(TokenType::Text, "Section A"),
+                Token::new(TokenType::SectionHeaderEnd, "]"),
+                Token::new(TokenType::Text, "KeyOne"),
+                Token::new(TokenType::KVSeparator, "="),
+                Token::new(TokenType::Text, "value 1"),
+                Token::new(TokenType::Text, "some text"),
+            ];
+            let mut parser = Parser::new(tokens);
+            let old_pos = parser.pos;
+            assert_eq!(
+                parser.parse_section(),
+                Err(ParseError::InvalidKey("some text".into()))
+            );
+            assert_eq!(parser.pos, old_pos+6);
+        }
+
+        #[test]
+        fn test_fail_without_kv_separator() {
+            let tokens = vec![
+                Token::new(TokenType::SectionHeaderStart, "["),
+                Token::new(TokenType::Text, "Section A"),
+                Token::new(TokenType::SectionHeaderEnd, "]"),
+                Token::new(TokenType::Text, "LooksLikeAKey"),
+                // KVSeparator missing
+                Token::new(TokenType::Text, "Looks Like A Value"),
+            ];
+            let mut parser = Parser::new(tokens);
+            let old_pos = parser.pos;
+            assert_eq!(
+                parser.parse_section(),
+                Err(ParseError::UnexpectedToken(TokenType::KVSeparator, TokenType::Text))
+            );
+            assert_eq!(parser.pos, old_pos+4);
+        }
     }
 
     mod parse_section_header {
@@ -284,5 +492,63 @@ mod test {
 
     mod parse_value {
         use super::*;
+
+        #[test]
+        fn test_success_consumes_tokens() {
+            let tokens = vec![
+                Token::new(TokenType::Text, "value 1"),
+            ];
+            let mut parser = Parser::new(tokens);
+            let old_pos = parser.pos;
+            assert_eq!(
+                parser.parse_value(),
+                Ok("value 1".into())
+            );
+            assert_eq!(parser.pos, old_pos+1);
+        }
+
+        #[test]
+        fn test_success_with_empty_text() {
+            let tokens = vec![
+                Token::new(TokenType::Text, ""),
+            ];
+            let mut parser = Parser::new(tokens);
+            let old_pos = parser.pos;
+            assert_eq!(
+                parser.parse_value(),
+                Ok("".into())
+            );
+            assert_eq!(parser.pos, old_pos+1);
+        }
+
+        #[test]
+        fn test_success_with_multiple_spaces() {
+            let tokens = vec![
+                Token::new(TokenType::Text, "this is some text"),
+            ];
+            let mut parser = Parser::new(tokens);
+            let old_pos = parser.pos;
+            assert_eq!(
+                parser.parse_value(),
+                Ok("this is some text".into())
+            );
+            assert_eq!(parser.pos, old_pos+1);
+        }
+
+        #[test]
+        fn test_turn_continuation_into_space() {
+            let tokens = vec![
+                Token::new(TokenType::Text, "this is some text"),
+                Token::new(TokenType::ContinueNL, "\\"),
+                Token::new(TokenType::Text, "more text"),
+            ];
+            let mut parser = Parser::new(tokens);
+            let old_pos = parser.pos;
+            assert_eq!(
+                parser.parse_value(),
+                Ok("this is some text more text".into())
+            );
+            assert_eq!(parser.pos, old_pos+3);
+        }
     }
 }
