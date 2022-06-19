@@ -174,7 +174,7 @@ impl<'a> Parser<'a> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     mod parse_comment {

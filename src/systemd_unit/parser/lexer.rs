@@ -79,7 +79,7 @@ impl Lexer {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     mod tokens_from {
