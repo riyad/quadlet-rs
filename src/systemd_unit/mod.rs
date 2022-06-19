@@ -12,9 +12,32 @@ pub(crate) struct Section {
     name: String,
     entries: Vec<Entry>,
 }
+
 type Entry = (Key, Value);
-type Key = String;
-type Value = String;
+
+#[derive(Clone, Debug, PartialEq)]
+struct Key(String);
+
+impl From<&str> for Key {
+  fn from(key: &str) -> Self {
+      Self(key.into())
+  }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct Value(String);
+
+impl From<&str> for Value {
+  fn from(val: &str) -> Self {
+      Self(val.into())
+  }
+}
+
+impl Value {
+    fn to_quoted(&self) -> Vec<&str> {
+        todo!()
+    }
+}
 
 impl SystemdUnit {
     fn from_string(data: &str) -> Result<Self, Error> {

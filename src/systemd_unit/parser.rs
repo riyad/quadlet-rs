@@ -3,7 +3,7 @@ pub(crate) mod lexer;
 use std::{fmt::Display};
 
 use self::lexer::{TokenType, Token};
-use super::{SystemdUnit, Entry, Section};
+use super::{SystemdUnit, Entry, Section, Key, Value};
 
 type ParseResult<T> = Result<T, ParseError>;
 #[derive(Debug, PartialEq)]
@@ -98,14 +98,14 @@ impl<'a> Parser<'a> {
     }
 
     // KEY            = [A-Za-z0-9-]
-    fn parse_key(&mut self) -> ParseResult<String> {
+    fn parse_key(&mut self) -> ParseResult<Key> {
         let key: String = self.take(TokenType::Text)?.content.into();
         if !key.chars().all(|c| c.is_ascii_alphabetic() || c == '-') {
             return Err(ParseError::InvalidKey(key.into()))
         }
         self.advance();
 
-        Ok(key)
+        Ok(Key(key))
     }
 
     // SECTION        = SECTION_HEADER [COMMENT | ENTRY]*
@@ -171,7 +171,7 @@ impl<'a> Parser<'a> {
     }
 
     // VALUE          = ANY* CONTINUE_NL [COMMENT]* VALUE
-    fn parse_value(&mut self) -> ParseResult<String> {
+    fn parse_value(&mut self) -> ParseResult<Value> {
         let mut value: String = self.take(TokenType::Text)?.content.into();
         self.advance();
 
@@ -187,7 +187,7 @@ impl<'a> Parser<'a> {
                                 let _ = self.parse_comment();
                             },
                             TokenType::Text => {
-                                let more_value = self.parse_value()?;
+                                let more_value = self.parse_value()?.0;
                                 value += format!(" {more_value}").as_str();
                                 break
                             },
@@ -200,7 +200,7 @@ impl<'a> Parser<'a> {
             }
         }
 
-        Ok(value)
+        Ok(Value(value))
     }
 }
 
