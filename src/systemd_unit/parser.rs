@@ -181,15 +181,20 @@ impl<'a> Parser<'a> {
                     self.advance();
 
                     while !self.is_eof() {
-                        match self.parse_comment() {
-                            Ok(_) => {},
-                            Err(_) => break,
+                        match self.peek().token_type {
+                            TokenType::Comment => {
+                                // ignore comment
+                                let _ = self.parse_comment();
+                            },
+                            TokenType::Text => {
+                                let more_value = self.parse_value()?;
+                                value += format!(" {more_value}").as_str();
+                                break
+                            },
+                            // this should make the parser more lenient
+                            _ => break
                         }
                     }
-
-                    let more_value = self.parse_value()?;
-                    value += format!(" {more_value}").as_str();
-
                 },
                 _ => {},
             }
@@ -776,6 +781,39 @@ mod tests {
                 Ok("some text more text some more".into())
             );
             assert_eq!(parser.pos, old_pos+8);
+        }
+
+        #[test]
+        fn test_with_missing_line_after_contiuation_succeeds() {
+            let tokens = vec![
+                Token::new(TokenType::Text, "text"),
+                Token::new(TokenType::ContinueNL, "\\"),
+                Token::new(TokenType::Comment, "# foo"),
+                Token::new(TokenType::Comment, "; bar"),
+            ];
+            let mut parser = Parser::new(tokens);
+            let old_pos = parser.pos;
+            assert_eq!(
+                parser.parse_value(),
+                Ok("text".into())
+            );
+            assert_eq!(parser.pos, old_pos+4);
+        }
+
+        #[test]
+        fn test_with_new_section_after_continuation_succeeds() {
+            let tokens = vec![
+                Token::new(TokenType::Text, "text"),
+                Token::new(TokenType::ContinueNL, "\\"),
+                Token::new(TokenType::SectionHeaderStart, "["),
+            ];
+            let mut parser = Parser::new(tokens);
+            let old_pos = parser.pos;
+            assert_eq!(
+                parser.parse_value(),
+                Ok("text".into())
+            );
+            assert_eq!(parser.pos, old_pos+2);
         }
     }
 }
