@@ -176,9 +176,7 @@ impl<'a> Parser<'a> {
         Ok(unit)
     }
 
-    // VALUE          = [QUOTE WS | ANY*]* CONTINUE_NL [COMMENT]* VALUE | [QUOTE | ANY*]* NL
-    // NOTE: this is not what the code does ATM (at all)!
-    // more like: VALUE = ANY* CONTINUE_NL [COMMENT]* VALUE
+    // VALUE          = ANY* CONTINUE_NL [COMMENT]* VALUE
     fn parse_value(&mut self) -> ParseResult<String> {
         let mut value: String = self.take(TokenType::Text)?.content.into();
         self.advance();
@@ -202,9 +200,6 @@ impl<'a> Parser<'a> {
                 _ => {},
             }
         }
-
-        // TODO: parse quotes
-        // TODO: parse escape sequences
 
         Ok(value)
     }

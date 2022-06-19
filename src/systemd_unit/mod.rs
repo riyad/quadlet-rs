@@ -100,7 +100,8 @@ KeyOne = value 1.2";
             assert!(result.is_err());
         }
 
-        #[test]        fn test_systemd_syntax_example_1_succeeds() {
+        #[test]
+        fn test_systemd_syntax_example_1_succeeds() {
             let data = "[Section A]
 KeyOne=value 1
 KeyTwo=value 2
@@ -143,6 +144,37 @@ KeyThree=value 3\\
                             name: "Section C".into(),
                             entries: vec![
                                 ("KeyThree".into(), "value 3       value 3 continued".into()),
+                            ],
+                        },
+                    ],
+                }
+            );
+        }
+
+
+        #[test]
+        fn test_quadlet_case_escapes_container_succeeds() {
+            let data = "[Container]
+Image=imagename
+PodmanArgs=\"--foo\" \\
+  --bar
+PodmanArgs=--also
+Exec=/some/path \"an arg\" \"a;b\\nc\\td'e\" a;b\\nc\\td 'a\"b'";
+
+            let unit = SystemdUnit::from_string(data).unwrap();
+
+            assert_eq!(unit.sections.len(), 1);
+            assert_eq!(
+                unit,
+                SystemdUnit {
+                    sections: vec![
+                        Section {
+                            name: "Container".into(),
+                            entries: vec![
+                                ("Image".into(), "imagename".into()),
+                                ("PodmanArgs".into(), "\"--foo\"    --bar".into()),
+                                ("PodmanArgs".into(), "--also".into()),
+                                ("Exec".into(), "/some/path \"an arg\" \"a;b\\nc\\td'e\" a;b\\nc\\td 'a\"b'".into()),
                             ],
                         },
                     ],
