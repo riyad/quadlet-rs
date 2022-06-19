@@ -40,7 +40,7 @@ impl Value {
 }
 
 impl SystemdUnit {
-    fn from_string(data: &str) -> Result<Self, Error> {
+    pub(crate) fn from_string(data: &str) -> Result<Self, Error> {
         let tokens = parser::lexer::Lexer::tokens_from(data)?;
         let mut parser = parser::Parser::new(tokens);
         let unit = parser.parse()?;
