@@ -33,8 +33,12 @@ impl SystemdUnit {
         self.sections.iter().map(|s| s.name.clone()).collect()
     }
 
-    fn section_entries(&self, section_name: &str) -> Vec<&Section> {
-        self.sections.iter().filter(|&s| s.name == section_name).collect()
+    fn section_entries(&self, section_name: &str) -> Vec<Entry> {
+        self.sections.iter()
+          .filter(|s| s.name == section_name)
+          .map(|s| s.entries.clone())
+          .flatten()
+          .collect()
     }
 }
 
@@ -70,6 +74,21 @@ KeyTwo=value 2";
             assert!(unit.section_entries("Section").is_empty());
             assert!(unit.section_entries("A").is_empty());
             assert_eq!(unit.section_entries("Section A").len(), 2);
+        }
+
+        #[test]
+        fn test_with_same_section_occuring_multiple_times() {
+            let data = "[Section A]
+KeyOne=value 1
+KeyTwo=value 2
+
+[Section A]
+KeyOne = value 1.2";
+
+            let unit = SystemdUnit::from_string(data).unwrap();
+
+            assert_eq!(unit.sections.len(), 2);
+            assert_eq!(unit.section_entries("Section A").len(), 3);
         }
 
         #[test]

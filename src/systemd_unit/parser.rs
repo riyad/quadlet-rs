@@ -8,6 +8,7 @@ use super::{SystemdUnit, Entry, Section};
 type ParseResult<T> = Result<T, ParseError>;
 #[derive(Debug, PartialEq)]
 pub(crate) enum ParseError {
+    CannotContinue(String),
     InvalidKey(String),
     LexingError(String),
     UnexpectedEOF(TokenType),
@@ -17,18 +18,21 @@ pub(crate) enum ParseError {
 impl Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::CannotContinue(msg) =>
+                write!(f, "{msg:?}"),
             Self::InvalidKey(key) =>
-                write!(f, "Invalid key {:?}. Allowed characters are A-Za-z0-9-", key),
+                write!(f, "Invalid key {key:?}. Allowed characters are A-Za-z0-9-"),
             Self::LexingError(msg) =>
-                write!(f, "LexingError: {:?}", msg),
+                write!(f, "LexingError: {msg:?}"),
             Self::UnexpectedEOF(expected) =>
-                write!(f, "Unexpected End of File: Expected {:?}", expected),
+                write!(f, "Unexpected End of File: Expected {expected:?}"),
             Self::UnexpectedToken(expected, found) =>
-                write!(f, "Unexpected Token: Expected {:?}. Found {:?}.", expected, found),
+                write!(f, "Unexpected Token: Expected {expected:?}. Found {found:?}."),
         }
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct Parser<'a> {
     tokens: Vec<Token<'a>>,
     pos: usize
@@ -43,15 +47,11 @@ impl<'a> Parser<'a> {
     }
 
     fn is_eof(&self) -> bool {
-        self.pos >= self.tokens.len()
+        self.pos >= self.tokens.len() || self.peek().token_type == TokenType::EOF
     }
 
     fn peek(&self) -> &Token {
         &self.tokens[self.pos]
-    }
-
-    fn is_match(&self, token_type: TokenType) -> bool {
-        !self.is_eof() && self.peek().token_type == token_type
     }
 
     fn take(&self, expected_token_type: TokenType) -> Result<&Token, ParseError> {
@@ -70,6 +70,10 @@ impl<'a> Parser<'a> {
 
     fn advance(&mut self) {
         self.pos += 1;
+    }
+
+    pub(crate) fn parse(&mut self) -> ParseResult<SystemdUnit> {
+        self.parse_unit()
     }
 
     // COMMENT        = ('#' | ';') ANY* NL
@@ -104,7 +108,7 @@ impl<'a> Parser<'a> {
         Ok(key)
     }
 
-    // SECTION        = SECTION_HEADER [ENTRY]*
+    // SECTION        = SECTION_HEADER [COMMENT | ENTRY]*
     fn parse_section(&mut self) -> ParseResult<Section> {
         let name = self.parse_section_header()?;
 
@@ -114,8 +118,20 @@ impl<'a> Parser<'a> {
         };
 
         while !self.is_eof() {
-            let entry = self.parse_entry()?;
-            section.entries.push(entry);
+            match self.peek().token_type {
+                TokenType::Comment => {
+                    // ignore comment
+                    let _ = self.parse_comment();
+                },
+                TokenType::Text => {
+                    match self.parse_entry() {
+                        Ok(entry) => section.entries.push(entry),
+                        Err(ParseError::CannotContinue(_)) => {},
+                        Err(e) => return Err(e),
+                    }
+                },
+                _ => break,
+            }
         }
 
         Ok(section)
@@ -141,14 +157,20 @@ impl<'a> Parser<'a> {
         let mut unit = SystemdUnit::new();
 
         while !self.is_eof() {
-            // ignore comments
-            while let Ok(_) = self.parse_comment() {}
-
-            if let Ok(section) = self.parse_section() {
-                unit.sections.push(section);
-            }
-
-            // TODO: return error if both err out
+            match self.peek().token_type {
+                TokenType::Comment => {
+                    // ignore comment
+                    let _ = self.parse_comment();
+                },
+                TokenType::SectionHeaderStart => {
+                    match self.parse_section() {
+                        Ok(section) => unit.sections.push(section),
+                        Err(ParseError::CannotContinue(_)) => {},
+                        Err(e) => return Err(e),
+                    }
+                },
+                _ => return Err(ParseError::CannotContinue("Expected comment or section".into())),
+            };
         }
 
         Ok(unit)
@@ -166,10 +188,6 @@ impl<'a> Parser<'a> {
         // TODO: parse escape sequences
 
         Ok(value)
-    }
-
-    pub(crate) fn parse(&mut self) -> ParseResult<SystemdUnit> {
-        self.parse_unit()
     }
 }
 
@@ -278,12 +296,140 @@ mod tests {
 
         #[test]
         fn test_only_comments_should_create_empty_unit() {
-        let tokens = vec![
-            Token::new(TokenType::Comment, "# foo"),
-            Token::new(TokenType::Comment, "; bar"),
-        ];
-        let mut parser = Parser::new(tokens);
-        assert_eq!(parser.parse_unit(), Ok(SystemdUnit { sections: Vec::new() }))
+            let tokens = vec![
+                Token::new(TokenType::Comment, "# foo"),
+                Token::new(TokenType::Comment, "; bar"),
+            ];
+            let mut parser = Parser::new(tokens);
+            assert_eq!(parser.parse_unit(), Ok(SystemdUnit { sections: Vec::new() }))
+        }
+
+        #[test]
+        fn test_with_empty_section() {
+            let tokens = vec![
+                Token::new(TokenType::SectionHeaderStart, "["),
+                Token::new(TokenType::Text, "Section A"),
+                Token::new(TokenType::SectionHeaderEnd, "]"),
+            ];
+            let mut parser = Parser::new(tokens);
+            assert_eq!(
+                parser.parse_unit(),
+                Ok(SystemdUnit {
+                    sections:   vec![
+                        Section {
+                            name: "Section A".into(),
+                            entries: vec![],
+                        },
+                    ]
+                })
+            );
+        }
+
+        #[test]
+        fn test_with_section_with_entries() {
+            let tokens = vec![
+                Token::new(TokenType::SectionHeaderStart, "["),
+                Token::new(TokenType::Text, "Section A"),
+                Token::new(TokenType::SectionHeaderEnd, "]"),
+                Token::new(TokenType::Text, "KeyOne"),
+                Token::new(TokenType::KVSeparator, "="),
+                Token::new(TokenType::Text, "value 1"),
+                Token::new(TokenType::Text, "KeyTwo"),
+                Token::new(TokenType::KVSeparator, "="),
+                Token::new(TokenType::Text, "value 2"),
+            ];
+            let mut parser = Parser::new(tokens);
+            assert_eq!(
+                parser.parse_unit(),
+                Ok(SystemdUnit {
+                    sections:   vec![
+                        Section {
+                            name: "Section A".into(),
+                            entries: vec![
+                                ("KeyOne".into(), "value 1".into()),
+                                ("KeyTwo".into(), "value 2".into()),
+                            ],
+                        },
+                    ]
+                })
+            );
+        }
+
+
+        #[test]
+        fn test_with_multiple_sections() {
+            let tokens = vec![
+                Token::new(TokenType::SectionHeaderStart, "["),
+                Token::new(TokenType::Text, "Section A"),
+                Token::new(TokenType::SectionHeaderEnd, "]"),
+                Token::new(TokenType::Text, "KeyOne"),
+                Token::new(TokenType::KVSeparator, "="),
+                Token::new(TokenType::Text, "value 1"),
+                Token::new(TokenType::SectionHeaderStart, "["),
+                Token::new(TokenType::Text, "Section B"),
+                Token::new(TokenType::SectionHeaderEnd, "]"),
+                Token::new(TokenType::Text, "KeyTwo"),
+                Token::new(TokenType::KVSeparator, "="),
+                Token::new(TokenType::Text, "value 2"),
+            ];
+            let mut parser = Parser::new(tokens);
+            assert_eq!(
+                parser.parse_unit(),
+                Ok(SystemdUnit {
+                    sections:   vec![
+                        Section {
+                            name: "Section A".into(),
+                            entries: vec![
+                                ("KeyOne".into(), "value 1".into()),
+                            ],
+                        },
+                        Section {
+                            name: "Section B".into(),
+                            entries: vec![
+                                ("KeyTwo".into(), "value 2".into()),
+                            ],
+                        },
+                    ]
+                })
+            );
+        }
+
+        #[test]
+        fn test_with_same_section_occuring_mutlimple_times() {
+            let tokens = vec![
+                Token::new(TokenType::SectionHeaderStart, "["),
+                Token::new(TokenType::Text, "Section A"),
+                Token::new(TokenType::SectionHeaderEnd, "]"),
+                Token::new(TokenType::Text, "KeyOne"),
+                Token::new(TokenType::KVSeparator, "="),
+                Token::new(TokenType::Text, "value 1"),
+                Token::new(TokenType::SectionHeaderStart, "["),
+                Token::new(TokenType::Text, "Section A"),
+                Token::new(TokenType::SectionHeaderEnd, "]"),
+                Token::new(TokenType::Text, "KeyTwo"),
+                Token::new(TokenType::KVSeparator, "="),
+                Token::new(TokenType::Text, "value 2"),
+            ];
+            let mut parser = Parser::new(tokens);
+            assert_eq!(
+                parser.parse_unit(),
+                Ok(SystemdUnit {
+                    sections:   vec![
+                        Section {
+                            name: "Section A".into(),
+                            entries: vec![
+                                ("KeyOne".into(), "value 1".into()),
+                            ],
+                        },
+                        Section {
+                            name: "Section A".into(),
+                            entries: vec![
+                                ("KeyTwo".into(), "value 2".into()),
+                            ],
+                        },
+                    ]
+                })
+            );
         }
     }
 
@@ -306,7 +452,7 @@ mod tests {
                 parser.parse_section(),
                 Ok(Section{
                     name: "Section A".into(),
-                    entries: vec!(("KeyOne".into(), "value 1".into())),
+                    entries: vec![("KeyOne".into(), "value 1".into())],
                 })
             );
             assert_eq!(parser.pos, old_pos+6);
@@ -331,10 +477,10 @@ mod tests {
                 parser.parse_section(),
                 Ok(Section{
                     name: "Section A".into(),
-                    entries: vec!(
+                    entries: vec![
                         ("KeyOne".into(), "value 1".into()),
                         ("KeyTwo".into(), "value 2".into()),
-                    ),
+                    ],
                 })
             );
             assert_eq!(parser.pos, old_pos+9);
@@ -359,10 +505,10 @@ mod tests {
                 parser.parse_section(),
                 Ok(Section{
                     name: "Section A".into(),
-                    entries: vec!(
+                    entries: vec![
                         ("KeyOne".into(), "value 1".into()),
                         ("KeyOne".into(), "value 2".into()),
-                    ),
+                    ],
                 })
             );
             assert_eq!(parser.pos, old_pos+9);
@@ -536,6 +682,7 @@ mod tests {
         }
 
         #[test]
+        #[ignore]
         fn test_turn_continuation_into_space() {
             let tokens = vec![
                 Token::new(TokenType::Text, "this is some text"),

@@ -10,7 +10,7 @@ This is a rough grammar extracted from the text in https://www.freedesktop.org/s
 
 > UNIT           = [COMMENT | SECTION]*
 > COMMENT        = ('#' | ';') ANY* NL
-> SECTION        = SECTION_HEADER [ENTRY]*
+> SECTION        = SECTION_HEADER [COMMENT | ENTRY]*
 > SECTION_HEADER = '[' ANY+ ']' NL
 > ENTRY          = KEY WS* '=' WS* VALUE NL
 > KEY            = [A-Za-z0-9-]
