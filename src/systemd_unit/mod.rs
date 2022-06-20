@@ -81,11 +81,10 @@ impl SystemdUnit {
     }
 
     pub fn write_to<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
-
         for section in &self.sections {
-            write!(writer, "[{}]\n", section.name);
+            write!(writer, "[{}]\n", section.name)?;
             for (k, v) in &section.entries {
-                write!(writer, "{k:?}={v:?}\n");
+                write!(writer, "{k:?}={v:?}\n")?;
             }
         }
 
