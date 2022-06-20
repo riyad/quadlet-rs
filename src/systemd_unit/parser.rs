@@ -314,7 +314,7 @@ mod tests {
                 Token::new(TokenType::Comment, "; bar"),
             ];
             let mut parser = Parser::new(tokens);
-            assert_eq!(parser.parse_unit(), Ok(SystemdUnit { sections: Vec::new() }))
+            assert_eq!(parser.parse_unit(), Ok(SystemdUnit::new()))
         }
 
         #[test]
@@ -328,7 +328,8 @@ mod tests {
             assert_eq!(
                 parser.parse_unit(),
                 Ok(SystemdUnit {
-                    sections:   vec![
+                    path: None,
+                    sections: vec![
                         Section {
                             name: "Section A".into(),
                             entries: vec![],
@@ -355,7 +356,8 @@ mod tests {
             assert_eq!(
                 parser.parse_unit(),
                 Ok(SystemdUnit {
-                    sections:   vec![
+                    path: None,
+                    sections: vec![
                         Section {
                             name: "Section A".into(),
                             entries: vec![
@@ -389,7 +391,8 @@ mod tests {
             assert_eq!(
                 parser.parse_unit(),
                 Ok(SystemdUnit {
-                    sections:   vec![
+                    path: None,
+                    sections: vec![
                         Section {
                             name: "Section A".into(),
                             entries: vec![
@@ -427,7 +430,8 @@ mod tests {
             assert_eq!(
                 parser.parse_unit(),
                 Ok(SystemdUnit {
-                    sections:   vec![
+                    path: None,
+                    sections: vec![
                         Section {
                             name: "Section A".into(),
                             entries: vec![

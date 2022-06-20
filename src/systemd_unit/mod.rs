@@ -1,9 +1,12 @@
 mod parser;
 
+use std::path::{PathBuf};
+
 type Error = parser::ParseError;
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct SystemdUnit {
+    pub(crate) path: Option<PathBuf>,
     pub(crate) sections: Vec<Section>,
 }
 
@@ -48,8 +51,11 @@ impl SystemdUnit {
         Ok(unit)
     }
 
-    fn new() -> Self {
-        SystemdUnit { sections: Vec::default() }
+    pub(crate) fn new() -> Self {
+        SystemdUnit {
+            path: None,
+            sections: Vec::default()
+        }
     }
 
     fn section_names(&self) -> Vec<String> {
@@ -148,6 +154,7 @@ KeyThree=value 3\\
             assert_eq!(
                 unit,
                 SystemdUnit {
+                    path: None,
                     sections: vec![
                         Section {
                             name: "Section A".into(),
@@ -190,6 +197,7 @@ Exec=/some/path \"an arg\" \"a;b\\nc\\td'e\" a;b\\nc\\td 'a\"b'";
             assert_eq!(
                 unit,
                 SystemdUnit {
+                    path: None,
                     sections: vec![
                         Section {
                             name: "Container".into(),
