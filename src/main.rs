@@ -47,8 +47,6 @@ const X_CONTAINER_GROUP: &str = "X-Container";
 const VOLUME_GROUP: &str = "Volume";
 const X_VOLUME_GROUP: &str = "X-Volume";
 
-struct ArgError(String);
-
 #[derive(Debug)]
 struct Config {
     output_path: PathBuf,
@@ -66,31 +64,39 @@ impl<'a> Display for ConversionError<'a> {
 
 fn help() {
     println!("Usage:
-quadlet [-v|-verbose] [--version] OUTPUTDIR");
+quadlet --version
+quadlet [-v|-verbose] OUTPUTDIR");
 }
 
 
-fn parse_args(args: Vec<String>) -> Result<Config, ArgError> {
-    if args.len() < 2 {
-        return Err(ArgError("Missing output directory argument".into()));
-    }
-
+fn parse_args(args: Vec<String>) -> Result<Config, String> {
     let mut cfg = Config {
         output_path: PathBuf::new(),
         verbose: false,
         version: false,
     };
 
-    for arg in &args[1..args.len()-1] {
-        match &arg[..] {
-            "--verbose" => cfg.verbose = true,
-            "-v" => cfg.verbose = true,
-            "--version" => cfg.version = true,
-            _ => return Err(ArgError(format!("Unknown argument {arg}"))),
+    if args.len() < 2 {
+        return Err("Too few arguments".into())
+    } else if args.len() == 2 {
+        if args[1] == "--version" {
+            cfg.version = true
+        } else {
+            cfg.output_path = args.last().unwrap().into()
         }
+    } else {
+        for arg in &args[1..args.len()-1] {
+            match &arg[..] {
+                "--verbose" => cfg.verbose = true,
+                "-v" => cfg.verbose = true,
+                "--version" => cfg.version = true,
+                _ => return Err(format!("Unknown argument: {arg}")),
+            }
+        }
+
+        cfg.output_path = args.last().unwrap().into();
     }
 
-    cfg.output_path = args.last().unwrap().into();
 
     Ok(cfg)
 }
@@ -188,7 +194,7 @@ fn main() {
 
     let cfg = match parse_args(args) {
         Ok(cfg) => cfg,
-        Err(ArgError(msg)) => {
+        Err(msg) => {
             println!("Error: {}", msg);
             help();
             std::process::exit(1)
