@@ -10,7 +10,6 @@ type ParseResult<T> = Result<T, ParseError>;
 pub(crate) enum ParseError {
     General(String),
     InvalidKey(String),
-    LexingError(String),
     UnexpectedEOF(TokenType),
     UnexpectedToken(TokenType, TokenType),
 }
@@ -22,8 +21,6 @@ impl Display for ParseError {
                 write!(f, "{msg:?}"),
             Self::InvalidKey(key) =>
                 write!(f, "Invalid key {key:?}. Allowed characters are A-Za-z0-9-"),
-            Self::LexingError(msg) =>
-                write!(f, "LexingError: {msg:?}"),
             Self::UnexpectedEOF(expected) =>
                 write!(f, "Unexpected End of File: Expected {expected:?}"),
             Self::UnexpectedToken(expected, found) =>
