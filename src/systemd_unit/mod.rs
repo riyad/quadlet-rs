@@ -1,6 +1,9 @@
+mod constants;
 mod parser;
 
 use std::path::{PathBuf};
+
+pub use self::constants::*;
 
 type Error = parser::ParseError;
 
@@ -23,7 +26,7 @@ struct Key(String);
 
 impl From<&str> for Key {
   fn from(key: &str) -> Self {
-      Self(key.into())
+      Self(key.to_owned())
   }
 }
 
@@ -32,7 +35,7 @@ struct Value(String);
 
 impl From<&str> for Value {
   fn from(val: &str) -> Self {
-      Self(val.into())
+      Self(val.to_owned())
   }
 }
 
@@ -43,6 +46,11 @@ impl Value {
 }
 
 impl SystemdUnit {
+    pub(crate) fn add_entry(&self, group_name: &str, key: String, value: String) {
+        //let &mut group = self.find_or_create_group(group_name)
+        //group.insert(key, value);
+    }
+
     pub(crate) fn from_string(data: &str) -> Result<Self, Error> {
         let tokens = parser::lexer::Lexer::tokens_from(data)?;
         let mut parser = parser::Parser::new(tokens);
@@ -59,6 +67,7 @@ impl SystemdUnit {
     }
 
     fn section_names(&self) -> Vec<String> {
+        // FIXME: make sure list only has unique elements
         self.sections.iter().map(|s| s.name.clone()).collect()
     }
 
@@ -68,6 +77,21 @@ impl SystemdUnit {
             .map(|s| s.entries.clone())
             .flatten()
             .collect()
+    }
+
+    // use writer based api
+    // implement Display? or Deserialze?
+    pub(crate) fn to_string(&self) -> String {
+        let mut ret = String::with_capacity(1024);
+
+        for section in &self.sections {
+            ret += &format!("[{}]\n", section.name);
+            for (k, v) in &section.entries {
+                ret += &format!("{k:?}={v:?}\n");
+            }
+        }
+
+        ret
     }
 }
 
