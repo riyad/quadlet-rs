@@ -161,7 +161,7 @@ fn convert_volume(unit: &SystemdUnit) -> Result<SystemdUnit, ConversionError> {
     Ok(SystemdUnit::new())
 }
 
-fn generate_service_file(output_path: &Path, service_name: &PathBuf, service: &SystemdUnit, orig_unit: &SystemdUnit) -> io::Result<()> {
+fn generate_service_file(output_path: &Path, service_name: &PathBuf, service: &mut SystemdUnit, orig_unit: &SystemdUnit) -> io::Result<()> {
     let orig_path = &orig_unit.path;
     let out_filename = output_path.join(service_name);
 
@@ -226,7 +226,7 @@ fn main() {
     for (name, unit) in units {
         let mut extra_suffix = "";
 
-        let service = if name.ends_with(".container") {
+        let mut service = if name.ends_with(".container") {
             match convert_container(&unit) {
                 Ok(service_unit) => service_unit,
                 Err(e) => {
@@ -255,7 +255,7 @@ fn main() {
             extra_suffix,
         );
 
-        match generate_service_file(&cfg.output_path, &service_name, &service, &unit){
+        match generate_service_file(&cfg.output_path, &service_name, &mut service, &unit){
             Ok(_) => {},
             Err(e) => {
                 warn!("Error writing {service_name:?}, ignoring: {e}")
