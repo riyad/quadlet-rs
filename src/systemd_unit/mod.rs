@@ -1,9 +1,10 @@
 mod constants;
 mod parser;
 
-use std::path::{PathBuf};
-
 pub use self::constants::*;
+
+use std::io;
+use std::path::PathBuf;
 
 type Error = parser::ParseError;
 
@@ -79,19 +80,16 @@ impl SystemdUnit {
             .collect()
     }
 
-    // use writer based api
-    // implement Display? or Deserialze?
-    pub(crate) fn to_string(&self) -> String {
-        let mut ret = String::with_capacity(1024);
+    pub fn write_to<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
 
         for section in &self.sections {
-            ret += &format!("[{}]\n", section.name);
+            write!(writer, "[{}]\n", section.name);
             for (k, v) in &section.entries {
-                ret += &format!("{k:?}={v:?}\n");
+                write!(writer, "{k:?}={v:?}\n");
             }
         }
 
-        ret
+        Ok(())
     }
 }
 

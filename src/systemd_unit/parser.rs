@@ -1,9 +1,9 @@
 pub(crate) mod lexer;
 
-use std::{fmt::Display};
-
 use self::lexer::{TokenType, Token};
 use super::{SystemdUnit, Entry, Section, Key, Value};
+
+use std::fmt::Display;
 
 type ParseResult<T> = Result<T, ParseError>;
 #[derive(Debug, PartialEq)]
