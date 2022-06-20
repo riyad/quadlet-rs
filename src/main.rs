@@ -4,17 +4,42 @@ use std::{env, path::{Path, PathBuf}, collections::HashMap, io::{ErrorKind, self
 
 use crate::systemd_unit::SystemdUnit;
 
+#[macro_use]
+extern crate lazy_static;
+
+lazy_static! {
+    static ref RUN_AS_USER: bool = std::env::args().nth(0).unwrap().contains("user");
+    static ref UNIT_DIRS: Vec<PathBuf> = {
+        let mut unit_dirs: Vec<PathBuf> = vec![];
+
+        if let Ok(unit_dirs_env) = std::env::var("QUADLET_UNIT_DIRS") {
+            let mut pathes_from_env: Vec<PathBuf> = unit_dirs_env
+                .split(":")
+                .map(|s| PathBuf::from(s))
+                .collect();
+            unit_dirs.append(pathes_from_env.as_mut());
+        } else {
+            if *RUN_AS_USER {
+                unit_dirs.push(get_user_config_dir().join("containers/systemd"))
+            } else {
+                unit_dirs.push(PathBuf::from(QUADLET_ADMIN_UNIT_SEARCH_PATH));
+                unit_dirs.push(PathBuf::from(QUADLET_DISTRO_UNIT_SEARCH_PATH));
+            }
+        }
+
+        unit_dirs
+    };
+}
+
 const QUADLET_VERSION: &str = "0.1.0";
 const QUADLET_ADMIN_UNIT_SEARCH_PATH: &str  = "/etc/containers/systemd";
 const QUADLET_DISTRO_UNIT_SEARCH_PATH: &str  = "/usr/share/containers/systemd";
-const QUADLET_USER_UNIT_SEARCH_PATH: &str  = "~/.local/containers/systemd";
 
 struct ArgError(String);
 
 #[derive(Debug)]
 struct Config {
-    is_user: bool,
-    output_path: Option<String>,
+    output_path: PathBuf,
     verbose: bool,
     version: bool,
 }
@@ -31,8 +56,7 @@ fn parse_args(args: Vec<String>) -> Result<Config, ArgError> {
     }
 
     let mut cfg = Config {
-        is_user: args[0].contains("user"),
-        output_path: None,
+        output_path: PathBuf::new(),
         verbose: false,
         version: false,
     };
@@ -46,7 +70,7 @@ fn parse_args(args: Vec<String>) -> Result<Config, ArgError> {
         }
     }
 
-    cfg.output_path = Some(args.last().unwrap().into());
+    cfg.output_path = args.last().unwrap().into();
 
     Ok(cfg)
 }
@@ -54,24 +78,6 @@ fn parse_args(args: Vec<String>) -> Result<Config, ArgError> {
 fn get_user_config_dir() -> PathBuf {
     // FIXME: get user's proper XDG_CONFIG_PATH
     PathBuf::from("~/.config")
-}
-
-fn quad_get_unit_dirs<'a>(user: bool) -> Vec<PathBuf> {
-    let mut unit_dirs: Vec<PathBuf> = vec![];  // TODO: make lazy static
-
-    if let Ok(unit_dirs_env) = std::env::var("QUADLET_UNIT_DIRS") {
-        let mut segments: Vec<PathBuf> = unit_dirs_env.split(":").map(|s| PathBuf::from(s)).collect();
-        unit_dirs.append(segments.as_mut());
-    } else {
-        if user {
-            unit_dirs.push(get_user_config_dir().join("containers/systemd"))
-        } else {
-            unit_dirs.push(PathBuf::from(QUADLET_ADMIN_UNIT_SEARCH_PATH));
-            unit_dirs.push(PathBuf::from(QUADLET_DISTRO_UNIT_SEARCH_PATH));
-        }
-    }
-
-    unit_dirs
 }
 
 fn load_units_from_dir(source_path: &PathBuf, units: &mut HashMap<String, SystemdUnit>) -> io::Result<()> {
@@ -114,7 +120,7 @@ fn load_units_from_dir(source_path: &PathBuf, units: &mut HashMap<String, System
     Ok(())
 }
 
-fn quad_replace_extension(file: &Path, new_extension: &str, extra_prefix: &str, extra_suffix: &str) -> PathBuf {
+fn quad_replace_extension(file: &PathBuf, new_extension: &str, extra_prefix: &str, extra_suffix: &str) -> PathBuf {
     let parent = file.parent().unwrap();
     let base_name = file.file_stem().unwrap().to_str().unwrap();
 
@@ -141,7 +147,7 @@ fn main() {
     dbg!("Starting quadlet-generator, output to: {}", &cfg.output_path);
     dbg!(&cfg);
 
-    let unit_search_dirs = quad_get_unit_dirs(cfg.is_user);
+    let unit_search_dirs = &*UNIT_DIRS;
 
     let mut units: HashMap<String, SystemdUnit> = HashMap::default();
     for source_path in unit_search_dirs {
