@@ -23,21 +23,22 @@ pub(crate) struct Section {
 type Entry = (Key, Value);
 
 #[derive(Clone, Debug, PartialEq)]
-struct Key(String);
+pub(crate) struct Key(String);
 
 impl From<&str> for Key {
-  fn from(key: &str) -> Self {
-      Self(key.to_owned())
-  }
+    fn from(key: &str) -> Self {
+        // FIXME: validate str
+        Self(key.to_owned())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
-struct Value(String);
+pub(crate) struct Value(String);
 
 impl From<&str> for Value {
-  fn from(val: &str) -> Self {
-      Self(val.to_owned())
-  }
+    fn from(val: &str) -> Self {
+        Self(val.to_owned())
+    }
 }
 
 impl Value {
@@ -47,9 +48,17 @@ impl Value {
 }
 
 impl SystemdUnit {
-    pub(crate) fn add_entry(&self, group_name: &str, key: String, value: String) {
-        //let &mut group = self.find_or_create_group(group_name)
-        //group.insert(key, value);
+    pub(crate) fn add_entry(&mut self, group_name: &str, key: Key, value: Value) {
+        match self.sections.iter_mut().find(|s| s.name == group_name) {
+            Some(section) => section.entries.push((key, value)),
+            None => {
+                self.sections.push(Section {
+                    name: group_name.to_owned(),
+                    entries: vec![(key, value)],
+                });
+            },
+        };
+
     }
 
     pub(crate) fn from_string(data: &str) -> Result<Self, Error> {
