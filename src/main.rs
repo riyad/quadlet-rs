@@ -35,6 +35,11 @@ const QUADLET_VERSION: &str = "0.1.0";
 const QUADLET_ADMIN_UNIT_SEARCH_PATH: &str  = "/etc/containers/systemd";
 const QUADLET_DISTRO_UNIT_SEARCH_PATH: &str  = "/usr/share/containers/systemd";
 
+const CONTAINER_GROUP: &str = "Container";
+const X_CONTAINER_GROUP: &str = "X-Container";
+const VOLUME_GROUP: &str = "Volume";
+const X_VOLUME_GROUP: &str = "X-Volume";
+
 struct ArgError(String);
 
 #[derive(Debug)]
