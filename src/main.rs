@@ -1,11 +1,13 @@
 mod systemd_unit;
 
+use log::{debug, error, info, warn};
 use std::{env, path::{Path, PathBuf}, collections::HashMap, io::{self}, fs, fmt::Display};
 
 use crate::systemd_unit::{SystemdUnit, UNIT_GROUP};
 
 #[macro_use]
 extern crate lazy_static;
+extern crate env_logger;
 
 lazy_static! {
     static ref RUN_AS_USER: bool = std::env::args().nth(0).unwrap().contains("user");
@@ -94,7 +96,7 @@ fn get_user_config_dir() -> PathBuf {
 }
 
 fn load_units_from_dir(source_path: &PathBuf, units: &mut HashMap<String, SystemdUnit>) -> io::Result<()> {
-    for entry in source_path.read_dir().expect("failed to read source path") {
+    for entry in source_path.read_dir()? {
         let entry = entry?;
         let name = entry.file_name();
 
@@ -114,7 +116,7 @@ fn load_units_from_dir(source_path: &PathBuf, units: &mut HashMap<String, System
         let data = match fs::read_to_string(&*name) {
             Ok(data) => data,
             Err(e) => {
-                println!("Error loading {path:?}, ignoring: {e}");
+                warn!("Error loading {path:?}, ignoring: {e}");
                 continue;
             }
         };
@@ -122,7 +124,7 @@ fn load_units_from_dir(source_path: &PathBuf, units: &mut HashMap<String, System
         let unit = match SystemdUnit::from_string(&data) {
             Ok(unit) => unit,
             Err(e) => {
-                println!("Error loading {path:?}, ignoring: {e}");
+                warn!("Error loading {path:?}, ignoring: {e}");
                 continue;
            },
         };
@@ -166,8 +168,7 @@ fn generate_service_file(output_path: &Path, service_name: &PathBuf, service: &S
 
     out_data += service.to_string().as_str();
 
-    // FIXME: make debug!()
-    println!("writing '{out_filename:?}'");
+    debug!("writing {out_filename:?}");
 
     fs::write(out_filename, out_data)?;
 
@@ -184,25 +185,32 @@ fn main() {
     let cfg = match parse_args(args) {
         Ok(cfg) => cfg,
         Err(ArgError(msg)) => {
-            eprintln!("Error: {}", msg);
+            println!("Error: {}", msg);
             help();
             std::process::exit(1)
         },
     };
+
+    let mut builder = env_logger::Builder::from_default_env();
+    builder
+        .target(env_logger::Target::Stdout)
+        .filter_level(if cfg.verbose { log::LevelFilter::Debug } else { log::LevelFilter::Info });
+    builder.init();
 
     if cfg.version {
         println!("quadlet {}", QUADLET_VERSION);
         std::process::exit(0);
     }
 
-    dbg!("Starting quadlet-generator, output to: {}", &cfg.output_path);
-    dbg!(&cfg);
+    debug!("Starting quadlet-generator, output to: {:?}", &cfg.output_path);
 
     let unit_search_dirs = &*UNIT_DIRS;
 
     let mut units: HashMap<String, SystemdUnit> = HashMap::default();
     for source_path in unit_search_dirs {
-        load_units_from_dir(&source_path, &mut units).expect("failed to load unit files");
+        if let Err(e) = load_units_from_dir(&source_path, &mut units) {
+            warn!("Can't read {source_path:?}: {e}");
+        }
     }
 
     for (name, unit) in units {
@@ -212,7 +220,7 @@ fn main() {
             match convert_container(&unit) {
                 Ok(service_unit) => service_unit,
                 Err(e) => {
-                    print!("Error converting '{name:?}', ignoring: {e}");
+                    warn!("Error converting {name:?}, ignoring: {e}");
                     continue;
                 },
             }
@@ -221,13 +229,12 @@ fn main() {
             match convert_volume(&unit) {
                 Ok(service_unit) => service_unit,
                 Err(e) => {
-                    print!("Error converting '{name:?}', ignoring: {e}");
+                    warn!("Error converting {name:?}, ignoring: {e}");
                     continue;
                 },
             }
         } else {
-            // FIXME: make debug!()
-            println!("Unsupported type '{name:?}'");
+            debug!("Unsupported type {name:?}");
             continue;
         };
 
@@ -241,13 +248,13 @@ fn main() {
         match generate_service_file(&cfg.output_path, &service_name, &service, &unit){
             Ok(_) => {},
             Err(e) => {
-                println!("Error writing '{service_name:?}', ignoring: {e}")
+                warn!("Error writing {service_name:?}, ignoring: {e}")
             },
         };
         match enable_service_file(&cfg.output_path, &service_name, &service) {
             Ok(_) => {},
             Err(e) => {
-                println!("Failed to enable generated unit for {service_name:?}, ignoring: {e}")
+                warn!("Failed to enable generated unit for {service_name:?}, ignoring: {e}")
             },
         }
     }
