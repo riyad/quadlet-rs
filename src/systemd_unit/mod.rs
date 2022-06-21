@@ -3,10 +3,21 @@ mod parser;
 
 pub use self::constants::*;
 
+use std::fmt;
 use std::io;
 use std::path::PathBuf;
 
 type Error = parser::ParseError;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ParseBoolError;
+
+impl fmt::Display for ParseBoolError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        "value was neither `1`, `yes`, `true`, `on` nor `0`, `no`, `false`, `off`".fmt(f)
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct SystemdUnit {
@@ -64,6 +75,16 @@ impl ToString for Value {
 }
 
 impl Value {
+    pub(crate) fn to_bool(&self) -> Result<bool,ParseBoolError> {
+        if ["1", "yes", "true", "on"].contains(&self.0.as_str()) {
+            return Ok(true);
+        } else if ["0", "no", "false", "off"].contains(&self.0.as_str()) {
+            return Ok(false)
+        }
+
+        Err(ParseBoolError)
+    }
+
     fn to_quoted(&self) -> Vec<&str> {
         todo!()
     }
