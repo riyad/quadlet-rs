@@ -4,7 +4,7 @@ mod systemd_unit;
 use self::quadlet::PodmanCommand;
 use self::systemd_unit::{SystemdUnit, SERVICE_GROUP, UNIT_GROUP};
 
-use log::{debug, warn};
+use log::{debug, warn, info};
 use std::collections::HashMap;
 use std::env;
 use std::fmt::Display;
@@ -18,6 +18,7 @@ extern crate env_logger;
 extern crate lazy_static;
 
 lazy_static! {
+    static ref DEFAULT_DROP_CAPS: Vec<&'static str> = vec!["all"];
     static ref RUN_AS_USER: bool = std::env::args().nth(0).unwrap().contains("user");
     static ref UNIT_DIRS: Vec<PathBuf> = {
         let mut unit_dirs: Vec<PathBuf> = vec![];
@@ -159,7 +160,9 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     service.rename_section(CONTAINER_GROUP, X_CONTAINER_GROUP);
 
     // FIXME: move to top
-    // warn_for_unknown_keys (container, CONTAINER_GROUP, supported_container_keys, &supported_container_keys_hash);
+    /* FIXME: port
+    warn_for_unknown_keys (container, CONTAINER_GROUP, supported_container_keys, &supported_container_keys_hash);
+    */
 
     // FIXME: move to top
     if let None = container.lookup_last(CONTAINER_GROUP, "Image") {
@@ -192,7 +195,9 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
 
     // Read env early so we can override it below
     let environments = container.lookup_all(CONTAINER_GROUP, "Environment");
-    // TODO: g_autoptr(GHashTable) podman_env = parse_keys (environments);
+    /* FIXME: port
+    g_autoptr(GHashTable) podman_env = parse_keys (environments);
+    */
 
     // Need the containers filesystem mounted to start podman
     service.add_entry(
@@ -224,6 +229,278 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         "ExecStopPost",
         "-rm -f %t/%N.cid",
     );
+
+    let mut podman = PodmanCommand::new_command("run");
+
+    let container_name_arg = format!("--name={container_name}");
+    podman.add(container_name_arg.as_str());
+
+    // We store the container id so we can clean it up in case of failure
+    podman.add("--cidfile=%t/%N.cid");
+
+    // And replace any previous container with the same name, not fail
+    podman.add("--replace");
+
+    // On clean shutdown, remove container
+    podman.add("--rm");
+
+    // Detach from container, we don't need the podman process to hang around
+    podman.add("-d");
+
+    // But we still want output to the journal, so use the log driver.
+    // TODO: Once available we want to use the passthrough log-driver instead.
+    podman.addv(&["--log-driver", "journald"]);
+
+    // Never try to pull the image during service start
+    podman.add("--pull=never");
+
+    // We use crun as the runtime and delegated groups to it
+    service.add_entry(
+        SERVICE_GROUP,
+        "Delegate",
+        "yes",
+    );
+    podman.addv(&[ "--runtime", "/usr/bin/crun", "--cgroups=split"]);
+
+    let timezone_arg: String;
+    if let Some(timezone) = container.lookup_last(CONTAINER_GROUP, "Timezone") {
+        timezone_arg = format!("--tz={}", timezone.to_string());
+        podman.add(timezone_arg.as_str());
+    }
+
+    // Run with a pid1 init to reap zombies by default (as most apps don't do that)
+    if let Some(_) = container.lookup_last(CONTAINER_GROUP, "RunInit") {
+        podman.add("--init");
+    }
+
+    // By default we handle startup notification with conmon, but allow passing it to the container with Notify=yes
+    let notify = container.lookup_last(CONTAINER_GROUP, "Notify")
+        .map(|v| v.to_bool().unwrap_or(false))
+        .unwrap_or(false);
+    if notify {
+        podman.add("--sdnotify=container");
+    } else {
+        podman.add("--sdnotify=conmon");
+    }
+    service.set_entry(
+        SERVICE_GROUP,
+        "Type",
+        "notify",
+    );
+    service.set_entry(
+        SERVICE_GROUP,
+        "NotifyAccess",
+        "all",
+    );
+
+    if let None = container.lookup_last(SERVICE_GROUP, "SyslogIdentifier") {
+        service.set_entry(
+            SERVICE_GROUP,
+            "SyslogIdentifier",
+            "%N",
+        );
+    }
+
+    // Default to no higher level privileges or caps
+    let no_new_privileges = container.lookup_last(CONTAINER_GROUP, "NoNewPrivileges")
+        .map(|v| v.to_bool().unwrap_or(true))
+        .unwrap_or(true);
+    if no_new_privileges {
+        podman.add("--security-opt=no-new-privileges");
+    }
+
+    let mut drop_caps: Vec<String> = container
+        .lookup_all(CONTAINER_GROUP, "DropCapability")
+        .iter()
+        .map(|v| v.to_string().to_ascii_lowercase())
+        .collect();
+    if drop_caps.is_empty() {
+        drop_caps = DEFAULT_DROP_CAPS.iter().map(|s| s.to_string()).collect();
+    }
+    drop_caps = drop_caps.iter().map(|caps| format!("--cap-drop={caps}")).collect();
+    for caps_arg in &drop_caps {
+        podman.add(caps_arg.as_str());
+    }
+
+    // But allow overrides with AddCapability
+    let add_caps: Vec<String> = container
+        .lookup_all(CONTAINER_GROUP, "AddCapability")
+        .iter()
+        .map(|v| format!("--cap-add={}", v.to_string().to_ascii_lowercase()))
+        .collect();
+    for caps_arg in &add_caps {
+        podman.add(caps_arg.as_str());
+    }
+
+    // We want /tmp to be a tmpfs, like on rhel host
+    let volatile_tmp = container.lookup_last(CONTAINER_GROUP, "VolatileTmp")
+        .map(|v| v.to_bool().unwrap_or(true))
+        .unwrap_or(true);
+    if volatile_tmp {
+        podman.addv(&["--mount", "type=tmpfs,tmpfs-size=512M,destination=/tmp"]);
+    }
+
+    let socket_activated = container.lookup_last(CONTAINER_GROUP, "SocketActivated")
+        .map(|v| v.to_bool().unwrap_or(false))
+        .unwrap_or(false);
+    if socket_activated {
+        // TODO: This will not be needed with later podman versions that support activation directly:
+        // https://github.com/containers/podman/pull/11316
+        podman.add("--preserve-fds=1");
+        /* FIXME: port
+        g_hash_table_insert (podman_env, g_strdup ("LISTEN_FDS"), g_strdup ("1"));
+        */
+
+        // TODO: This will not be 2 when catatonit forwards fds:
+        //  https://github.com/openSUSE/catatonit/pull/15
+        /* FIXME: port
+        g_hash_table_insert (podman_env, g_strdup ("LISTEN_PID"), g_strdup ("2"));
+        */
+    }
+
+    /* FIXME: port
+    uid_t default_container_uid = 0;
+    gid_t default_container_gid = 0;
+
+    gboolean keep_id = quad_unit_file_lookup_boolean (container, CONTAINER_GROUP, "KeepId", FALSE);
+    if (keep_id)
+        {
+        if (quad_is_user)
+            {
+            default_container_uid = getuid ();
+            default_container_gid = getgid ();
+            quad_podman_addv (podman, "--userns", "keep-id", NULL);
+            }
+        else
+            {
+            keep_id = FALSE;
+            quad_log ("Key 'KeepId' in '%s' unsupported for system units, ignoring", quad_unit_file_get_path (container));
+            }
+        }
+
+    uid_t uid = MAX (quad_unit_file_lookup_int (container, CONTAINER_GROUP, "User", default_container_uid), 0);
+    gid_t gid = MAX (quad_unit_file_lookup_int (container, CONTAINER_GROUP, "Group", default_container_gid), 0);
+
+    uid_t host_uid = quad_unit_file_lookup_uid (container,CONTAINER_GROUP, "HostUser", uid, error);
+    if (host_uid == (uid_t)-1)
+        return NULL;
+
+    gid_t host_gid = quad_unit_file_lookup_gid (container,CONTAINER_GROUP, "HostGroup", gid, error);
+    if (host_gid == (gid_t)-1)
+        return NULL;
+
+    if (uid != default_container_uid || gid != default_container_uid)
+        {
+        quad_podman_add (podman, "--user");
+        if (gid == default_container_gid)
+            quad_podman_addf (podman, "%lu", (long unsigned)uid);
+        else
+            quad_podman_addf (podman, "%lu:%lu", (long unsigned)uid, (long unsigned)gid);
+        }
+
+    gboolean remap_users = quad_unit_file_lookup_boolean (container, CONTAINER_GROUP, "RemapUsers", TRUE);
+
+    if (quad_is_user)
+        remap_users = FALSE;
+
+    if (!remap_users)
+        {
+        /* No remapping of users, although we still need maps if the
+            main user/group is remapped, even if most ids map one-to-one. */
+        if (uid != host_uid)
+            add_id_maps (podman, "--uidmap",
+                        uid, host_uid, UINT32_MAX, NULL);
+        if (gid != host_gid)
+            add_id_maps (podman, "--gidmap",
+                        gid, host_gid, UINT32_MAX, NULL);
+        }
+    else
+        {
+        g_autoptr(QuadRanges) uid_remap_ids = quad_unit_file_lookup_ranges (container, CONTAINER_GROUP, "RemapUidRanges",
+                                                                            quad_lookup_host_subuid, default_remap_uids);
+        g_autoptr(QuadRanges) gid_remap_ids = quad_unit_file_lookup_ranges (container, CONTAINER_GROUP, "RemapGidRanges",
+                                                                            quad_lookup_host_subgid, default_remap_gids);
+        guint32 remap_uid_start = MAX (quad_unit_file_lookup_int (container, CONTAINER_GROUP, "RemapUidStart", 1), 0);
+        guint32 remap_gid_start = MAX (quad_unit_file_lookup_int (container, CONTAINER_GROUP, "RemapGidStart", 1), 0);
+
+        add_id_maps (podman, "--uidmap",
+                    uid, host_uid,
+                    remap_uid_start, uid_remap_ids);
+        add_id_maps (podman, "--gidmap",
+                    gid, host_gid,
+                    remap_gid_start, gid_remap_ids);
+        }
+    */
+
+    let volumes: Vec<String> = container.lookup_all(CONTAINER_GROUP, "Volume")
+        .iter()
+        .map(|v| v.to_string())
+        .collect();
+    for volume in volumes {
+        let parts: Vec<&str> = volume.split(":").collect();
+        if parts.len() < 2 {
+            info!("Ignoring invalid volume '{volume}'");
+            continue;
+        }
+        let mut source = parts[0];
+        let dest = parts[1];
+        let options = if parts.len() >= 3 {
+            parts[2]
+        } else {
+            ""
+        };
+        let volume_name: PathBuf;
+
+        if source.starts_with("/") {
+            // Absolute path
+            service.add_entry(
+                UNIT_GROUP,
+                "RequiresMountsFor",
+                source,
+            );
+        } else {
+            // unit name (with .volume suffix) or named podman volume
+
+            if source.ends_with(".volume") {
+                // the podman volume name is systemd-$name
+                volume_name = quad_replace_extension(
+                    &PathBuf::from(source),
+                    "",
+                    "systemd-",
+                    "",
+                );
+
+                // the systemd unit name is $name-volume.service
+                let volume_service_name = quad_replace_extension(
+                    &PathBuf::from(source),
+                    ".service",
+                    "",
+                    "-volume",
+                );
+
+                source = volume_name.to_str().unwrap();
+
+                service.add_entry(
+                    UNIT_GROUP,
+                    "Requires",
+                    volume_service_name.to_str().unwrap(),
+                );
+                service.add_entry(
+                    UNIT_GROUP,
+                    "After",
+                    volume_service_name.to_str().unwrap(),
+                );
+            }
+        }
+
+        podman.add("-v");
+        let volume_arg = if options.is_empty() {
+            format!("{source}:{dest}")
+        } else {
+            format!("{source}:{dest}:{options}")
+        };
+        podman.add(&volume_arg);
+    }
 
     // TODO: continue porting
 
