@@ -10,9 +10,10 @@ use std::fs::{self, File};
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
+extern crate dirs;
+extern crate env_logger;
 #[macro_use]
 extern crate lazy_static;
-extern crate env_logger;
 
 lazy_static! {
     static ref RUN_AS_USER: bool = std::env::args().nth(0).unwrap().contains("user");
@@ -27,7 +28,7 @@ lazy_static! {
             unit_dirs.append(pathes_from_env.as_mut());
         } else {
             if *RUN_AS_USER {
-                unit_dirs.push(get_user_config_dir().join("containers/systemd"))
+                unit_dirs.push(dirs::config_dir().unwrap().join("containers/systemd"))
             } else {
                 unit_dirs.push(PathBuf::from(QUADLET_ADMIN_UNIT_SEARCH_PATH));
                 unit_dirs.push(PathBuf::from(QUADLET_DISTRO_UNIT_SEARCH_PATH));
@@ -99,11 +100,6 @@ fn parse_args(args: Vec<String>) -> Result<Config, String> {
 
 
     Ok(cfg)
-}
-
-fn get_user_config_dir() -> PathBuf {
-    // FIXME: get user's proper XDG_CONFIG_PATH
-    PathBuf::from("~/.config")
 }
 
 fn load_units_from_dir(source_path: &PathBuf, units: &mut HashMap<String, SystemdUnit>) -> io::Result<()> {
