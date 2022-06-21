@@ -14,10 +14,26 @@ pub(crate) struct SystemdUnit {
     pub(crate) sections: Vec<Section>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Section {
     name: String,
     entries: Vec<Entry>,
+}
+
+impl Section {
+    pub(crate) fn new(name: String) -> Self {
+        // FIXME: validate name
+        let mut ret = Self::_new();
+        ret.name = name;
+        ret
+    }
+
+    fn _new() -> Self {
+        Section {
+            name: Default::default(),
+            entries: Default::default(),
+        }
+    }
 }
 
 type Entry = (Key, Value);
@@ -41,6 +57,12 @@ impl From<&str> for Value {
     }
 }
 
+impl ToString for Value {
+    fn to_string(&self) -> String {
+        self.0.clone()
+    }
+}
+
 impl Value {
     fn to_quoted(&self) -> Vec<&str> {
         todo!()
@@ -48,13 +70,14 @@ impl Value {
 }
 
 impl SystemdUnit {
-    pub(crate) fn add_entry(&mut self, group_name: &str, key: Key, value: Value) {
+    pub(crate) fn add_entry(&mut self, group_name: &str, key: &str, value: &str) {
+        let entry = (key.into(), value.into());
         match self.sections.iter_mut().find(|s| s.name == group_name) {
-            Some(section) => section.entries.push((key, value)),
+            Some(section) => section.entries.push(entry),
             None => {
                 self.sections.push(Section {
                     name: group_name.to_owned(),
-                    entries: vec![(key, value)],
+                    entries: vec![entry],
                 });
             },
         };
@@ -69,6 +92,27 @@ impl SystemdUnit {
         Ok(unit)
     }
 
+    pub(crate)fn lookup_all(&self, lookup_section: &str, lookup_key: &str) -> Vec<&Value> {
+        self.sections
+            .iter()
+            .filter(|s| s.name == lookup_section)
+            .map(|s| &s.entries)
+            .flatten()
+            .filter(|(k, _v)| k.0 == lookup_key )
+            .map(|(_k,v)| v)
+            .collect()
+    }
+
+    pub(crate) fn lookup_last(&self, lookup_section: &str, lookup_key: &str) -> Option<&Value> {
+        self.sections
+            .iter()
+            .filter(|s| s.name == lookup_section)
+            .map(|s| &s.entries)
+            .flatten()
+            .find(|(k, _v)| k.0 == lookup_key )
+            .map(|(_k,v)| v)
+    }
+
     pub(crate) fn new() -> Self {
         SystemdUnit {
             path: None,
@@ -76,9 +120,17 @@ impl SystemdUnit {
         }
     }
 
-    fn section_names(&self) -> Vec<String> {
-        // FIXME: make sure list only has unique elements
-        self.sections.iter().map(|s| s.name.clone()).collect()
+    pub(crate) fn merge_from(&mut self, other: &SystemdUnit) {
+        for other_section in &other.sections {
+            self.sections.push(other_section.clone());
+        }
+    }
+
+    pub(crate) fn rename_section(&mut self, from: &str, to: &str) {
+        self.sections
+            .iter_mut()
+            .filter(|s| s.name == from)
+            .map(|s| s.name = to.to_owned());
     }
 
     fn section_entries(&self, section_name: &str) -> Vec<Entry> {
@@ -87,6 +139,40 @@ impl SystemdUnit {
             .map(|s| s.entries.clone())
             .flatten()
             .collect()
+    }
+
+    pub(crate) fn section_names(&self) -> Vec<String> {
+        // FIXME: make sure list only has unique elements
+        self.sections.iter().map(|s| s.name.clone()).collect()
+    }
+
+    pub(crate) fn set_entry(&mut self, section_name: &str, key: &str, value: &str) {
+        let section = match self.sections
+            .iter_mut()
+            .find(|s| s.name == section_name)
+            .map(|s| s) {
+                Some(s) => s,
+                None =>  {
+                    let mut s = Section::new(section_name.to_owned());
+                    self.sections.push(s);
+                    self.sections.iter_mut().last().unwrap()
+                },
+            };
+
+        let entry = (key.into(), value.into());
+
+        if section.entries.len() == 0 {
+            section.entries.push(entry);
+        } else {
+            // find index of last occurrence of key
+            let (i, _) = section.entries
+                .iter_mut()
+                .enumerate()
+                .rev()
+                .find(|(_i, (k,_v))| k.0 == key).unwrap();
+            // replace that entry
+            section.entries.insert(i, entry);
+        }
     }
 
     pub fn write_to<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {

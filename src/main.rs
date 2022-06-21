@@ -1,6 +1,6 @@
 mod systemd_unit;
 
-use self::systemd_unit::{SystemdUnit, UNIT_GROUP};
+use self::systemd_unit::{SystemdUnit, SERVICE_GROUP, UNIT_GROUP};
 
 use log::{debug, warn};
 use std::collections::HashMap;
@@ -149,8 +149,83 @@ fn quad_replace_extension(file: &PathBuf, new_extension: &str, extra_prefix: &st
     parent.join(format!("{extra_prefix}{base_name}{extra_suffix}{new_extension}"))
 }
 
-fn convert_container(unit: &SystemdUnit) -> Result<SystemdUnit, ConversionError> {
-    Ok(SystemdUnit::new())
+fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionError> {
+    let mut service = SystemdUnit::new();
+
+    service.merge_from(container);
+
+    service.rename_section(CONTAINER_GROUP, X_CONTAINER_GROUP);
+
+    // FIXME: move to top
+    // warn_for_unknown_keys (container, CONTAINER_GROUP, supported_container_keys, &supported_container_keys_hash);
+
+    // FIXME: move to top
+    if let None = container.lookup_last(CONTAINER_GROUP, "Image") {
+        return Err(ConversionError("No Image key specified"))
+    }
+
+    let container_name = container
+        .lookup_last(CONTAINER_GROUP, "ContainerName")
+        .map(|v| v.to_string())
+        // By default, We want to name the container by the service name
+        .unwrap_or("systemd-%N".to_owned());
+
+    // Set PODMAN_SYSTEMD_UNIT so that podman auto-update can restart the service.
+    service.add_entry(
+        SERVICE_GROUP,
+        "Environment".into(),
+        "PODMAN_SYSTEMD_UNIT=%n".into(),
+    );
+
+    // Only allow mixed or control-group, as nothing else works well
+    let kill_mode = service.lookup_last(SERVICE_GROUP, "KillMode");
+    if kill_mode.is_none() || !["mixed", "control-group"].contains(&kill_mode.unwrap().to_string().as_str()) {
+        if kill_mode.is_some() {
+            warn!("Invalid KillMode {:?}, ignoring", kill_mode.unwrap());
+        }
+
+        // We default to mixed instead of control-group, because it lets conmon do its thing
+        service.set_entry(SERVICE_GROUP, "KillMode", "mixed");
+    }
+
+    // Read env early so we can override it below
+    let environments = container.lookup_all(CONTAINER_GROUP, "Environment");
+    // TODO: g_autoptr(GHashTable) podman_env = parse_keys (environments);
+
+    // Need the containers filesystem mounted to start podman
+    service.add_entry(
+        UNIT_GROUP,
+        "RequiresMountsFor",
+        "%t/containers",
+    );
+
+    // Remove any leftover cid file before starting, just to be sure.
+    // We remove any actual pre-existing container by name with --replace=true.
+    // But --cidfile will fail if the target exists.
+    service.add_entry(
+        SERVICE_GROUP,
+        "ExecStartPre",
+        "-rm -f %t/%N.cid",
+    );
+
+    // If the conman exited uncleanly it may not have removed the container, so force it,
+    // -i makes it ignore non-existing files.
+    service.add_entry(
+        SERVICE_GROUP,
+        "ExecStopPost",
+        "-/usr/bin/podman rm -f -i --cidfile=%t/%N.cid",
+    );
+
+    // Remove the cid file, to avoid confusion as the container is no longer running.
+    service.add_entry(
+        SERVICE_GROUP,
+        "ExecStopPost",
+        "-rm -f %t/%N.cid",
+    );
+
+    // TODO: continue porting
+
+    Ok(service)
 }
 
 fn convert_volume(unit: &SystemdUnit) -> Result<SystemdUnit, ConversionError> {
