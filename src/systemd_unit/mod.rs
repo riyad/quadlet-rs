@@ -81,7 +81,6 @@ impl SystemdUnit {
                 });
             },
         };
-
     }
 
     pub(crate) fn from_string(data: &str) -> Result<Self, Error> {
@@ -127,7 +126,7 @@ impl SystemdUnit {
     }
 
     pub(crate) fn rename_section(&mut self, from: &str, to: &str) {
-        self.sections
+        let _ = self.sections
             .iter_mut()
             .filter(|s| s.name == from)
             .map(|s| s.name = to.to_owned());
@@ -148,16 +147,16 @@ impl SystemdUnit {
 
     pub(crate) fn set_entry(&mut self, section_name: &str, key: &str, value: &str) {
         let section = match self.sections
-            .iter_mut()
-            .find(|s| s.name == section_name)
-            .map(|s| s) {
-                Some(s) => s,
-                None =>  {
-                    let mut s = Section::new(section_name.to_owned());
-                    self.sections.push(s);
-                    self.sections.iter_mut().last().unwrap()
-                },
-            };
+                .iter_mut()
+                .find(|s| s.name == section_name)
+                .map(|s| s) {
+            Some(s) => s,
+            None =>  {
+                let s = Section::new(section_name.to_owned());
+                self.sections.push(s);
+                self.sections.iter_mut().last().unwrap()
+            },
+        };
 
         let entry = (key.into(), value.into());
 
