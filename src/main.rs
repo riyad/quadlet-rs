@@ -1,5 +1,7 @@
+mod quadlet;
 mod systemd_unit;
 
+use self::quadlet::PodmanCommand;
 use self::systemd_unit::{SystemdUnit, SERVICE_GROUP, UNIT_GROUP};
 
 use log::{debug, warn};
