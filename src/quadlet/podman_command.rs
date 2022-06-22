@@ -32,4 +32,8 @@ impl<'a> PodmanCommand<'a> {
 
         podman
     }
+
+    pub(crate) fn to_escaped_string(&self) -> String {
+        shlex::join(self.args)
+    }
 }
