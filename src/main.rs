@@ -13,7 +13,7 @@ use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 extern crate dirs;
-extern crate env_logger;
+extern crate simplelog;
 #[macro_use]
 extern crate lazy_static;
 
@@ -551,11 +551,10 @@ fn main() {
         },
     };
 
-    let mut builder = env_logger::Builder::from_default_env();
-    builder
-        .target(env_logger::Target::Stdout)
-        .filter_level(if cfg.verbose { log::LevelFilter::Debug } else { log::LevelFilter::Info });
-    builder.init();
+    let _ = simplelog::SimpleLogger::init(
+        if cfg.verbose { log::LevelFilter::Debug } else { log::LevelFilter::Info },
+        simplelog::Config::default(),
+    );
 
     if cfg.version {
         println!("quadlet {}", QUADLET_VERSION);
