@@ -14,14 +14,17 @@ impl<'a> PodmanCommand<'a> {
         self.args.push(arg);
     }
 
-    pub(crate) fn addf(&mut self, arg: &'a String)
-    {
-        self.args.push(arg.as_str());
-    }
-
-    pub(crate) fn addv(&mut self, args: &'a [&str])
+    pub(crate) fn add_slice(&mut self, args: &'a [&str])
     {
         self.args.append(args.to_vec().as_mut())
+    }
+
+
+    pub(crate) fn add_vec(&mut self, args: &'a Vec<String>)
+    {
+        for arg in args.as_slice() {
+            self.args.push(arg)
+        }
     }
 
     pub(crate) fn new_command(command: &'a str) -> Self {

@@ -249,7 +249,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
 
     // But we still want output to the journal, so use the log driver.
     // TODO: Once available we want to use the passthrough log-driver instead.
-    podman.addv(&["--log-driver", "journald"]);
+    podman.add_slice(&["--log-driver", "journald"]);
 
     // Never try to pull the image during service start
     podman.add("--pull=never");
@@ -260,7 +260,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         "Delegate",
         "yes",
     );
-    podman.addv(&[ "--runtime", "/usr/bin/crun", "--cgroups=split"]);
+    podman.add_slice(&[ "--runtime", "/usr/bin/crun", "--cgroups=split"]);
 
     let timezone_arg: String;
     if let Some(timezone) = container.lookup_last(CONTAINER_GROUP, "Timezone") {
@@ -318,9 +318,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         drop_caps = DEFAULT_DROP_CAPS.iter().map(|s| s.to_string()).collect();
     }
     drop_caps = drop_caps.iter().map(|caps| format!("--cap-drop={caps}")).collect();
-    for caps_arg in &drop_caps {
-        podman.add(caps_arg.as_str());
-    }
+    podman.add_vec(&drop_caps);
 
     // But allow overrides with AddCapability
     let add_caps: Vec<String> = container
@@ -328,16 +326,14 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         .iter()
         .map(|v| format!("--cap-add={}", v.to_string().to_ascii_lowercase()))
         .collect();
-    for caps_arg in &add_caps {
-        podman.add(caps_arg.as_str());
-    }
+    podman.add_vec(&add_caps);
 
     // We want /tmp to be a tmpfs, like on rhel host
     let volatile_tmp = container.lookup_last(CONTAINER_GROUP, "VolatileTmp")
         .map(|v| v.to_bool().unwrap_or(true))
         .unwrap_or(true);
     if volatile_tmp {
-        podman.addv(&["--mount", "type=tmpfs,tmpfs-size=512M,destination=/tmp"]);
+        podman.add_slice(&["--mount", "type=tmpfs,tmpfs-size=512M,destination=/tmp"]);
     }
 
     let socket_activated = container.lookup_last(CONTAINER_GROUP, "SocketActivated")
