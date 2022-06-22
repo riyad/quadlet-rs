@@ -1,7 +1,7 @@
 pub(crate) mod lexer;
 
-use self::lexer::{TokenType, Token};
-use super::{SystemdUnit, Entry, Section, Key, Value};
+use self::lexer::*;
+use super::*;
 
 use std::fmt::Display;
 

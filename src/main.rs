@@ -1,9 +1,14 @@
+extern crate dirs;
+extern crate lazy_static;
+extern crate simplelog;
+
 mod quadlet;
 mod systemd_unit;
 
-use self::quadlet::PodmanCommand;
-use self::systemd_unit::{SystemdUnit, SERVICE_GROUP, UNIT_GROUP};
+use self::quadlet::*;
+use self::systemd_unit::*;
 
+use lazy_static::lazy_static;
 use log::{debug, warn, info};
 use std::collections::HashMap;
 use std::env;
@@ -11,11 +16,6 @@ use std::fmt::Display;
 use std::fs::{self, File};
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
-
-extern crate dirs;
-extern crate simplelog;
-#[macro_use]
-extern crate lazy_static;
 
 lazy_static! {
     static ref DEFAULT_DROP_CAPS: Vec<&'static str> = vec!["all"];
