@@ -1,5 +1,5 @@
 extern crate dirs;
-extern crate lazy_static;
+extern crate once_cell;
 extern crate simplelog;
 
 mod quadlet;
@@ -8,8 +8,8 @@ mod systemd_unit;
 use self::quadlet::*;
 use self::systemd_unit::*;
 
-use lazy_static::lazy_static;
-use log::{debug, warn, info};
+use log::{debug, warn};
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::env;
 use std::fmt::Display;
@@ -17,30 +17,30 @@ use std::fs::{self, File};
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
-lazy_static! {
-    static ref DEFAULT_DROP_CAPS: Vec<&'static str> = vec!["all"];
-    static ref RUN_AS_USER: bool = std::env::args().nth(0).unwrap().contains("user");
-    static ref UNIT_DIRS: Vec<PathBuf> = {
-        let mut unit_dirs: Vec<PathBuf> = vec![];
+static DEFAULT_DROP_CAPS: &[&str] = &["all"];
+static RUN_AS_USER: Lazy<bool> = Lazy::new(|| {
+    env::args().nth(0).unwrap().contains("user")
+});
+static UNIT_DIRS: Lazy<Vec<PathBuf>> = Lazy::new(|| {
+    let mut unit_dirs: Vec<PathBuf> = vec![];
 
-        if let Ok(unit_dirs_env) = std::env::var("QUADLET_UNIT_DIRS") {
-            let mut pathes_from_env: Vec<PathBuf> = unit_dirs_env
-                .split(":")
-                .map(|s| PathBuf::from(s))
-                .collect();
-            unit_dirs.append(pathes_from_env.as_mut());
+    if let Ok(unit_dirs_env) = std::env::var("QUADLET_UNIT_DIRS") {
+        let mut pathes_from_env: Vec<PathBuf> = unit_dirs_env
+            .split(":")
+            .map(|s| PathBuf::from(s))
+            .collect();
+        unit_dirs.append(pathes_from_env.as_mut());
+    } else {
+        if *RUN_AS_USER {
+            unit_dirs.push(dirs::config_dir().unwrap().join("containers/systemd"))
         } else {
-            if *RUN_AS_USER {
-                unit_dirs.push(dirs::config_dir().unwrap().join("containers/systemd"))
-            } else {
-                unit_dirs.push(PathBuf::from(QUADLET_ADMIN_UNIT_SEARCH_PATH));
-                unit_dirs.push(PathBuf::from(QUADLET_DISTRO_UNIT_SEARCH_PATH));
-            }
+            unit_dirs.push(PathBuf::from(QUADLET_ADMIN_UNIT_SEARCH_PATH));
+            unit_dirs.push(PathBuf::from(QUADLET_DISTRO_UNIT_SEARCH_PATH));
         }
+    }
 
-        unit_dirs
-    };
-}
+    unit_dirs
+});
 
 const QUADLET_VERSION: &str = "0.1.0";
 const QUADLET_ADMIN_UNIT_SEARCH_PATH: &str  = "/etc/containers/systemd";
@@ -165,9 +165,11 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     */
 
     // FIXME: move to top
-    if let None = container.lookup_last(CONTAINER_GROUP, "Image") {
+    let image = if let Some(image) =container.lookup_last(CONTAINER_GROUP, "Image") {
+        image.to_string()
+    } else {
         return Err(ConversionError("No Image key specified"))
-    }
+    };
 
     let container_name = container
         .lookup_last(CONTAINER_GROUP, "ContainerName")
@@ -428,75 +430,76 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         }
     */
 
-    let volumes: Vec<String> = container.lookup_all(CONTAINER_GROUP, "Volume")
+    let volume_args: Vec<String> = container.lookup_all(CONTAINER_GROUP, "Volume")
         .iter()
-        .map(|v| v.to_string())
-        .collect();
-    for volume in volumes {
-        let parts: Vec<&str> = volume.split(":").collect();
-        if parts.len() < 2 {
-            info!("Ignoring invalid volume '{volume}'");
-            continue;
-        }
-        let mut source = parts[0];
-        let dest = parts[1];
-        let options = if parts.len() >= 3 {
-            parts[2]
-        } else {
-            ""
-        };
-        let volume_name: PathBuf;
-
-        if source.starts_with("/") {
-            // Absolute path
-            service.add_entry(
-                UNIT_GROUP,
-                "RequiresMountsFor",
-                source,
-            );
-        } else {
-            // unit name (with .volume suffix) or named podman volume
-
-            if source.ends_with(".volume") {
-                // the podman volume name is systemd-$name
-                volume_name = quad_replace_extension(
-                    &PathBuf::from(source),
-                    "",
-                    "systemd-",
-                    "",
-                );
-
-                // the systemd unit name is $name-volume.service
-                let volume_service_name = quad_replace_extension(
-                    &PathBuf::from(source),
-                    ".service",
-                    "",
-                    "-volume",
-                );
-
-                source = volume_name.to_str().unwrap();
-
-                service.add_entry(
-                    UNIT_GROUP,
-                    "Requires",
-                    volume_service_name.to_str().unwrap(),
-                );
-                service.add_entry(
-                    UNIT_GROUP,
-                    "After",
-                    volume_service_name.to_str().unwrap(),
-                );
+        .map(|v| {
+            let volume = v.to_string();
+            let parts: Vec<&str> = volume.split(":").collect();
+            if parts.len() < 2 {
+                warn!("Ignoring invalid volume '{volume}'");
+                return None
             }
-        }
+            let mut source = parts[0];
+            let dest = parts[1];
+            let options = if parts.len() >= 3 {
+                parts[2]
+            } else {
+                ""
+            };
+            let volume_name: PathBuf;
 
-        podman.add("-v");
-        let volume_arg = if options.is_empty() {
-            format!("{source}:{dest}")
-        } else {
-            format!("{source}:{dest}:{options}")
-        };
-        podman.add(&volume_arg);
-    }
+            if source.starts_with("/") {
+                // Absolute path
+                service.add_entry(
+                    UNIT_GROUP,
+                    "RequiresMountsFor",
+                    source,
+                );
+            } else {
+                // unit name (with .volume suffix) or named podman volume
+
+                if source.ends_with(".volume") {
+                    // the podman volume name is systemd-$name
+                    volume_name = quad_replace_extension(
+                        &PathBuf::from(source),
+                        "",
+                        "systemd-",
+                        "",
+                    );
+
+                    // the systemd unit name is $name-volume.service
+                    let volume_service_name = quad_replace_extension(
+                        &PathBuf::from(source),
+                        ".service",
+                        "",
+                        "-volume",
+                    );
+
+                    source = volume_name.to_str().unwrap();
+
+                    service.add_entry(
+                        UNIT_GROUP,
+                        "Requires",
+                        volume_service_name.to_str().unwrap(),
+                    );
+                    service.add_entry(
+                        UNIT_GROUP,
+                        "After",
+                        volume_service_name.to_str().unwrap(),
+                    );
+                }
+            }
+
+            if options.is_empty() {
+                Some(format!("-v={source}:{dest}"))
+            } else {
+                Some(format!("-v={source}:{dest}:{options}"))
+            }
+        })
+        .filter(|o| o.is_some())
+        .map(|o| o.unwrap())
+        .collect();
+    podman.add_vec(&volume_args);
 
     // TODO: continue porting
 
