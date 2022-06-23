@@ -197,6 +197,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
 
     // Read env early so we can override it below
     let environments = container.lookup_all(CONTAINER_GROUP, "Environment");
+    let  mut env_args: Vec<String> = vec![];
     /* FIXME: port
     g_autoptr(GHashTable) podman_env = parse_keys (environments);
     */
@@ -501,7 +502,142 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         .collect();
     podman.add_vec(&volume_args);
 
-    // TODO: continue porting
+    let exposed_port_args: Vec<String> = container
+        .lookup_all(CONTAINER_GROUP, "ExposeHostPort")
+        .iter()
+        .map(|v| {
+            let exposed_port = v.to_string().trim_end().to_owned();  // Allow whitespace after
+
+            if is_port_range(exposed_port.as_str()) {
+                warn!("Ignoring invalid exposed port: '{exposed_port}'");
+                return None
+            }
+
+            Some(format!("--expose={exposed_port}"))
+        })
+        .filter(|o| o.is_some())
+        .map(|o| o.unwrap())
+        .collect();
+    podman.add_vec(&exposed_port_args);
+
+    /* FIXME: port
+    g_auto(GStrv) publish_ports = quad_unit_file_lookup_all (container, CONTAINER_GROUP, "PublishPort");
+    for (guint i = 0; publish_ports[i] != NULL; i++)
+        {
+        char *publish_port = g_strstrip (publish_ports[i]); /* Allow whitespaces before and after */
+        /* IP address could have colons in it. For example: "[::]:8080:80/tcp, so use custom splitter */
+        g_auto(GStrv) parts = quad_split_ports (publish_port);
+        const char *container_port = NULL, *ip = NULL, *host_port = NULL;
+
+        /* format (from podman run):
+        * ip:hostPort:containerPort | ip::containerPort | hostPort:containerPort | containerPort
+        *
+        * ip could be IPv6 with minimum of these chars "[::]"
+        * containerPort can have a suffix of "/tcp" or "/udp"
+        */
+
+        switch (g_strv_length (parts))
+            {
+            case 1:
+            container_port = parts[0];
+            break;
+
+            case 2:
+            host_port = parts[0];
+            container_port = parts[1];
+            break;
+
+            case 3:
+            ip = parts[0];
+            host_port = parts[1];
+            container_port = parts[2];
+            break;
+
+            default:
+            quad_log ("Ignoring invalid published port '%s'", publish_port);
+            continue;
+            }
+
+        if (host_port && *host_port == 0)
+            host_port = NULL;
+
+        if (ip && (strcmp (ip, "0.0.0.0") == 0 || *ip == 0))
+            ip = NULL;
+
+        if (host_port && !is_port_range (host_port))
+            {
+            quad_log ("Invalid port format '%s'", host_port);
+            continue;
+            }
+
+        if (container_port && !is_port_range (container_port))
+            {
+            quad_log ("Invalid port format '%s'", container_port);
+            continue;
+            }
+
+        if (ip)
+            quad_podman_addf (podman, "-p=%s:%s:%s", ip, host_port ? host_port : "", container_port);
+        else if (host_port)
+            quad_podman_addf (podman, "-p=%s:%s", host_port, container_port);
+        else
+            quad_podman_addf (podman, "-p=%s", container_port);
+        }
+    */
+
+    podman.add_vec(&env_args);
+
+    /* FIXME: port
+    g_auto(GStrv) labels = quad_unit_file_lookup_all (container, CONTAINER_GROUP, "Label");
+    g_autoptr(GHashTable) podman_labels = parse_keys (labels);
+    quad_podman_add_labels (podman, podman_labels);
+    */
+
+    /* FIXME: port
+    g_auto(GStrv) annotations = quad_unit_file_lookup_all (container, CONTAINER_GROUP, "Annotation");
+    g_autoptr(GHashTable) podman_annotations = parse_keys (annotations);
+    quad_podman_add_annotations (podman, podman_annotations);
+    */
+
+    let podman_args_args: Vec<&str> = container.lookup_all(CONTAINER_GROUP, "PodmanArgs")
+        .iter()
+        .map(|v| {
+            let podman_args_s = v.to_string();
+            /* FIXME: port
+            // quad_split_string(
+            //     podman_args_s.as_str(),
+            //     WHITESPACE,
+            //     make_bitflags!(QuadSplitFlags::{RELAX|UNQUOTE|CUNESCAPE}),
+            // )
+            */
+            vec![]
+        })
+        .flatten()
+        .collect();
+    podman.add_slice(podman_args_args.as_slice());
+
+    podman.add(image.as_str());
+
+    let exec_key_args = container.lookup_last(CONTAINER_GROUP, "Exec")
+        .map(|v| {
+            let exec_key = v.to_string();
+            /* FIXME: port
+            // quad_split_string(
+            //     exec_key.as_str(),
+            //     WHITESPACE,
+            //     make_bitflags!(QuadSplitFlags::{RELAX|UNQUOTE|CUNESCAPE}),
+            // )
+            */
+            vec![]
+        })
+        .unwrap_or(vec![]);
+    podman.add_slice(exec_key_args.as_slice());
+
+    service.add_entry(
+        SERVICE_GROUP,
+        "ExecStart",
+        podman.to_escaped_string().as_str(),
+    );
 
     Ok(service)
 }
