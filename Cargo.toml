@@ -11,3 +11,10 @@ log = "0.4.0"
 once_cell = "1.12.0"
 shlex = "1.1.0"
 simplelog = "0.12.0"
+
+# NOTE: only using the std feature reduces the resulting binary by ~1.1MB
+[dependencies.regex]
+version = "1.5.6"
+default-features = false
+# regex currently requires the standard library, we must re-enable it.
+features = ["std"]
