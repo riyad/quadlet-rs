@@ -815,5 +815,21 @@ mod tests {
             );
             assert_eq!(parser.pos, old_pos+2);
         }
+
+        #[test]
+        fn test_continuation_with_kv_style_line_succeeds() {
+            let tokens = vec![
+                Token::new(TokenType::Text, "org.foo.Arg1=arg1 \"org.foo.Arg2=arg 2\" "),
+                Token::new(TokenType::ContinueNL, "\\"),
+                Token::new(TokenType::Text, "  org.foo.Arg3=arg3"),
+            ];
+            let mut parser = Parser::new(tokens);
+            let old_pos = parser.pos;
+            assert_eq!(
+                parser.parse_value(),
+                Ok("org.foo.Arg1=arg1 \"org.foo.Arg2=arg 2\"    org.foo.Arg3=arg3".into())
+            );
+            assert_eq!(parser.pos, old_pos+3);
+        }
     }
 }

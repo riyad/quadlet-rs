@@ -29,7 +29,7 @@ pub(crate) struct Lexer;
 
 impl Lexer {
     pub(crate) fn tokens_from(data: &str) -> Result<Vec<Token>, super::ParseError> {
-        let mut tokens = Vec::with_capacity(data.lines().count());
+        let mut tokens: Vec<Token> = Vec::with_capacity(data.lines().count());
 
         for line in data.lines() {
             if line.is_empty() {
@@ -39,13 +39,13 @@ impl Lexer {
                 tokens.push(Token::new(TokenType::Comment, line));
                 continue;
             }
-            if line.starts_with('[') && line.ends_with(']') {  // shortcut
+            if tokens.last().map(|t| t.token_type != TokenType::ContinueNL).unwrap_or(true) && line.starts_with('[') && line.ends_with(']') {  // shortcut
                 tokens.push(Token::new(TokenType::SectionHeaderStart, &line[0..1]));
                 tokens.push(Token::new(TokenType::Text, &line[1..line.len()-1]));
                 tokens.push(Token::new(TokenType::SectionHeaderEnd, &line[line.len()-1..line.len()]));
                 continue;
             }
-            if line.contains("=") {
+            if tokens.last().map(|t| t.token_type != TokenType::ContinueNL).unwrap_or(true) && line.contains("=") {
                 if let Some((key, value)) = line.split_once("=") {
                     tokens.push(Token::new(TokenType::Text, key.trim_end()));
                     tokens.push(Token::new(TokenType::KVSeparator, "="));
@@ -230,9 +230,46 @@ KeyThree=value 3\\
             assert_eq!(tokens[29], Token::new(TokenType::Comment, "; this line is ignored too"));
             assert_eq!(tokens[30], Token::new(TokenType::Text, "       value 3 continued"));
             assert_eq!(tokens.last().unwrap().token_type, TokenType::EOF);
+        }
 
-            // assert_eq!(tokens[6], Token::new(TokenType::ContinueNL, "\\"));
-            // assert_eq!(tokens[7], Token::new(TokenType::Text, "Else"));
+        #[test]
+        fn  test_quadlet_annotatopm_container_case_succeeds() {
+            let data = "## assert-podman-final-args imagename
+## assert-podman-args \"--annotation\" \"org.foo.Arg0=arg0\"
+## assert-podman-args \"--annotation\" \"org.foo.Arg1=arg1\"
+## assert-podman-args \"--annotation\" \"org.foo.Arg2=arg 2\"
+## assert-podman-args \"--annotation\" \"org.foo.Arg3=arg3\"
+
+[Container]
+Image=imagename
+Annotation=org.foo.Arg1=arg1 \"org.foo.Arg2=arg 2\" \\
+  org.foo.Arg3=arg3
+
+Annotation=org.foo.Arg0=arg0
+";
+
+            let tokens = Lexer::tokens_from(data).unwrap();
+            assert_eq!(tokens.len(), 20);
+            assert_eq!(tokens[ 0], Token::new(TokenType::Comment, "## assert-podman-final-args imagename"));
+            assert_eq!(tokens[ 1], Token::new(TokenType::Comment, "## assert-podman-args \"--annotation\" \"org.foo.Arg0=arg0\""));
+            assert_eq!(tokens[ 2], Token::new(TokenType::Comment, "## assert-podman-args \"--annotation\" \"org.foo.Arg1=arg1\""));
+            assert_eq!(tokens[ 3], Token::new(TokenType::Comment, "## assert-podman-args \"--annotation\" \"org.foo.Arg2=arg 2\""));
+            assert_eq!(tokens[ 4], Token::new(TokenType::Comment, "## assert-podman-args \"--annotation\" \"org.foo.Arg3=arg3\""));
+            assert_eq!(tokens[ 5], Token::new(TokenType::SectionHeaderStart, "["));
+            assert_eq!(tokens[ 6], Token::new(TokenType::Text, "Container"));
+            assert_eq!(tokens[ 7], Token::new(TokenType::SectionHeaderEnd, "]"));
+            assert_eq!(tokens[ 8], Token::new(TokenType::Text, "Image"));
+            assert_eq!(tokens[ 9], Token::new(TokenType::KVSeparator, "="));
+            assert_eq!(tokens[10], Token::new(TokenType::Text, "imagename"));
+            assert_eq!(tokens[11], Token::new(TokenType::Text, "Annotation"));
+            assert_eq!(tokens[12], Token::new(TokenType::KVSeparator, "="));
+            assert_eq!(tokens[13], Token::new(TokenType::Text, "org.foo.Arg1=arg1 \"org.foo.Arg2=arg 2\" "));
+            assert_eq!(tokens[14], Token::new(TokenType::ContinueNL, "\\"));
+            assert_eq!(tokens[15], Token::new(TokenType::Text, "  org.foo.Arg3=arg3"));
+            assert_eq!(tokens[16], Token::new(TokenType::Text, "Annotation"));
+            assert_eq!(tokens[17], Token::new(TokenType::KVSeparator, "="));
+            assert_eq!(tokens[18], Token::new(TokenType::Text, "org.foo.Arg0=arg0"));
+            assert_eq!(tokens.last().unwrap().token_type, TokenType::EOF);
         }
     }
 }
