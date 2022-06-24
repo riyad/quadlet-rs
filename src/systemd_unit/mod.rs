@@ -185,13 +185,18 @@ impl SystemdUnit {
             section.entries.push(entry);
         } else {
             // find index of last occurrence of key
-            let (i, _) = section.entries
+            let index = section.entries
                 .iter_mut()
                 .enumerate()
                 .rev()
-                .find(|(_i, (k,_v))| k.0 == key).unwrap();
-            // replace that entry
-            section.entries.insert(i, entry);
+                .find(|(_i, (k,_v))| k.0 == key)
+                .map(|(i, _)| i);
+
+            match index {
+                // replace the entry
+                Some(i) => section.entries[i] = entry,
+                None => section.entries.push(entry),
+            }
         }
     }
 
