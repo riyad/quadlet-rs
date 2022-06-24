@@ -13,7 +13,7 @@ use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::env;
 use std::fmt::Display;
-use std::fs::{self, File};
+use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
@@ -123,15 +123,7 @@ fn load_units_from_dir(source_path: &PathBuf, units: &mut HashMap<String, System
         // FIXME: make debug!()
         println!("Loading source unit file {path:?}");
 
-        let data = match fs::read_to_string(&path) {
-            Ok(data) => data,
-            Err(e) => {
-                warn!("Error loading {path:?}, ignoring: {e}");
-                continue;
-            }
-        };
-
-        let unit = match SystemdUnit::from_string(&data) {
+        let unit = match SystemdUnit::load_from_file(&path) {
             Ok(unit) => unit,
             Err(e) => {
                 warn!("Error loading {path:?}, ignoring: {e}");
@@ -278,7 +270,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
 
     // By default we handle startup notification with conmon, but allow passing it to the container with Notify=yes
     let notify = container.lookup_last(CONTAINER_GROUP, "Notify")
-        .map(|v| v.to_bool().unwrap_or(false))
+        .map(|s| parse_bool(s).unwrap_or(false))
         .unwrap_or(false);
     if notify {
         podman.add("--sdnotify=container");
@@ -306,7 +298,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
 
     // Default to no higher level privileges or caps
     let no_new_privileges = container.lookup_last(CONTAINER_GROUP, "NoNewPrivileges")
-        .map(|v| v.to_bool().unwrap_or(true))
+        .map(|s| parse_bool(s).unwrap_or(true))
         .unwrap_or(true);
     if no_new_privileges {
         podman.add("--security-opt=no-new-privileges");
@@ -314,8 +306,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
 
     let mut drop_caps: Vec<String> = container
         .lookup_all(CONTAINER_GROUP, "DropCapability")
-        .iter()
-        .map(|v| v.to_string().to_ascii_lowercase())
+        .map(|s| s.to_ascii_lowercase())
         .collect();
     if drop_caps.is_empty() {
         drop_caps = DEFAULT_DROP_CAPS.iter().map(|s| s.to_string()).collect();
@@ -326,21 +317,20 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     // But allow overrides with AddCapability
     let add_caps: Vec<String> = container
         .lookup_all(CONTAINER_GROUP, "AddCapability")
-        .iter()
         .map(|v| format!("--cap-add={}", v.to_string().to_ascii_lowercase()))
         .collect();
     podman.add_vec(&add_caps);
 
     // We want /tmp to be a tmpfs, like on rhel host
     let volatile_tmp = container.lookup_last(CONTAINER_GROUP, "VolatileTmp")
-        .map(|v| v.to_bool().unwrap_or(true))
+        .map(|s| parse_bool(s).unwrap_or(true))
         .unwrap_or(true);
     if volatile_tmp {
         podman.add_slice(&["--mount", "type=tmpfs,tmpfs-size=512M,destination=/tmp"]);
     }
 
     let socket_activated = container.lookup_last(CONTAINER_GROUP, "SocketActivated")
-        .map(|v| v.to_bool().unwrap_or(false))
+        .map(|s| parse_bool(s).unwrap_or(false))
         .unwrap_or(false);
     if socket_activated {
         // TODO: This will not be needed with later podman versions that support activation directly:
@@ -432,7 +422,6 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     */
 
     let volume_args: Vec<String> = container.lookup_all(CONTAINER_GROUP, "Volume")
-        .iter()
         .map(|v| {
             let volume = v.to_string();
             let parts: Vec<&str> = volume.split(":").collect();
@@ -504,7 +493,6 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
 
     let exposed_port_args: Vec<String> = container
         .lookup_all(CONTAINER_GROUP, "ExposeHostPort")
-        .iter()
         .map(|v| {
             let exposed_port = v.to_string().trim_end().to_owned();  // Allow whitespace after
 
@@ -600,7 +588,6 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     */
 
     let podman_args_args: Vec<&str> = container.lookup_all(CONTAINER_GROUP, "PodmanArgs")
-        .iter()
         .map(|v| {
             let podman_args_s = v.to_string();
             /* FIXME: port
@@ -647,7 +634,7 @@ fn convert_volume(unit: &SystemdUnit) -> Result<SystemdUnit, ConversionError> {
 }
 
 fn generate_service_file(output_path: &Path, service_name: &PathBuf, service: &mut SystemdUnit, orig_unit: &SystemdUnit) -> io::Result<()> {
-    let orig_path = &orig_unit.path;
+    let orig_path = &orig_unit.path();
     let out_filename = output_path.join(service_name);
 
     let out_file = File::create(&out_filename)?;

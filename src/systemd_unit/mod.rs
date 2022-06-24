@@ -1,13 +1,12 @@
+extern crate ini;
+
 mod constants;
-mod parser;
 
 pub use self::constants::*;
 
-use std::fmt;
-use std::io;
-use std::path::PathBuf;
-
-type Error = parser::ParseError;
+use ini::Ini;
+use std::{fmt, io};
+use std::path::{PathBuf, Path};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -19,197 +18,88 @@ impl fmt::Display for ParseBoolError {
     }
 }
 
-#[derive(Debug, PartialEq)]
+pub(crate) fn parse_bool(s: &str) -> Result<bool, ParseBoolError> {
+    if ["1", "yes", "true", "on"].contains(&s) {
+        return Ok(true);
+    } else if ["0", "no", "false", "off"].contains(&s) {
+        return Ok(false)
+    }
+
+    Err(ParseBoolError)
+}
+
 pub(crate) struct SystemdUnit {
-    pub(crate) path: Option<PathBuf>,
-    pub(crate) sections: Vec<Section>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct Section {
-    name: String,
-    entries: Vec<Entry>,
-}
-
-impl Section {
-    pub(crate) fn new(name: String) -> Self {
-        // FIXME: validate name
-        let mut ret = Self::_new();
-        ret.name = name;
-        ret
-    }
-
-    fn _new() -> Self {
-        Section {
-            name: Default::default(),
-            entries: Default::default(),
-        }
-    }
-}
-
-type Entry = (Key, Value);
-
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct Key(String);
-
-impl From<&str> for Key {
-    fn from(key: &str) -> Self {
-        // FIXME: validate str
-        Self(key.to_owned())
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) struct Value(String);
-
-impl From<&str> for Value {
-    fn from(val: &str) -> Self {
-        Self(val.to_owned())
-    }
-}
-
-impl ToString for Value {
-    fn to_string(&self) -> String {
-        self.0.clone()
-    }
-}
-
-impl Value {
-    pub(crate) fn to_bool(&self) -> Result<bool,ParseBoolError> {
-        if ["1", "yes", "true", "on"].contains(&self.0.as_str()) {
-            return Ok(true);
-        } else if ["0", "no", "false", "off"].contains(&self.0.as_str()) {
-            return Ok(false)
-        }
-
-        Err(ParseBoolError)
-    }
-
-    fn to_quoted(&self) -> Vec<&str> {
-        todo!()
-    }
+    path: Option<PathBuf>,
+    inner: Ini,
 }
 
 impl SystemdUnit {
-    pub(crate) fn add_entry(&mut self, group_name: &str, key: &str, value: &str) {
-        let entry = (key.into(), value.into());
-        match self.sections.iter_mut().find(|s| s.name == group_name) {
-            Some(section) => section.entries.push(entry),
-            None => {
-                self.sections.push(Section {
-                    name: group_name.to_owned(),
-                    entries: vec![entry],
-                });
-            },
-        };
+    pub(crate) fn add_entry(&mut self, section: &str, key: &str, value: &str) {
+        // TODO: find out if this appends or replaces
+        self.inner.set_to(Some(section), key.into(), value.into())
     }
 
-    pub(crate) fn from_string(data: &str) -> Result<Self, Error> {
-        let tokens = parser::lexer::Lexer::tokens_from(data)?;
-        let mut parser = parser::Parser::new(tokens);
-        let unit = parser.parse()?;
-
-        Ok(unit)
+    /// Load from a file
+    pub fn load_from_file<P: AsRef<Path>>(filename: P) -> Result<Self, ini::Error> {
+        Ok(SystemdUnit {
+            path: Some(filename.as_ref().into()),
+            inner: Ini::load_from_file(filename)?,
+        })
     }
 
-    pub(crate)fn lookup_all(&self, lookup_section: &str, lookup_key: &str) -> Vec<&Value> {
-        self.sections
-            .iter()
-            .filter(|s| s.name == lookup_section)
-            .map(|s| &s.entries)
-            .flatten()
-            .filter(|(k, _v)| k.0 == lookup_key )
-            .map(|(_k,v)| v)
-            .collect()
+    pub(crate) fn lookup_all<'a>(&'a self, section: &'a str, key: &'a str) -> impl DoubleEndedIterator<Item = &str>
+    {
+        self.inner
+            .section_all(Some(section))
+            .flat_map(move |props| props.get_all(key))
     }
 
-    pub(crate) fn lookup_last(&self, lookup_section: &str, lookup_key: &str) -> Option<&Value> {
-        self.sections
-            .iter()
-            .filter(|s| s.name == lookup_section)
-            .map(|s| &s.entries)
-            .flatten()
-            .find(|(k, _v)| k.0 == lookup_key )
-            .map(|(_k,v)| v)
+    pub(crate) fn lookup_last<'a>(&'a self, section: &'a str, key: &'a str) -> Option<&'a str> {
+        self.lookup_all(section, key).last()
     }
 
     pub(crate) fn new() -> Self {
         SystemdUnit {
             path: None,
-            sections: Vec::default()
+            inner: Default::default(),
         }
     }
 
     pub(crate) fn merge_from(&mut self, other: &SystemdUnit) {
-        for other_section in &other.sections {
-            self.sections.push(other_section.clone());
+        for (section, props) in other.inner.iter() {
+            match self.inner.entry(section.map(|s| s.to_string())) {
+                ini::SectionEntry::Vacant(se) => { se.insert(props.clone()); },
+                ini::SectionEntry::Occupied(mut se) => se.append(props.clone()),
+            };
         }
+    }
+
+    pub(crate) fn path(&self) -> &Option<PathBuf> {
+        &self.path
     }
 
     pub(crate) fn rename_section(&mut self, from: &str, to: &str) {
-        let _ = self.sections
-            .iter_mut()
-            .filter(|s| s.name == from)
-            .map(|s| s.name = to.to_owned());
-    }
+        let from_data: Vec<(&str, &str)> = self.inner
+            .section_all(Some(from))
+            .flat_map(|props| props.iter())
+            .collect();
 
-    fn section_entries(&self, section_name: &str) -> Vec<Entry> {
-        self.sections.iter()
-            .filter(|s| s.name == section_name)
-            .map(|s| s.entries.clone())
-            .flatten()
-            .collect()
-    }
-
-    pub(crate) fn section_names(&self) -> Vec<String> {
-        // FIXME: make sure list only has unique elements
-        self.sections.iter().map(|s| s.name.clone()).collect()
-    }
-
-    pub(crate) fn set_entry(&mut self, section_name: &str, key: &str, value: &str) {
-        let section = match self.sections
-                .iter_mut()
-                .find(|s| s.name == section_name)
-                .map(|s| s) {
-            Some(s) => s,
-            None =>  {
-                let s = Section::new(section_name.to_owned());
-                self.sections.push(s);
-                self.sections.iter_mut().last().unwrap()
-            },
-        };
-
-        let entry = (key.into(), value.into());
-
-        if section.entries.len() == 0 {
-            section.entries.push(entry);
-        } else {
-            // find index of last occurrence of key
-            let index = section.entries
-                .iter_mut()
-                .enumerate()
-                .rev()
-                .find(|(_i, (k,_v))| k.0 == key)
-                .map(|(i, _)| i);
-
-            match index {
-                // replace the entry
-                Some(i) => section.entries[i] = entry,
-                None => section.entries.push(entry),
-            }
-        }
-    }
-
-    pub fn write_to<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
-        for section in &self.sections {
-            write!(writer, "[{}]\n", section.name)?;
-            for (k, v) in &section.entries {
-                // FIXME: Value needs escaping
-                write!(writer, "{}={}\n", k.0, v.0)?;
-            }
+        for (k, v) in from_data {
+            let mut to_section = self.inner.with_section(Some(to));
+            to_section.set(k, v);
         }
 
-        Ok(())
+        // TODO: find out if we have to loop until all `[from]` sections are gone
+        self.inner.delete(Some(from));
+    }
+
+    pub(crate) fn set_entry(&mut self, section: &str, key: &str, value: &str) {
+        self.inner.set_to(Some(section), key.into(), value.into())
+    }
+
+    /// Write to a writer
+    pub(crate) fn write_to<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
+        self.inner.write_to(writer)
     }
 }
 
