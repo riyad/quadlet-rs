@@ -5,6 +5,7 @@ import os
 import tempfile
 import subprocess
 import shlex
+import unittest
 
 def match_sublist_at(full_list, pos, sublist):
     if len(sublist) > len(full_list) - pos:
@@ -54,8 +55,10 @@ def find_check(checks, checkname):
             return check
     return None
 
-class Testcase:
+class QuadletTestCase(unittest.TestCase):
     def __init__(self, filename):
+        super().__init__()
+        self._testMethodDoc = filename
         self.filename = filename
         self.servicename = to_service(filename)
         self.data = read_file(testcases_dir, filename)
@@ -131,7 +134,7 @@ class Testcase:
             symlink = args[0]
             expected_target = args[1]
 
-            self.expect_file(symlink)
+            testcase.expect_file(symlink)
 
             p = os.path.join (outdir, symlink)
             if not os.path.islink(p):
@@ -154,11 +157,11 @@ class Testcase:
         servicepath = os.path.join(outdir, self.servicename)
         if self.expect_fail:
             if os.path.isfile(servicepath):
-                self.fail("Unexpected success")
+                raise RuntimeError(self._err_msg("Unexpected success"))
             return # Successfully failed checks done
 
         if not os.path.isfile(servicepath):
-            self.fail(f"Unexpected failure, can't find {servicepath}\n" + self.stdout)
+            raise FileNotFoundError(self._err_msg(f"Unexpected failure, can't find {servicepath}\n" + self.stdout))
 
         self.outdata = read_file(outdir, self.servicename)
         self.sections = parse_unitfile(canonicalize_unitfile(self.outdata))
@@ -170,23 +173,23 @@ class Testcase:
             args = check[1:]
             invert = False
             if op[0] == '!':
-                invert = True;
+                invert = True
                 op = op[1:]
             if not op in ops:
-                testcase.fail(f"unknown assertion {op}");
-            ok = ops[op](args, testcase)
+                raise NameError(self._err_msg(f"unknown assertion {op}"))
+            ok = ops[op](args, self)
             if invert:
                 ok = not ok
             if not ok:
-                testcase.fail(shlex.join(check))
+                raise AssertionError(self._err_msg(shlex.join(check)))
 
         files = self.listfiles(outdir)
         for f in self.expected_files:
             files.remove(f)
         if len(files) != 0:
-            self.fail(f"Unexpected files in output directory: " + str(files))
+            raise FileExistsError(self._err_msg(f"Unexpected files in output directory: " + str(files)))
 
-    def run(self):
+    def runTest(self):
         res = None
         outdata = {}
         with tempfile.TemporaryDirectory(prefix="quadlet-test-") as basedir:
@@ -194,29 +197,28 @@ class Testcase:
             os.mkdir(indir)
             outdir = os.path.join(basedir, "out")
             os.mkdir(outdir)
-
-            write_file (indir, testcase.filename, self.data);
+            write_file (indir, self.filename, self.data);
             cmd = [generator_bin, '-v', outdir]
             if use_valgrind:
                 cmd = ["valgrind", "--error-exitcode=1", "--leak-check=full", "--show-possibly-lost=no", "--errors-for-leak-kinds=definite"] + cmd
+
             res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env = {
                 "QUADLET_UNIT_DIRS": indir
             })
+
             self.stdout = res.stdout.decode('utf8')
             # The generator should never fail, just log warnings
             if res.returncode != 0:
-                self.fail(f"Unexpected generator failure\n" + self.stdout)
+                raise RuntimeError(self._err_msg(f"Unexpected generator failure\n" + self.stdout))
 
-            testcase.check(outdir)
+            self.check(outdir)
 
 
-    def fail(self, msg):
-        print(f"Failed testcase {self.filename}: {msg}")
+    def _err_msg(self, msg):
+        err_msg = msg
         if self.outdata:
-            print(f"-------- {self.servicename}----------")
-            print(self.outdata)
-            print(f"------------------")
-        sys.exit(1)
+            err_msg += f"\n---------- contents of {self.servicename} ----------\n{self.outdata}"
+        return err_msg
 
 # Removes comments and merges lines
 def canonicalize_unitfile(data):
@@ -248,30 +250,33 @@ def parse_unitfile(data):
             sections[section][key].append(val)
     return sections
 
-if len(sys.argv) < 2:
-    print("No dir arg given", file=sys.stderr)
-    sys.exit(1)
-testcases_dir = sys.argv[1]
+def load_test_suite():
+    if len(sys.argv) < 2:
+        print("No dir arg given", file=sys.stderr)
+        sys.exit(1)
+    global testcases_dir
+    testcases_dir = sys.argv[1]
 
-if len(sys.argv) < 3:
-    print("No generator arg given", file=sys.stderr)
-    sys.exit(1)
-generator_bin = sys.argv[2]
+    if len(sys.argv) < 3:
+        print("No generator arg given", file=sys.stderr)
+        sys.exit(1)
+    global generator_bin
+    generator_bin = sys.argv[2]
 
-use_valgrind = False
-if len(sys.argv) >= 4 and sys.argv[3] == '--valgrind':
-    use_valgrind = True
+    global use_valgrind
+    use_valgrind = False
+    if len(sys.argv) >= 4 and sys.argv[3] == '--valgrind':
+        use_valgrind = True
 
-testcases = []
-for de in os.scandir(testcases_dir):
-    name = de.name
-    if (name.endswith(".container") or name.endswith(".volume")) and not name.startswith("."):
-        testcases.append(Testcase(name))
-testcases.sort(key = lambda testcase: testcase.filename)
+    test_suite = unittest.TestSuite()
+    for de in os.scandir(testcases_dir):
+        name = de.name
+        if (name.endswith(".container") or name.endswith(".volume")) and not name.startswith("."):
+            test_suite.addTest(QuadletTestCase(name))
 
-for testcase in testcases:
-    in_valgrind = ""
-    if use_valgrind:
-        in_valgrind = " (in valgrind)"
-    print (f"Running testcase {testcase.filename}{in_valgrind}")
-    testcase.run()
+    return test_suite
+
+
+if __name__ == '__main__':
+    runner = unittest.TextTestRunner()
+    runner.run(load_test_suite())

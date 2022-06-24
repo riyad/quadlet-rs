@@ -12,5 +12,5 @@ cargo build
 
 ```shell
 cargo test
-./tests/testcase-runner.py ./tests/cases ./target/debug/quadlet-rs
+cargo build && ./tests/testcase-runner.py ./tests/cases ./target/debug/quadlet-rs
 ```
