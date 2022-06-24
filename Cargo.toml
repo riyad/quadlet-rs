@@ -17,4 +17,5 @@ simplelog = "0.12.0"
 version = "1.5.6"
 default-features = false
 # regex currently requires the standard library, we must re-enable it.
-features = ["std"]
+# unicode-perl is required for character classes
+features = ["std", "unicode-perl"]
