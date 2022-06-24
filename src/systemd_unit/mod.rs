@@ -204,7 +204,8 @@ impl SystemdUnit {
         for section in &self.sections {
             write!(writer, "[{}]\n", section.name)?;
             for (k, v) in &section.entries {
-                write!(writer, "{k:?}={v:?}\n")?;
+                // FIXME: Value needs escaping
+                write!(writer, "{}={}\n", k.0, v.0)?;
             }
         }
 
