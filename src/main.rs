@@ -123,7 +123,7 @@ fn load_units_from_dir(source_path: &PathBuf, units: &mut HashMap<String, System
         // FIXME: make debug!()
         println!("Loading source unit file {path:?}");
 
-        let data = match fs::read_to_string(&*name) {
+        let data = match fs::read_to_string(&path) {
             Ok(data) => data,
             Err(e) => {
                 warn!("Error loading {path:?}, ignoring: {e}");
