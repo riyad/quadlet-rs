@@ -108,18 +108,7 @@ impl SystemdUnit {
     }
 
     pub(crate) fn rename_section(&mut self, from: &str, to: &str) {
-        let from_data: Vec<(&str, &str)> = self.inner
-            .section_all(Some(from))
-            .flat_map(|props| props.iter())
-            .collect();
-
-        for (k, v) in from_data {
-            let mut to_section = self.inner.with_section(Some(to));
-            to_section.set(k, v);
-        }
-
-        // TODO: find out if we have to loop until all `[from]` sections are gone
-        self.inner.delete(Some(from));
+        self.inner.rename_section_all(Some(from), Some(to));
     }
 
     pub(crate) fn section_entries<'a>(&'a self, name: &'a str) -> impl DoubleEndedIterator<Item=(&'a str, &'a str)> {
@@ -553,6 +542,119 @@ Key2=valA2";
         }
     }
 
+    mod rename_section {
+        use super::*;
+
+        #[test]
+        fn with_single_instance_of_the_section() {
+            let input = "[Section A]
+KeyOne=value 1
+KeyTwo=value 2";
+
+            let mut unit = SystemdUnit::load_from_str(input).unwrap();
+            assert_eq!(unit.len(), 1);
+
+            let from_section = "Section A";
+            let to_section = "New Section";
+            unit.rename_section(from_section, to_section);
+            assert_eq!(unit.len(), 1);  // shouldn't change the number of sections
+
+            assert!(!unit.has_section(from_section));
+            let mut iter = unit.section_entries(from_section);
+            assert_eq!(iter.next(), None);
+
+            assert!(unit.has_section(to_section));
+            let mut iter = unit.section_entries(to_section);
+            assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
+            assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+            assert_eq!(iter.next(), None);
+        }
+
+        #[test]
+        fn with_multiple_instances_of_a_section() {
+            let input = "[Section A]
+KeyOne=value 1
+[Section B]
+[Section A]
+KeyTwo=value 2";
+
+            let mut unit = SystemdUnit::load_from_str(input).unwrap();
+            assert_eq!(unit.len(), 2);
+
+            let from_section = "Section A";
+            let to_section = "New Section";
+            unit.rename_section(from_section, to_section);
+            assert_eq!(unit.len(), 2);  // shouldn't change the number of sections
+
+            assert!(!unit.has_section(from_section));
+            let mut iter = unit.section_entries(from_section);
+            assert_eq!(iter.next(), None);
+
+            assert!(unit.has_section(to_section));
+            let mut iter = unit.section_entries(to_section);
+            assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
+            assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+            assert_eq!(iter.next(), None);
+        }
+
+        #[test]
+        fn with_unknown_section_should_do_anything() {
+            let input = "[Section A]
+KeyOne=value 1
+KeyTwo=value 2";
+
+            let mut unit = SystemdUnit::load_from_str(input).unwrap();
+            assert_eq!(unit.len(), 1);
+
+            let from_section = "foo";
+            let to_section = "New";
+            let other_section = "Section A";
+
+            assert!(!unit.has_section(from_section));
+            unit.rename_section(from_section, to_section);
+            assert_eq!(unit.len(), 1);  // shouldn't change the number of sections
+
+            assert!(unit.has_section(other_section));
+            let mut iter = unit.section_entries(other_section);
+            assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
+            assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+            assert_eq!(iter.next(), None);
+
+            assert!(!unit.has_section(to_section));
+            let mut iter = unit.section_entries(to_section);
+            assert_eq!(iter.next(), None);
+        }
+
+        #[test]
+        fn keeps_entries_already_present_in_destination_section() {
+            let input = "[Section A]
+KeyOne=value 1
+[Section B]
+KeyTwo=value 2
+[Section A]
+KeyThree=value 3";
+
+            let mut unit = SystemdUnit::load_from_str(input).unwrap();
+            assert_eq!(unit.len(), 2);
+
+            let from_section = "Section A";
+            let to_section = "Section B";
+            unit.rename_section(from_section, to_section);
+            assert_eq!(unit.len(), 1);
+
+            assert!(!unit.has_section(from_section));
+            let mut iter = unit.section_entries(from_section);
+            assert_eq!(iter.next(), None);
+
+            assert!(unit.has_section(to_section));
+            let mut iter = unit.section_entries(to_section);
+            assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+            assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
+            assert_eq!(iter.next(), Some(("KeyThree", "value 3")));
+            assert_eq!(iter.next(), None);
+        }
+    }
+
     mod section_entries {
         use super::*;
 
@@ -594,5 +696,4 @@ KeyOne=value 1.2";
         }
     }
 
-    }
 }
