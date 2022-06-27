@@ -43,7 +43,7 @@ impl SystemdUnit {
 
     /// Retrun `true` if there's an (non-empty) instance of section `name`
     pub(crate) fn has_section(&self, name: &str) -> bool {
-        match self.inner.section(Some(name.to_string())) {
+        match self.inner.section(Some(name)) {
             Some(_) => true,
             None => false,
         }
