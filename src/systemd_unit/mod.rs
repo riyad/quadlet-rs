@@ -199,7 +199,7 @@ mod tests {
         }
 
         #[test]
-        fn converts_user_name() {
+        fn converts_group_name() {
             let input = "root";
 
             let res = parse_gid(input);
@@ -207,10 +207,10 @@ mod tests {
         }
 
         #[test]
-        fn converts_user_name2() {
+        fn converts_group_name2() {
             let input = User::from_name("mail")
-                .expect("should have this user")
-                .expect("should have this user");
+                .expect("should have this group")
+                .expect("should have this group");
 
             let res = parse_gid(input.name.as_str());
             assert_eq!(res.ok(), Some(input.gid));

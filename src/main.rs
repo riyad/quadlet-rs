@@ -457,21 +457,42 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
             );
         }
     } else {
-        /* FIXME: port
-        g_autoptr(QuadRanges) uid_remap_ids = quad_unit_file_lookup_ranges (container, CONTAINER_GROUP, "RemapUidRanges",
-                                                                            quad_lookup_host_subuid, default_remap_uids);
-        g_autoptr(QuadRanges) gid_remap_ids = quad_unit_file_lookup_ranges (container, CONTAINER_GROUP, "RemapGidRanges",
-                                                                            quad_lookup_host_subgid, default_remap_gids);
-        guint32 remap_uid_start = MAX (quad_unit_file_lookup_int (container, CONTAINER_GROUP, "RemapUidStart", 1), 0);
-        guint32 remap_gid_start = MAX (quad_unit_file_lookup_int (container, CONTAINER_GROUP, "RemapGidStart", 1), 0);
+        let uid_remap_ids = container.lookup_last(CONTAINER_GROUP, "RemapUidRanges")
+            .map(|s| parse_ranges(s, Some(quad_lookup_host_subuid)))
+            .unwrap_or(DEFAULT_REMAP_UIDS.clone());
+        let gid_remap_ids = container.lookup_last(CONTAINER_GROUP, "RemapGidRanges")
+            .map(|s| parse_ranges(s, Some(quad_lookup_host_subgid)))
+            .unwrap_or(DEFAULT_REMAP_GIDS.clone());
 
-        add_id_maps (podman, "--uidmap",
-                    uid, host_uid,
-                    remap_uid_start, uid_remap_ids);
-        add_id_maps (podman, "--gidmap",
-                    gid, host_gid,
-                    remap_gid_start, gid_remap_ids);
-        */
+        let remap_uid_start = Uid::from_raw(
+            0.max(
+                container.lookup_last(CONTAINER_GROUP, "User")
+                    .map(|s| s.parse::<u32>().unwrap_or(1))  // key found: parse or default
+                    .unwrap_or(1)  // key not found: use default
+            )
+        );
+        let remap_gid_start = Gid::from_raw(
+            0.max(
+                container.lookup_last(CONTAINER_GROUP, "Group")
+                    .map(|s| s.parse::<u32>().unwrap_or(1))  // key found: parse or default
+                    .unwrap_or(1)  // key not found: use default
+            )
+        );
+
+        podman.add_id_maps(
+            "--uidmap",
+            uid.as_raw(),
+            host_uid.as_raw(),
+            remap_uid_start.as_raw(),
+            Some(uid_remap_ids),
+        );
+        podman.add_id_maps(
+            "--gidmap",
+            gid.as_raw(),
+            host_gid.as_raw(),
+            remap_gid_start.as_raw(),
+            Some(gid_remap_ids),
+        );
     }
 
     let mut volume_args: Vec<String> = container.lookup_all(CONTAINER_GROUP, "Volume")
