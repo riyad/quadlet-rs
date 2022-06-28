@@ -1,42 +1,43 @@
 
-pub(crate) struct PodmanCommand<'a> {
-    args: Vec<&'a str>,
+pub(crate) struct PodmanCommand {
+    args: Vec<String>,
 }
 
-impl<'a> PodmanCommand<'a> {
+impl PodmanCommand {
     fn _new() -> Self {
         PodmanCommand {
             args: Vec::with_capacity(10),
         }
     }
 
-    pub(crate) fn add(&mut self, arg: &'a str) {
-        self.args.push(arg);
+    pub(crate) fn add<S>(&mut self, arg: S) where S: Into<String> {
+        self.args.push(arg.into());
     }
 
-    pub(crate) fn add_slice(&mut self, args: &'a [&str])
+    pub(crate) fn add_slice(&mut self, args: &[&str])
     {
-        self.args.append(args.to_vec().as_mut())
-    }
-
-
-    pub(crate) fn add_vec(&mut self, args: &'a Vec<String>)
-    {
-        for arg in args.as_slice() {
-            self.args.push(arg)
+        self.args.reserve(args.len());
+        for arg in args {
+            self.args.push(arg.to_string())
         }
     }
 
-    pub(crate) fn new_command(command: &'a str) -> Self {
+
+    pub(crate) fn add_vec(&mut self, args: &mut Vec<String>)
+    {
+        self.args.append(args);
+    }
+
+    pub(crate) fn new_command(command: &str) -> Self {
         let mut podman = Self::_new();
 
-        podman.args.push("/usr/bin/podman");
-        podman.args.push(command);
+        podman.add("/usr/bin/podman");
+        podman.add(command);
 
         podman
     }
 
-    pub(crate) fn to_escaped_string(&self) -> String {
-        shlex::join(self.args.clone())
+    pub(crate) fn to_escaped_string(&mut self) -> String {
+        shlex::join(self.args.iter().map(String::as_str))
     }
 }

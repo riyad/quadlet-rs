@@ -229,8 +229,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
 
     let mut podman = PodmanCommand::new_command("run");
 
-    let container_name_arg = format!("--name={container_name}");
-    podman.add(container_name_arg.as_str());
+    podman.add(format!("--name={container_name}"));
 
     // We store the container id so we can clean it up in case of failure
     podman.add("--cidfile=%t/%N.cid");
@@ -259,10 +258,8 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     );
     podman.add_slice(&[ "--runtime", "/usr/bin/crun", "--cgroups=split"]);
 
-    let timezone_arg: String;
     if let Some(timezone) = container.lookup_last(CONTAINER_GROUP, "Timezone") {
-        timezone_arg = format!("--tz={}", timezone.to_string());
-        podman.add(timezone_arg.as_str());
+        podman.add(format!("--tz={}", timezone));
     }
 
     // Run with a pid1 init to reap zombies by default (as most apps don't do that)
@@ -314,14 +311,14 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         drop_caps = DEFAULT_DROP_CAPS.iter().map(|s| s.to_string()).collect();
     }
     drop_caps = drop_caps.iter().map(|caps| format!("--cap-drop={caps}")).collect();
-    podman.add_vec(&drop_caps);
+    podman.add_vec(&mut drop_caps);
 
     // But allow overrides with AddCapability
-    let add_caps: Vec<String> = container
+    let mut  add_caps: Vec<String> = container
         .lookup_all(CONTAINER_GROUP, "AddCapability")
         .map(|v| format!("--cap-add={}", v.to_string().to_ascii_lowercase()))
         .collect();
-    podman.add_vec(&add_caps);
+    podman.add_vec(&mut add_caps);
 
     // We want /tmp to be a tmpfs, like on rhel host
     let volatile_tmp = container.lookup_last(CONTAINER_GROUP, "VolatileTmp")
@@ -392,15 +389,13 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         .unwrap_or(Ok(gid))  // key not found: use default
         .map_err(|e| ConversionError::Parsing(e))?;  // key found, but parsing caused error: propagate error
 
-    let uid_arg: String;
     if uid != default_container_uid || gid != default_container_gid {
         podman.add("--user");
-        uid_arg = if gid == default_container_gid {
-            uid.to_string()
+        if gid == default_container_gid {
+            podman.add(uid.to_string())
         } else {
-            format!("{uid}:{gid}")
-        };
-        podman.add(uid_arg.as_str())
+            podman.add(format!("{uid}:{gid}"))
+        }
     }
 
     let mut remap_users = container
@@ -442,7 +437,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         */
     }
 
-    let volume_args: Vec<String> = container.lookup_all(CONTAINER_GROUP, "Volume")
+    let mut volume_args: Vec<String> = container.lookup_all(CONTAINER_GROUP, "Volume")
         .map(|v| {
             let volume = v.to_string();
             let parts: Vec<&str> = volume.split(":").collect();
@@ -510,9 +505,9 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         .filter(|o| o.is_some())
         .map(|o| o.unwrap())
         .collect();
-    podman.add_vec(&volume_args);
+    podman.add_vec(&mut volume_args);
 
-    let exposed_port_args: Vec<String> = container
+    let mut exposed_port_args: Vec<String> = container
         .lookup_all(CONTAINER_GROUP, "ExposeHostPort")
         .map(|v| {
             let exposed_port = v.to_string().trim_end().to_owned();  // Allow whitespace after
@@ -527,7 +522,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         .filter(|o| o.is_some())
         .map(|o| o.unwrap())
         .collect();
-    podman.add_vec(&exposed_port_args);
+    podman.add_vec(&mut exposed_port_args);
 
     /* FIXME: port
     g_auto(GStrv) publish_ports = quad_unit_file_lookup_all (container, CONTAINER_GROUP, "PublishPort");
@@ -594,7 +589,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         }
     */
 
-    podman.add_vec(&env_args);
+    podman.add_vec(&mut env_args);
 
     /* FIXME: port
     g_auto(GStrv) labels = quad_unit_file_lookup_all (container, CONTAINER_GROUP, "Label");
@@ -608,7 +603,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     quad_podman_add_annotations (podman, podman_annotations);
     */
 
-    let podman_args_args: Vec<&str> = container.lookup_all(CONTAINER_GROUP, "PodmanArgs")
+    let mut podman_args_args: Vec<String> = container.lookup_all(CONTAINER_GROUP, "PodmanArgs")
         .map(|v| {
             let podman_args_s = v.to_string();
             /* FIXME: port
@@ -622,11 +617,11 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         })
         .flatten()
         .collect();
-    podman.add_slice(podman_args_args.as_slice());
+    podman.add_vec(&mut podman_args_args);
 
-    podman.add(image.as_str());
+    podman.add(image);
 
-    let exec_key_args = container.lookup_last(CONTAINER_GROUP, "Exec")
+    let mut exec_key_args = container.lookup_last(CONTAINER_GROUP, "Exec")
         .map(|v| {
             let exec_key = v.to_string();
             /* FIXME: port
@@ -639,7 +634,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
             vec![]
         })
         .unwrap_or(vec![]);
-    podman.add_slice(exec_key_args.as_slice());
+    podman.add_vec(&mut exec_key_args);
 
     service.append_entry(
         SERVICE_GROUP,
