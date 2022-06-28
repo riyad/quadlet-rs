@@ -3,8 +3,8 @@ use std::ops::Range;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct IdMap {
-    start: u32,
-    length: u32,
+    pub start: u32,
+    pub length: u32,
 }
 
 impl IdMap {
