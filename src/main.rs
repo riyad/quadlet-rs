@@ -259,18 +259,23 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     podman.add_slice(&[ "--runtime", "/usr/bin/crun", "--cgroups=split"]);
 
     if let Some(timezone) = container.lookup_last(CONTAINER_GROUP, "Timezone") {
-        podman.add(format!("--tz={}", timezone));
+        if !timezone.is_empty() {
+            podman.add(format!("--tz={}", timezone));
+        }
     }
 
     // Run with a pid1 init to reap zombies by default (as most apps don't do that)
-    if let Some(_) = container.lookup_last(CONTAINER_GROUP, "RunInit") {
+    let run_init = container.lookup_last(CONTAINER_GROUP, "RunInit")
+        .map(|s| parse_bool(s).unwrap_or(true))  // key found: parse or default
+        .unwrap_or(true);  // key not found: use default
+    if run_init {
         podman.add("--init");
     }
 
     // By default we handle startup notification with conmon, but allow passing it to the container with Notify=yes
     let notify = container.lookup_last(CONTAINER_GROUP, "Notify")
-        .map(|s| parse_bool(s).unwrap_or(false))
-        .unwrap_or(false);
+        .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
+        .unwrap_or(false);  // key not found: use default
     if notify {
         podman.add("--sdnotify=container");
     } else {
@@ -297,8 +302,8 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
 
     // Default to no higher level privileges or caps
     let no_new_privileges = container.lookup_last(CONTAINER_GROUP, "NoNewPrivileges")
-        .map(|s| parse_bool(s).unwrap_or(true))
-        .unwrap_or(true);
+        .map(|s| parse_bool(s).unwrap_or(true))  // key found: parse or default
+        .unwrap_or(true);  // key not found: use default
     if no_new_privileges {
         podman.add("--security-opt=no-new-privileges");
     }
@@ -410,15 +415,24 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     if !remap_users {
         // No remapping of users, although we still need maps if the
         // main user/group is remapped, even if most ids map one-to-one.
-
-        /* FIXME: port
-        if (uid != host_uid)
-            add_id_maps (podman, "--uidmap",
-                        uid, host_uid, UINT32_MAX, NULL);
-        if (gid != host_gid)
-            add_id_maps (podman, "--gidmap",
-                        gid, host_gid, UINT32_MAX, NULL);
-        */
+        if uid != host_uid {
+            podman.add_id_maps(
+                "--uidmap",
+                uid.as_raw(),
+                host_uid.as_raw(),
+                u32::MAX,
+                None,
+            )
+        }
+        if gid != host_gid {
+            podman.add_id_maps(
+                "--gidmap",
+                gid.as_raw(),
+                host_gid.as_raw(),
+                u32::MAX,
+                None,
+            );
+        }
     } else {
         /* FIXME: port
         g_autoptr(QuadRanges) uid_remap_ids = quad_unit_file_lookup_ranges (container, CONTAINER_GROUP, "RemapUidRanges",
