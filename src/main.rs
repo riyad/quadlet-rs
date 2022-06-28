@@ -1,7 +1,3 @@
-extern crate dirs;
-extern crate once_cell;
-extern crate simplelog;
-
 mod quadlet;
 mod systemd_unit;
 
@@ -58,11 +54,16 @@ struct Config {
     version: bool,
 }
 
-struct ConversionError<'a>(&'a str);
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+enum ConversionError<'a> {
+    ImageMissing(&'a str),
+    Parsing(ParseError),
+}
 
 impl<'a> Display for ConversionError<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}", self)
     }
 }
 
@@ -160,7 +161,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     let image = if let Some(image) =container.lookup_last(CONTAINER_GROUP, "Image") {
         image.to_string()
     } else {
-        return Err(ConversionError("No Image key specified"))
+        return Err(ConversionError::ImageMissing("No Image key specified"))
     };
 
     let container_name = container
@@ -323,8 +324,8 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
 
     // We want /tmp to be a tmpfs, like on rhel host
     let volatile_tmp = container.lookup_last(CONTAINER_GROUP, "VolatileTmp")
-        .map(|s| parse_bool(s).unwrap_or(true))
-        .unwrap_or(true);
+        .map(|s| parse_bool(s).unwrap_or(true))  // key found: parse or default
+        .unwrap_or(true);  // key not found: use default
     if volatile_tmp {
         podman.add_slice(&["--mount", "type=tmpfs,tmpfs-size=512M,destination=/tmp"]);
     }
