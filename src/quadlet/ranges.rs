@@ -22,6 +22,7 @@ impl From<&Range<u32>> for IdMap {
     }
 }
 
+#[derive(Clone)]
 pub struct IdRanges {
     inner: RangeSet<u32>,
 }
