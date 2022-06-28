@@ -14,6 +14,14 @@ use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
+// BEGIN from build config
+static QUADLET_FALLBACK_GID_LENGTH: u32 = 65536;
+static QUADLET_FALLBACK_GID_START: u32 = 1879048192;
+static QUADLET_FALLBACK_UID_LENGTH: u32 = 65536;
+static QUADLET_FALLBACK_UID_START: u32 = 1879048192;
+static QUADLET_USERNAME: &str = "quadlet";
+// END from build config
+
 static DEFAULT_DROP_CAPS: &[&str] = &["all"];
 static RUN_AS_USER: Lazy<bool> = Lazy::new(|| {
     env::args().nth(0).unwrap().contains("user")
