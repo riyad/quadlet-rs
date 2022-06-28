@@ -51,6 +51,10 @@ impl IdRanges {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.inner.iter().next().is_none()
+    }
+
     pub fn iter(&self) -> impl Iterator<Item=IdMap> + '_ {
         self.inner.iter().map(IdMap::from)
     }
@@ -135,6 +139,24 @@ mod tests {
                 let mut iter = ranges.iter();
                 assert_eq!(iter.next(), Some(IdMap::new(0, 123)));
                 assert_eq!(iter.next(), None);
+            }
+        }
+
+        mod is_empty {
+            use super::*;
+
+            #[test]
+            fn true_for_empty() {
+                let ranges = IdRanges::empty();
+
+                assert!(ranges.is_empty());
+            }
+
+            #[test]
+            fn false_for_non_empty() {
+                let ranges = IdRanges::new(0, 1);
+
+                assert!(!ranges.is_empty());
             }
         }
     }
