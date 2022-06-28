@@ -315,7 +315,10 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     if drop_caps.is_empty() {
         drop_caps = DEFAULT_DROP_CAPS.iter().map(|s| s.to_string()).collect();
     }
-    drop_caps = drop_caps.iter().map(|caps| format!("--cap-drop={caps}")).collect();
+    drop_caps = drop_caps.iter()
+        .filter(|s| !s.is_empty())  // explicitly filter empty values
+        .map(|caps| format!("--cap-drop={caps}"))
+        .collect();
     podman.add_vec(&mut drop_caps);
 
     // But allow overrides with AddCapability
