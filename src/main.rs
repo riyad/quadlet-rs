@@ -23,6 +23,18 @@ static QUADLET_USERNAME: &str = "quadlet";
 // END from build config
 
 static DEFAULT_DROP_CAPS: &[&str] = &["all"];
+static DEFAULT_REMAP_GIDS: Lazy<IdRanges> = Lazy::new(|| {
+    match quad_lookup_host_subgid(QUADLET_USERNAME) {
+        Some(ids) => ids,
+        None => IdRanges::new(QUADLET_FALLBACK_GID_START, QUADLET_FALLBACK_GID_LENGTH),
+    }
+});
+static DEFAULT_REMAP_UIDS: Lazy<IdRanges> = Lazy::new(|| {
+    match quad_lookup_host_subuid(QUADLET_USERNAME) {
+        Some(ids) => ids,
+        None => IdRanges::new(QUADLET_FALLBACK_UID_START, QUADLET_FALLBACK_UID_LENGTH),
+    }
+});
 static RUN_AS_USER: Lazy<bool> = Lazy::new(|| {
     env::args().nth(0).unwrap().contains("user")
 });
