@@ -1,6 +1,5 @@
-use std::ops::Range;
-
 use rangemap::RangeSet;
+use std::ops::Range;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct IdMap {
@@ -64,6 +63,14 @@ impl IdRanges {
     // pub fn parse(str: &str) -> Result<Self, Error> {
     //     todo!()
     // }
+
+    pub fn remove(&mut self, start: u32, length: u32) {
+        if length == 0 {
+            return
+        }
+
+        self.inner.remove(start..start+length);
+    }
 }
 
 #[cfg(test)]
