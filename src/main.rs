@@ -5,6 +5,7 @@ use self::quadlet::*;
 use self::systemd_unit::*;
 
 use log::{debug, warn};
+use nix::unistd::{Gid, Uid};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::env;
@@ -348,64 +349,83 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         */
     }
 
-    /* FIXME: port
-    uid_t default_container_uid = 0;
-    gid_t default_container_gid = 0;
+    let mut default_container_uid = Uid::from_raw(0);
+    let mut default_container_gid = Gid::from_raw(0);
 
-    gboolean keep_id = quad_unit_file_lookup_boolean (container, CONTAINER_GROUP, "KeepId", FALSE);
-    if (keep_id)
-        {
-        if (quad_is_user)
-            {
-            default_container_uid = getuid ();
-            default_container_gid = getgid ();
-            quad_podman_addv (podman, "--userns", "keep-id", NULL);
-            }
-        else
-            {
-            keep_id = FALSE;
-            quad_log ("Key 'KeepId' in '%s' unsupported for system units, ignoring", quad_unit_file_get_path (container));
-            }
+    let mut keep_id = container
+        .lookup_last(CONTAINER_GROUP, "KeepId")
+        .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
+        .unwrap_or(false);  // key not found: use default
+    if keep_id {
+        if *RUN_AS_USER {
+            default_container_uid = Uid::current();
+            default_container_gid = Gid::current();
+            podman.add_slice(&[ "--userns", "keep-id"]);
+        } else {
+            keep_id = false;
+            warn!("Key 'KeepId' in {:?} unsupported for system units, ignoring", container.path());
         }
+    }
+    let uid = Uid::from_raw(
+        0.max(
+            container.lookup_last(CONTAINER_GROUP, "User")
+                .map(|s| s.parse::<u32>().unwrap_or(0))  // key found: parse or default
+                .unwrap_or(0)  // key not found: use default
+        )
+    );
+    let gid = Gid::from_raw(
+        0.max(
+            container.lookup_last(CONTAINER_GROUP, "Group")
+                .map(|s| s.parse::<u32>().unwrap_or(0))  // key found: parse or default
+                .unwrap_or(0)  // key not found: use default
+        )
+    );
 
-    uid_t uid = MAX (quad_unit_file_lookup_int (container, CONTAINER_GROUP, "User", default_container_uid), 0);
-    gid_t gid = MAX (quad_unit_file_lookup_int (container, CONTAINER_GROUP, "Group", default_container_gid), 0);
+    let host_uid = container.lookup_last(CONTAINER_GROUP, "HostUser")
+        .map(|s| parse_uid(s))
+        .unwrap_or(Ok(uid))  // key not found: use default
+        .map_err(|e| ConversionError::Parsing(e))?;  // key found, but parsing caused error: propagate error
 
-    uid_t host_uid = quad_unit_file_lookup_uid (container,CONTAINER_GROUP, "HostUser", uid, error);
-    if (host_uid == (uid_t)-1)
-        return NULL;
 
-    gid_t host_gid = quad_unit_file_lookup_gid (container,CONTAINER_GROUP, "HostGroup", gid, error);
-    if (host_gid == (gid_t)-1)
-        return NULL;
+    let host_gid = container.lookup_last(CONTAINER_GROUP, "HostGroup")
+        .map(|s| parse_gid(s))
+        .unwrap_or(Ok(gid))  // key not found: use default
+        .map_err(|e| ConversionError::Parsing(e))?;  // key found, but parsing caused error: propagate error
 
-    if (uid != default_container_uid || gid != default_container_uid)
-        {
-        quad_podman_add (podman, "--user");
-        if (gid == default_container_gid)
-            quad_podman_addf (podman, "%lu", (long unsigned)uid);
-        else
-            quad_podman_addf (podman, "%lu:%lu", (long unsigned)uid, (long unsigned)gid);
-        }
+    let uid_arg: String;
+    if uid != default_container_uid || gid != default_container_gid {
+        podman.add("--user");
+        uid_arg = if gid == default_container_gid {
+            uid.to_string()
+        } else {
+            format!("{uid}:{gid}")
+        };
+        podman.add(uid_arg.as_str())
+    }
 
-    gboolean remap_users = quad_unit_file_lookup_boolean (container, CONTAINER_GROUP, "RemapUsers", TRUE);
+    let mut remap_users = container
+        .lookup_last(CONTAINER_GROUP, "RemapUsers")
+        .map(|s| parse_bool(s).unwrap_or(true))  // key found: parse or default
+        .unwrap_or(true);
 
-    if (quad_is_user)
-        remap_users = FALSE;
+    if *RUN_AS_USER {
+        remap_users = false;
+    }
 
-    if (!remap_users)
-        {
-        /* No remapping of users, although we still need maps if the
-            main user/group is remapped, even if most ids map one-to-one. */
+    if !remap_users {
+        // No remapping of users, although we still need maps if the
+        // main user/group is remapped, even if most ids map one-to-one.
+
+        /* FIXME: port
         if (uid != host_uid)
             add_id_maps (podman, "--uidmap",
                         uid, host_uid, UINT32_MAX, NULL);
         if (gid != host_gid)
             add_id_maps (podman, "--gidmap",
                         gid, host_gid, UINT32_MAX, NULL);
-        }
-    else
-        {
+        */
+    } else {
+        /* FIXME: port
         g_autoptr(QuadRanges) uid_remap_ids = quad_unit_file_lookup_ranges (container, CONTAINER_GROUP, "RemapUidRanges",
                                                                             quad_lookup_host_subuid, default_remap_uids);
         g_autoptr(QuadRanges) gid_remap_ids = quad_unit_file_lookup_ranges (container, CONTAINER_GROUP, "RemapGidRanges",
@@ -419,8 +439,8 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         add_id_maps (podman, "--gidmap",
                     gid, host_gid,
                     remap_gid_start, gid_remap_ids);
-        }
-    */
+        */
+    }
 
     let volume_args: Vec<String> = container.lookup_all(CONTAINER_GROUP, "Volume")
         .map(|v| {
