@@ -1,6 +1,8 @@
 mod podman_command;
+mod ranges;
 
 pub(crate) use self::podman_command::*;
+pub(crate) use self::ranges::*;
 
 use once_cell::unsync::Lazy;
 use regex::Regex;
