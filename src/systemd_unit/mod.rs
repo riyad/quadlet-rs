@@ -1,31 +1,69 @@
-extern crate ini;
-
 mod constants;
 
 pub use self::constants::*;
 
 use ini::{Ini, ParseOption};
-use std::{fmt, io};
+use nix::unistd::{Gid, Uid, User, Group};
+use std::fmt;
+use std::io;
 use std::path::{PathBuf, Path};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
-pub struct ParseBoolError;
+pub enum ParseError {
+    Bool,
+    Gid(nix::errno::Errno),
+    Uid(nix::errno::Errno),
+}
 
-impl fmt::Display for ParseBoolError {
+impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        "value was neither `1`, `yes`, `true`, `on` nor `0`, `no`, `false`, `off`".fmt(f)
+        match self {
+            ParseError::Bool => {
+                write!(f, "value must be one of `1`, `yes`, `true`, `on`, `0`, `no`, `false`, `off`")
+            },
+            ParseError::Gid(e) => {
+                write!(f, "failed to parse group name/id: {e}")
+            },
+            ParseError::Uid(e) => {
+                write!(f, "failed to parse user name/id: {e}")
+            },
+        }
     }
 }
 
-pub(crate) fn parse_bool(s: &str) -> Result<bool, ParseBoolError> {
+pub(crate) fn parse_bool(s: &str) -> Result<bool, ParseError> {
     if ["1", "yes", "true", "on"].contains(&s) {
         return Ok(true);
     } else if ["0", "no", "false", "off"].contains(&s) {
         return Ok(false)
     }
 
-    Err(ParseBoolError)
+    Err(ParseError::Bool)
+}
+
+pub(crate) fn parse_gid(s: &str) -> Result<Gid, ParseError> {
+    match s.parse::<u32>() {
+        Ok(uid) => return Ok(Gid::from_raw(uid)),
+        Err(_) => (),
+    }
+
+    return match Group::from_name(s) {
+        Ok(g) => return Ok(g.unwrap().gid),
+        Err(e) => Err(ParseError::Gid(e)),
+    }
+}
+
+pub(crate) fn parse_uid(s: &str) -> Result<Uid, ParseError> {
+    match s.parse::<u32>() {
+        Ok(uid) => return Ok(Uid::from_raw(uid)),
+        Err(_) => (),
+    }
+
+    return match User::from_name(s) {
+        Ok(u) => return Ok(u.unwrap().uid),
+        Err(e) => Err(ParseError::Uid(e)),
+    }
 }
 
 pub(crate) struct SystemdUnit {
@@ -130,6 +168,102 @@ impl SystemdUnit {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod parse_gid {
+        use nix::errno::Errno;
+
+        use super::*;
+
+        #[test]
+        fn fails_with_empty_input() {
+            let input = "";
+
+            let res = parse_gid(input);
+            assert_eq!(res.err(), Some(ParseError::Gid(Errno::ENOENT)));
+        }
+
+        #[test]
+        fn parses_integer_gid() {
+            let input = "12345";
+
+            let res = parse_gid(input);
+            assert_eq!(res.ok(), Some(Gid::from_raw(12345)));
+        }
+
+        #[test]
+        fn fails_parsing_integer_with_gunk() {
+            let input = "12345%";
+
+            let res = parse_gid(input);
+            assert_eq!(res.err(), Some(ParseError::Gid(Errno::ENOENT)));
+        }
+
+        #[test]
+        fn converts_user_name() {
+            let input = "root";
+
+            let res = parse_gid(input);
+            assert_eq!(res.ok(), Some(Gid::from_raw(0)));
+        }
+
+        #[test]
+        fn converts_user_name2() {
+            let input = User::from_name("mail")
+                .expect("should have this user")
+                .expect("should have this user");
+
+            let res = parse_gid(input.name.as_str());
+            assert_eq!(res.ok(), Some(input.gid));
+        }
+    }
+
+    mod parse_uid {
+        use nix::errno::Errno;
+
+        use super::*;
+
+        #[test]
+        fn fails_with_empty_input() {
+            let input = "";
+
+            let res = parse_uid(input);
+            assert_eq!(res.err(), Some(ParseError::Uid(Errno::ENOENT)));
+        }
+
+        #[test]
+        fn parses_integer_uid() {
+            let input = "12345";
+
+            let res = parse_uid(input);
+            assert_eq!(res.ok(), Some(Uid::from_raw(12345)));
+        }
+
+        #[test]
+        fn fails_parsing_integer_with_gunk() {
+            let input = "12345%";
+
+            let res = parse_uid(input);
+            assert_eq!(res.err(), Some(ParseError::Uid(Errno::ENOENT)));
+        }
+
+        #[test]
+        fn converts_user_name() {
+            let input = "root";
+
+            let res = parse_uid(input);
+            assert_eq!(res.ok(), Some(Uid::from_raw(0)));
+        }
+
+        #[test]
+        fn converts_user_name2() {
+            let input = User::from_name("mail")
+                .expect("should have this user")
+                .expect("should have this user");
+
+            let res = parse_uid(input.name.as_str());
+            assert_eq!(res.ok(), Some(input.uid));
+        }
+    }
 
     mod add_entry {
         use super::*;
