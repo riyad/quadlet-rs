@@ -466,14 +466,14 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
 
         let remap_uid_start = Uid::from_raw(
             0.max(
-                container.lookup_last(CONTAINER_GROUP, "User")
+                container.lookup_last(CONTAINER_GROUP, "RemapUidStart")
                     .map(|s| s.parse::<u32>().unwrap_or(1))  // key found: parse or default
                     .unwrap_or(1)  // key not found: use default
             )
         );
         let remap_gid_start = Gid::from_raw(
             0.max(
-                container.lookup_last(CONTAINER_GROUP, "Group")
+                container.lookup_last(CONTAINER_GROUP, "RemapGidStart")
                     .map(|s| s.parse::<u32>().unwrap_or(1))  // key found: parse or default
                     .unwrap_or(1)  // key not found: use default
             )
