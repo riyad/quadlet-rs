@@ -1,5 +1,7 @@
 mod constants;
 
+use crate::quadlet::IdRanges;
+
 pub use self::constants::*;
 
 use ini::{Ini, ParseOption};
@@ -52,6 +54,38 @@ pub(crate) fn parse_gid(s: &str) -> Result<Gid, ParseError> {
         Ok(g) => return Ok(g.unwrap().gid),
         Err(e) => Err(ParseError::Gid(e)),
     }
+}
+
+/// Parses subuids/subgids for remapping.
+/// Inputs can have the form of a user name or id ranges (separated by ',').
+/// Ranges can be "open" (i.e. only have a start value). In that case the end
+/// value will default to the maximum allowed id value.
+///
+/// see also the documentation for the `RemapUidRanges` and `RemapGidRanges` fields.
+///
+/// NOTE: Looking up id ranges for user names needs a lookup function (i.e. `name_lookup`)
+/// that can turn a user name into a range of ids (e.g by parsing _/etc/sub*uid_).
+/// Quadlet-rs has such functions already.
+/// If you don't need this, you can provide `|_| None` which will map all user names
+/// to an empty set of id ranges.
+///
+/// valid inputs are:
+/// - a username (e.g. "quadlet") in combination with a lookup function
+/// - a range of ids (e.g. "100000-101000")
+/// - multiple ranges (e.g. "1000-2000,100000-101000")
+/// - an "open" range (e.g. "100000"). The end will default to the maximum allowed id value.
+pub(crate) fn parse_ranges<F>(s: &str, name_lookup: F) -> IdRanges
+    where F: Fn(&str) -> Option<IdRanges>
+{
+    if s.is_empty() {
+        return IdRanges::empty()
+    }
+
+    if !s.chars().next().unwrap().is_ascii_digit() {
+        return name_lookup(s).unwrap_or(IdRanges::empty())
+    }
+
+    IdRanges::parse(s)
 }
 
 pub(crate) fn parse_uid(s: &str) -> Result<Uid, ParseError> {
@@ -214,6 +248,107 @@ mod tests {
 
             let res = parse_gid(input.name.as_str());
             assert_eq!(res.ok(), Some(input.gid));
+        }
+    }
+
+    mod parse_ranges {
+        use crate::quadlet::IdMap;
+        use super::*;
+
+        #[test]
+        fn empty_range_with_empty_input() {
+            let input = "";
+
+            let res = parse_ranges(input, |_| None);
+            assert!(res.is_empty());
+        }
+
+        #[test]
+        fn uses_name_lookup_for_user_name() {
+            let input = "quadlet";
+
+            let ranges = parse_ranges(input, |_| Some(IdRanges::new(123, 456)));
+
+            let mut iter = ranges.iter();
+            assert_eq!(iter.next(), Some(IdMap::new(123, 456)));
+            assert_eq!(iter.next(), None)
+        }
+
+        #[test]
+        fn name_lookup_falls_back_to_empty_range() {
+            let input = "quadlet";
+
+            let ranges = parse_ranges(input, |_| None);
+
+            let mut iter = ranges.iter();
+            assert_eq!(iter.next(), None)
+        }
+
+        #[test]
+        fn defaults_to_empty_range_without_lookup_function() {
+            let input = "quadlet";
+
+            let ranges = parse_ranges(input, |_| None);
+
+            let mut iter = ranges.iter();
+            assert_eq!(iter.next(), None)
+        }
+
+        #[test]
+        fn with_single_number() {
+            let input = "123";
+
+            let ranges = parse_ranges(input, |_| None);
+
+            let mut iter = ranges.iter();
+            assert_eq!(iter.next(), Some(IdMap::new(123, u32::MAX-123)));
+            assert_eq!(iter.next(), None)
+        }
+
+        #[test]
+        fn with_single_numeric_range() {
+            let input = "123-456";
+
+            let ranges = parse_ranges(input, |_| None);
+
+            let mut iter = ranges.iter();
+            assert_eq!(iter.next(), Some(IdMap::new(123, 334)));
+            assert_eq!(iter.next(), None)
+        }
+
+        #[test]
+        fn with_numeric_range_and_number() {
+            let input = "123-456,789";
+
+            let ranges = parse_ranges(input, |_| None);
+
+            let mut iter = ranges.iter();
+            assert_eq!(iter.next(), Some(IdMap::new(123, 334)));
+            assert_eq!(iter.next(), Some(IdMap::new(789, u32::MAX-789)));
+            assert_eq!(iter.next(), None)
+        }
+
+        #[test]
+        fn with_multiple_numeric_ranges() {
+            let input = "123-456,789-101112";
+
+            let ranges = parse_ranges(input, |_| None);
+
+            let mut iter = ranges.iter();
+            assert_eq!(iter.next(), Some(IdMap::new(123, 334)));
+            assert_eq!(iter.next(), Some(IdMap::new(789, 100324)));
+            assert_eq!(iter.next(), None)
+        }
+
+        #[test]
+        fn merges_overlapping_non_monotonic_numeric_ranges() {
+            let input = "123-456,345,234-567";
+
+            let ranges = parse_ranges(input, |_| None);
+
+            let mut iter = ranges.iter();
+            assert_eq!(iter.next(), Some(IdMap::new(123, u32::MAX-123)));
+            assert_eq!(iter.next(), None)
         }
     }
 

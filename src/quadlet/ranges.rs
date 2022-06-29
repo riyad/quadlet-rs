@@ -65,9 +65,36 @@ impl IdRanges {
         ranges
     }
 
-    // pub fn parse(str: &str) -> Result<Self, Error> {
-    //     todo!()
-    // }
+    pub fn parse(input: &str) -> Self {
+        let mut ranges = Self::empty();
+        for s in input.split(",") {
+            let mut splits = s.splitn(2, "-");
+
+            let start;
+            let end;
+
+            if let Some(start_s) = splits.next() {
+                start = start_s.parse().unwrap_or(0);
+                // FIXME: need to clamp to u32::MAX?
+
+                end = if let Some(end_s) = splits.next() {
+                    end_s.parse().unwrap_or(0)
+                    // FIXME: need to clamp to u32::MAX?
+                } else {
+                    u32::MAX
+                };
+            } else {
+                start = 0;
+                end = u32::MAX;
+            }
+
+            if end >= start {
+                ranges.add(start, u32::MAX.min((end - start).saturating_add(1)))
+            }
+        }
+
+        ranges
+    }
 
     pub fn remove(&mut self, start: u32, length: u32) {
         if length == 0 {
@@ -157,6 +184,79 @@ mod tests {
                 let ranges = IdRanges::new(0, 1);
 
                 assert!(!ranges.is_empty());
+            }
+        }
+
+        mod parse {
+            use super::*;
+
+
+            #[test]
+            fn with_single_number() {
+                let input = "123";
+
+                let ranges = IdRanges::parse(input);
+
+                let mut iter = ranges.iter();
+                assert_eq!(iter.next(), Some(IdMap::new(123, u32::MAX-123)));
+                assert_eq!(iter.next(), None)
+            }
+
+            #[test]
+            fn with_single_numeric_range() {
+                let input = "123-456";
+
+                let ranges = IdRanges::parse(input);
+
+                let mut iter = ranges.iter();
+                assert_eq!(iter.next(), Some(IdMap::new(123, 334)));
+                assert_eq!(iter.next(), None)
+            }
+
+            #[test]
+            fn with_numeric_range_and_number() {
+                let input = "123-456,789";
+
+                let ranges = IdRanges::parse(input);
+
+                let mut iter = ranges.iter();
+                assert_eq!(iter.next(), Some(IdMap::new(123, 334)));
+                assert_eq!(iter.next(), Some(IdMap::new(789, u32::MAX-789)));
+                assert_eq!(iter.next(), None)
+            }
+
+            #[test]
+            fn with_multiple_numeric_ranges() {
+                let input = "123-456,789-101112";
+
+                let ranges = IdRanges::parse(input);
+
+                let mut iter = ranges.iter();
+                assert_eq!(iter.next(), Some(IdMap::new(123, 334)));
+                assert_eq!(iter.next(), Some(IdMap::new(789, 100324)));
+                assert_eq!(iter.next(), None)
+            }
+
+            #[test]
+            fn merges_overlapping_non_monotonic_numeric_ranges() {
+                let input = "123-456,345,234-567";
+
+                let ranges = IdRanges::parse(input);
+
+                let mut iter = ranges.iter();
+                assert_eq!(iter.next(), Some(IdMap::new(123, u32::MAX-123)));
+                assert_eq!(iter.next(), None)
+            }
+
+            #[test]
+            fn with_borked_values() {
+                let input = "123.456,-789";
+
+                let ranges = IdRanges::parse(input);
+
+                let mut iter = ranges.iter();
+                assert_eq!(iter.next(), Some(IdMap::new(0, u32::MAX)));
+                assert_eq!(iter.next(), None)
             }
         }
     }

@@ -458,10 +458,10 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         }
     } else {
         let uid_remap_ids = container.lookup_last(CONTAINER_GROUP, "RemapUidRanges")
-            .map(|s| parse_ranges(s, Some(quad_lookup_host_subuid)))
+            .map(|s| parse_ranges(s, quad_lookup_host_subuid))
             .unwrap_or(DEFAULT_REMAP_UIDS.clone());
         let gid_remap_ids = container.lookup_last(CONTAINER_GROUP, "RemapGidRanges")
-            .map(|s| parse_ranges(s, Some(quad_lookup_host_subgid)))
+            .map(|s| parse_ranges(s, quad_lookup_host_subgid))
             .unwrap_or(DEFAULT_REMAP_GIDS.clone());
 
         let remap_uid_start = Uid::from_raw(
