@@ -58,3 +58,111 @@ fn quad_lookup_host_subid(file_contents: &String, prefix: &str) -> Option<IdRang
 
     None
 }
+
+/// Parses arguments to podman-run's `--publish` option.
+/// see also the documentation for the `PublishPort` field.
+///
+/// NOTE: the last part will also include the protocol if specified
+pub(crate) fn quad_split_ports(ports: &str) -> Vec<String> {
+    let mut parts: Vec<String> = Vec::new();
+
+    let mut next_part = String::new();
+    let mut chars = ports.chars();
+    while let Some(c) = chars.next() {
+        let c = c;
+        match c {
+            '[' => { // IPv6 contain ':' characters, hence they are enclosed with '[...]'
+                // so we consume all characters until ']' (including ':') for this part
+                next_part.push(c);
+                while let Some(c) = chars.next() {
+                    next_part.push(c);
+                    match c {
+                        ']' => break,
+                        _ => (),
+                    }
+                }
+            },
+            ':' => { // assume all ':' characters are boundaries that start a new part
+                parts.push(next_part);
+                next_part = String::new();
+                continue;
+            },
+            _ => {
+                next_part.push(c);
+            }
+        }
+    }
+    // don't forget the last part
+    parts.push(next_part);
+
+    parts
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod quad_split_ports {
+        use super::*;
+
+        #[test]
+        fn with_only_port() {
+            let input = "123";
+
+            assert_eq!(
+                quad_split_ports(input),
+                vec!["123"],
+            );
+        }
+
+        #[test]
+        fn with_ipv4_and_port() {
+            let input = "1.2.3.4:567";
+
+            assert_eq!(
+                quad_split_ports(input),
+                vec!["1.2.3.4", "567"],
+            );
+        }
+
+        #[test]
+        fn with_ipv6_and_port() {
+            let input = "[::]:567";
+
+            assert_eq!(
+                quad_split_ports(input),
+                vec!["[::]", "567"],
+            );
+        }
+
+        #[test]
+        fn with_host_and_container_ports() {
+            let input = "123:567";
+
+            assert_eq!(
+                quad_split_ports(input),
+                vec!["123", "567"],
+            );
+        }
+
+        #[test]
+        fn with_ipv4_host_and_container_ports() {
+            let input = "0.0.0.0:123:567";
+
+            assert_eq!(
+                quad_split_ports(input),
+                vec!["0.0.0.0", "123", "567"],
+            );
+        }
+
+        #[test]
+        fn with_ipv6_empty_host_container_port_and_protocol() {
+            let input = "[1:2:3:4::]::567/tcp";
+
+            assert_eq!(
+                quad_split_ports(input),
+                vec!["[1:2:3:4::]", "", "567/tcp"],
+            );
+        }
+    }
+}

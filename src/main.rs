@@ -582,70 +582,65 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         .collect();
     podman.add_vec(&mut exposed_port_args);
 
-    /* FIXME: port
-    g_auto(GStrv) publish_ports = quad_unit_file_lookup_all (container, CONTAINER_GROUP, "PublishPort");
-    for (guint i = 0; publish_ports[i] != NULL; i++)
-        {
-        char *publish_port = g_strstrip (publish_ports[i]); /* Allow whitespaces before and after */
-        /* IP address could have colons in it. For example: "[::]:8080:80/tcp, so use custom splitter */
-        g_auto(GStrv) parts = quad_split_ports (publish_port);
-        const char *container_port = NULL, *ip = NULL, *host_port = NULL;
+    let publish_ports: Vec<&str> = container
+        .lookup_all(CONTAINER_GROUP, "PublishPort")
+        .collect();
+    for publish_port in publish_ports {
+        let publish_port = publish_port.trim(); // Allow whitespaces before and after
+        //  IP address could have colons in it. For example: "[::]:8080:80/tcp, so use custom splitter
+        let mut parts = quad_split_ports(publish_port);
 
-        /* format (from podman run):
-        * ip:hostPort:containerPort | ip::containerPort | hostPort:containerPort | containerPort
-        *
-        * ip could be IPv6 with minimum of these chars "[::]"
-        * containerPort can have a suffix of "/tcp" or "/udp"
-        */
-
-        switch (g_strv_length (parts))
-            {
-            case 1:
-            container_port = parts[0];
-            break;
-
-            case 2:
-            host_port = parts[0];
-            container_port = parts[1];
-            break;
-
-            case 3:
-            ip = parts[0];
-            host_port = parts[1];
-            container_port = parts[2];
-            break;
-
-            default:
-            quad_log ("Ignoring invalid published port '%s'", publish_port);
-            continue;
-            }
-
-        if (host_port && *host_port == 0)
-            host_port = NULL;
-
-        if (ip && (strcmp (ip, "0.0.0.0") == 0 || *ip == 0))
-            ip = NULL;
-
-        if (host_port && !is_port_range (host_port))
-            {
-            quad_log ("Invalid port format '%s'", host_port);
-            continue;
-            }
-
-        if (container_port && !is_port_range (container_port))
-            {
-            quad_log ("Invalid port format '%s'", container_port);
-            continue;
-            }
-
-        if (ip)
-            quad_podman_addf (podman, "-p=%s:%s:%s", ip, host_port ? host_port : "", container_port);
-        else if (host_port)
-            quad_podman_addf (podman, "-p=%s:%s", host_port, container_port);
-        else
-            quad_podman_addf (podman, "-p=%s", container_port);
+        // format (from podman run):
+        // ip:hostPort:containerPort | ip::containerPort | hostPort:containerPort | containerPort
+        //
+        // ip could be IPv6 with minimum of these chars "[::]"
+        // containerPort can have a suffix of "/tcp" or "/udp"
+        let mut container_port = String::new();
+        let mut ip = String::new();
+        let mut host_port = String::new();
+        match parts.len() {
+            1 => {
+                container_port = parts.pop().unwrap();
+            },
+            2 => {
+                // NOTE: order inverted because of pop()
+                container_port = parts.pop().unwrap();
+                host_port = parts.pop().unwrap();
+            },
+            3 => {
+                // NOTE: order inverted because of pop()
+                container_port = parts.pop().unwrap();
+                host_port = parts.pop().unwrap();
+                ip = parts.pop().unwrap();
+            },
+            _ => {
+                warn!("Ignoring invalid published port '{publish_port}'");
+                continue;
+            },
         }
-    */
+
+        if ip == "0.0.0.0" {
+            ip.clear();
+        }
+
+        if !is_port_range(host_port.as_str()) {
+            warn!("Invalid port format '{host_port}'");
+            continue;
+        }
+
+        if !is_port_range(container_port.as_str()) {
+            warn!("Invalid port format '{container_port}'");
+            continue;
+        }
+
+        if !ip.is_empty() {
+            podman.add(format!("-p={ip}:{host_port}:{container_port}"));
+        } else if !host_port.is_empty() {
+            podman.add(format!("-p={host_port}:{container_port}"));
+        } else {
+            podman.add(format!("-p={container_port}"));
+        }
+    }
 
     podman.add_vec(&mut env_args);
 
