@@ -133,7 +133,14 @@ impl SystemdUnit {
     pub fn load_from_file<P: AsRef<Path>>(filename: P) -> Result<Self, ini::Error> {
         Ok(SystemdUnit {
             path: Some(filename.as_ref().into()),
-            inner: Ini::load_from_file(filename)?,
+            inner: Ini::load_from_file_opt(
+                filename,
+                ParseOption {
+                    enabled_quote: false,
+                    enabled_escape: true,
+                    ..ParseOption::default()
+                },
+            )?,
         })
     }
 
@@ -144,7 +151,8 @@ impl SystemdUnit {
             inner: Ini::load_from_str_opt(
                 buf,
                 ParseOption {
-                    //enabled_quote: false,
+                    enabled_quote: false,
+                    enabled_escape: true,
                     ..ParseOption::default()
                 },
             )?,
@@ -720,7 +728,7 @@ KeyThree=value 3\\
             let mut iter = unit.section_entries("Section B");
             // TODO: may not be accurate according to Systemd quoting rules
             //assert_eq!(iter.next().unwrap(), ("Setting", "something some thing …"));
-            assert_eq!(iter.next().unwrap(), ("Setting", "something \"some thing\" \"…\""));
+            assert_eq!(iter.next().unwrap(), ("Setting", "\"something\" \"some thing\" \"…\""));
             assert_eq!(iter.next().unwrap(), ("KeyTwo", "value 2        value 2 continued"));
             assert_eq!(iter.next(), None);
 
@@ -743,7 +751,9 @@ Exec=/some/path \"an arg\" \"a;b\\nc\\td'e\" a;b\\nc\\td 'a\"b'";
 
             let mut iter = unit.section_entries("Container");
             assert_eq!(iter.next().unwrap(), ("Image", "imagename"));
-            assert_eq!(iter.next().unwrap(), ("PodmanArgs", "--foo    --bar"));
+            // TODO: may not be accurate according to Systemd quoting rules
+            //assert_eq!(iter.next().unwrap(), ("PodmanArgs", "--foo    --bar"));
+            assert_eq!(iter.next().unwrap(), ("PodmanArgs", "\"--foo\"    --bar"));
             assert_eq!(iter.next().unwrap(), ("PodmanArgs", "--also"));
             // TODO: may not be accurate according to Systemd quoting rules
             //assert_eq!(iter.next().unwrap(), ("Exec", "/some/path an arg a;b\nc\td'e a;b\nc\td a\"b"));
