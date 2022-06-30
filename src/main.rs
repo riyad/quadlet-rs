@@ -210,11 +210,10 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     }
 
     // Read env early so we can override it below
-    let environments = container.lookup_all(CONTAINER_GROUP, "Environment");
-    let  mut env_args: Vec<String> = vec![];
-    /* FIXME: port
-    g_autoptr(GHashTable) podman_env = parse_keys (environments);
-    */
+    let environments = container
+        .lookup_all(CONTAINER_GROUP, "Environment")
+        .collect();
+    let env_args: HashMap<String, String> = parse_keys(&environments);
 
     // Need the containers filesystem mounted to start podman
     service.append_entry(
@@ -642,19 +641,17 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         }
     }
 
-    podman.add_vec(&mut env_args);
+    podman.add_env(&env_args);
 
-    /* FIXME: port
-    g_auto(GStrv) labels = quad_unit_file_lookup_all (container, CONTAINER_GROUP, "Label");
-    g_autoptr(GHashTable) podman_labels = parse_keys (labels);
-    quad_podman_add_labels (podman, podman_labels);
-    */
+    let labels: Vec<&str> = container.lookup_all(CONTAINER_GROUP, "Label")
+        .collect();
+    let label_args: HashMap<String, String> = parse_keys(&labels);
+    podman.add_labels(&label_args);
 
-    /* FIXME: port
-    g_auto(GStrv) annotations = quad_unit_file_lookup_all (container, CONTAINER_GROUP, "Annotation");
-    g_autoptr(GHashTable) podman_annotations = parse_keys (annotations);
-    quad_podman_add_annotations (podman, podman_annotations);
-    */
+    let annotations: Vec<&str> = container.lookup_all(CONTAINER_GROUP, "Annotation")
+        .collect();
+    let annotation_args: HashMap<String, String> = parse_keys(&annotations);
+    podman.add_annotations(&annotation_args);
 
     let mut podman_args_args: Vec<String> = container.lookup_all(CONTAINER_GROUP, "PodmanArgs")
         .map(|v| {
