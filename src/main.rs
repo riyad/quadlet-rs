@@ -654,37 +654,16 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     podman.add_annotations(&annotation_args);
 
     let mut podman_args_args: Vec<String> = container.lookup_all(CONTAINER_GROUP, "PodmanArgs")
-        .map(|v| {
-            let podman_args_s = v.to_string();
-            /* FIXME: port
-            // quad_split_string(
-            //     podman_args_s.as_str(),
-            //     WHITESPACE,
-            //     make_bitflags!(QuadSplitFlags::{RELAX|UNQUOTE|CUNESCAPE}),
-            // )
-            */
-            vec![]
-        })
-        .flatten()
+        .flat_map(|v| SplitWord::new(v) )
         .collect();
     podman.add_vec(&mut podman_args_args);
 
     podman.add(image);
 
-    let mut exec_key_args = container.lookup_last(CONTAINER_GROUP, "Exec")
-        .map(|v| {
-            let exec_key = v.to_string();
-            /* FIXME: port
-            // quad_split_string(
-            //     exec_key.as_str(),
-            //     WHITESPACE,
-            //     make_bitflags!(QuadSplitFlags::{RELAX|UNQUOTE|CUNESCAPE}),
-            // )
-            */
-            vec![]
-        })
+    let mut exec_args = container.lookup_last(CONTAINER_GROUP, "Exec")
+        .map(|v| SplitWord::new(v).collect())
         .unwrap_or(vec![]);
-    podman.add_vec(&mut exec_key_args);
+    podman.add_vec(&mut exec_args);
 
     service.append_entry(
         SERVICE_GROUP,
