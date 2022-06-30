@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::ranges::IdRanges;
 
 pub(crate) struct PodmanCommand {
@@ -13,6 +15,14 @@ impl PodmanCommand {
 
     pub(crate) fn add<S>(&mut self, arg: S) where S: Into<String> {
         self.args.push(arg.into());
+    }
+
+    pub(crate) fn add_annotations(&mut self, annotations: &HashMap<String, String>) {
+        self.add_keys("--annotation", annotations);
+    }
+
+    pub(crate) fn add_env(&mut self, env: &HashMap<String, String>) {
+        self.add_keys("--env", env);
     }
 
     pub(crate) fn add_id_map(&mut self,
@@ -91,6 +101,17 @@ impl PodmanCommand {
                 }
             }
         }
+    }
+
+    pub(crate) fn add_keys(&mut self, prefix: &str, env: &HashMap<String, String>) {
+        for (key, value) in env {
+            self.add(prefix);
+            self.add(format!("{key}={value}"));
+        }
+    }
+
+    pub(crate) fn add_labels(&mut self, labels: &HashMap<String, String>) {
+        self.add_keys("--label", labels);
     }
 
     pub(crate) fn add_slice(&mut self, args: &[&str])
