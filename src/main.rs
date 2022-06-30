@@ -569,7 +569,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         .map(|v| {
             let exposed_port = v.to_string().trim_end().to_owned();  // Allow whitespace after
 
-            if is_port_range(exposed_port.as_str()) {
+            if !is_port_range(exposed_port.as_str()) {
                 warn!("Ignoring invalid exposed port: '{exposed_port}'");
                 return None
             }
