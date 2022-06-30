@@ -1,17 +1,41 @@
 mod podman_command;
 mod ranges;
 
+use crate::systemd_unit::SplitWord;
+
 pub(crate) use self::podman_command::*;
 pub(crate) use self::ranges::*;
 
+use log::warn;
 use once_cell::unsync::Lazy;
 use regex::Regex;
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
 pub(crate) fn is_port_range(port: &str) -> bool {
     const RE: Lazy<Regex> = Lazy::new(|| Regex::new("\\d+(-\\d+)?(/udp|/tcp)?$").unwrap());
     RE.is_match(port)
+}
+
+/// parse `key=value` pairs from given list
+pub(crate) fn parse_keys<'a>(key_vals: &'a Vec<&str>) -> HashMap<String, String> {
+    let mut res = HashMap::new();
+
+    for key_val in key_vals {
+        for assign_s in SplitWord::new(key_val) {
+            if assign_s.contains("=") {
+                let mut splits = assign_s.splitn(2, "=");
+                let k = splits.next().unwrap();
+                let v = splits.next().unwrap();
+                res.insert(k.to_string(), v.to_string());
+            } else {
+                warn!("Invalid key=value assignment '{assign_s}'");
+            }
+        }
+    }
+
+    res
 }
 
 pub(crate) fn quad_lookup_host_subgid(user: &str) -> Option<IdRanges> {
