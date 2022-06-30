@@ -1,8 +1,10 @@
 mod constants;
+mod split;
 
 use crate::quadlet::IdRanges;
 
 pub use self::constants::*;
+pub use self::split::*;
 
 use ini::{Ini, ParseOption};
 use nix::unistd::{Gid, Uid, User, Group};
