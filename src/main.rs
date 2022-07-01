@@ -142,8 +142,7 @@ fn load_units_from_dir(source_path: &PathBuf, units: &mut HashMap<String, System
 
         let path = entry.path();
 
-        // FIXME: make debug!()
-        println!("Loading source unit file {path:?}");
+        debug!("Loading source unit file {path:?}");
 
         let unit = match SystemdUnit::load_from_file(&path) {
             Ok(unit) => unit,
@@ -598,12 +597,12 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
                 container_port = parts.pop().unwrap();
             },
             2 => {
-                // NOTE: order inverted because of pop()
+                // NOTE: order is inverted because of pop()
                 container_port = parts.pop().unwrap();
                 host_port = parts.pop().unwrap();
             },
             3 => {
-                // NOTE: order inverted because of pop()
+                // NOTE: order is inverted because of pop()
                 container_port = parts.pop().unwrap();
                 host_port = parts.pop().unwrap();
                 ip = parts.pop().unwrap();
