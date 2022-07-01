@@ -656,12 +656,12 @@ KeyTwo\t=\tvalue 2\t";
 
             let mut iter = unit.section_entries("Section A");
             assert_eq!(iter.next().unwrap(), ("KeyOne", "value 1"));
-            assert_eq!(iter.next().unwrap(), ("KeyTwo", "value 2"));
+            assert_eq!(iter.next().unwrap(), ("KeyTwo", "value 2\t"));
             assert_eq!(iter.next(), None);
         }
 
         #[test]
-        #[ignore = "rust-ini wrongly trims values *after* unqoting"]
+        #[ignore = "rust-ini doesn't handle inner quotes properly"]
         fn trims_whitespace_around_but_not_inside_quoted_values() {
             let input = "[Section A]
   KeyThree  =  \"  value 3\t\"";
@@ -704,7 +704,105 @@ Setting=foo=\"bar baz\"";
 
         // TODO: automatically close quotes at end of line (with or witout line continuation)
         // TODO: test nested quotes
-        // TODO: test all possible of escape sequences
+
+        mod parse_escape_sequence {
+            use super::*;
+
+            #[test]
+            fn with_unknown_escape_char() {
+                let input = "[Section A]
+unescape=\\_";
+
+                let unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 1);
+
+                let mut iter = unit.section_entries("Section A");
+                // NOTE: not sure if this is the right behaviour, but this is what rust-ini gives us
+                assert_eq!(iter.next().unwrap(), ("unescape", "_"));
+                assert_eq!(iter.next(), None);
+            }
+
+            #[test]
+            fn unescapes_single_character_sequences() {
+                let input = "[Section A]
+unescape=\\a\\b\\f\\n\\r\\t\\v\\\\\\\"\\\'\\s";
+
+                let unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 1);
+
+                let mut iter = unit.section_entries("Section A");
+                assert_eq!(iter.next().unwrap(), ("unescape", "\u{7}\u{8}\u{c}\n\r\t\u{b}\\\"\' "));
+                assert_eq!(iter.next(), None);
+            }
+
+            #[test]
+            fn unescapes_unicode_sequences() {
+                let input = "[Section A]
+unescape=\\xaa \\u1234 \\U0010cdef \\123";
+
+                let unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 1);
+
+                let mut iter = unit.section_entries("Section A");
+                assert_eq!(iter.next().unwrap(), ("unescape", "\u{aa} \u{1234} \u{10cdef} \u{53}"));
+                assert_eq!(iter.next(), None);
+            }
+
+            #[test]
+            fn fails_with_escaped_null() {
+                let input = "[Section A]
+unescape=\\x00";
+
+                assert_eq!(
+                    SystemdUnit::load_from_str(input).err(),
+                    Some(ini::ParseError{ line: 1, col: 13, msg: "\\0 character not allowd in escape sequence".into()})
+                );
+            }
+
+            #[test]
+            fn fails_with_illegal_digit() {
+                let input = "[Section A]
+unescape=\\u123x";
+
+                assert_eq!(
+                    SystemdUnit::load_from_str(input).err(),
+                    Some(ini::ParseError{ line: 1, col: 15, msg: "Expected 4 hex values after \"\\x\", but got \"\\x123x\"".into()})
+                );
+            }
+
+            #[test]
+            fn fails_with_illegal_octal_digit() {
+                let input = "[Section A]
+unescape=\\678";
+
+                assert_eq!(
+                    SystemdUnit::load_from_str(input).err(),
+                    Some(ini::ParseError{ line: 1, col: 13, msg: "Expected 3 octal values after \"\\\", but got \"\\678\"".into()})
+                );
+            }
+
+            #[test]
+            fn fails_with_incomplete_sequence() {
+                let input = "[Section A]
+unescape=\\";
+
+                assert_eq!(
+                    SystemdUnit::load_from_str(input).err(),
+                    Some(ini::ParseError{line: 1, col: 10, msg: "expecting escape sequence or '\\n' but found EOF.".into()})
+                );
+            }
+
+            #[test]
+            fn fails_with_incomplete_unicode_sequence() {
+                let input = "[Section A]
+unescape=\\u12";
+
+                assert_eq!(
+                    SystemdUnit::load_from_str(input).err(),
+                    Some(ini::ParseError{ line: 1, col: 13, msg: "expecting unicode escape sequence but found EOF.".into()})
+                );
+            }
+        }
 
         #[test]
         fn test_systemd_syntax_example_1_succeeds() {
