@@ -6,6 +6,8 @@ use crate::quadlet::IdRanges;
 pub use self::constants::*;
 pub use self::split::*;
 
+use ini::EscapePolicy;
+use ini::WriteOption;
 use ini::{Ini, ParseOption};
 use nix::unistd::{Gid, Uid, User, Group};
 use std::fmt;
@@ -205,7 +207,13 @@ impl SystemdUnit {
 
     /// Write to a writer
     pub(crate) fn write_to<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
-        self.inner.write_to(writer)
+        self.inner.write_to_opt(
+            writer,
+            WriteOption {
+                escape_policy: EscapePolicy::Basics,
+                ..WriteOption::default()
+            },
+        )
     }
 }
 
