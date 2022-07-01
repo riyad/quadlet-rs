@@ -213,7 +213,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     let environments = container
         .lookup_all(CONTAINER_GROUP, "Environment")
         .collect();
-    let env_args: HashMap<String, String> = parse_keys(&environments);
+    let mut env_args: HashMap<String, String> = parse_keys(&environments);
 
     // Need the containers filesystem mounted to start podman
     service.append_entry(
@@ -356,21 +356,17 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     }
 
     let socket_activated = container.lookup_last(CONTAINER_GROUP, "SocketActivated")
-        .map(|s| parse_bool(s).unwrap_or(false))
-        .unwrap_or(false);
+        .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
+        .unwrap_or(false);  // key not found: use default
     if socket_activated {
         // TODO: This will not be needed with later podman versions that support activation directly:
         // https://github.com/containers/podman/pull/11316
         podman.add("--preserve-fds=1");
-        /* FIXME: port
-        g_hash_table_insert (podman_env, g_strdup ("LISTEN_FDS"), g_strdup ("1"));
-        */
+        env_args.insert("LISTEN_FDS".into(), "1".into());
 
         // TODO: This will not be 2 when catatonit forwards fds:
         //  https://github.com/openSUSE/catatonit/pull/15
-        /* FIXME: port
-        g_hash_table_insert (podman_env, g_strdup ("LISTEN_PID"), g_strdup ("2"));
-        */
+        env_args.insert("LISTEN_PID".into(), "2".into());
     }
 
     let mut default_container_uid = Uid::from_raw(0);
