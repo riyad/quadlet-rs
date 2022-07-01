@@ -618,12 +618,12 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
             ip.clear();
         }
 
-        if !is_port_range(host_port.as_str()) {
+        if !host_port.is_empty() && !is_port_range(host_port.as_str()) {
             warn!("Invalid port format '{host_port}'");
             continue;
         }
 
-        if !is_port_range(container_port.as_str()) {
+        if !container_port.is_empty() && !is_port_range(container_port.as_str()) {
             warn!("Invalid port format '{container_port}'");
             continue;
         }
