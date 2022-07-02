@@ -117,6 +117,10 @@ impl SystemdUnit {
             .append(key, value);
     }
 
+    pub(crate) fn has_key(&self, section: &str, key: &str) -> bool {
+        self.inner.get_from(Some(section), key).is_some()
+    }
+
     /// Retrun `true` if there's an (non-empty) instance of section `name`
     pub(crate) fn has_section(&self, name: &str) -> bool {
         match self.inner.section(Some(name)) {
