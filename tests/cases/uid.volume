@@ -1,4 +1,4 @@
-## assert-key-contains Service ExecStart " --opt o=uid=0,gid=11 "
+## assert-podman-args --opt o=uid=0,gid=11
 
 [Volume]
 # Test usernames too
