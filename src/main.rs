@@ -669,8 +669,73 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     Ok(service)
 }
 
-fn convert_volume(unit: &SystemdUnit) -> Result<SystemdUnit, ConversionError> {
-    Ok(SystemdUnit::new())
+fn convert_volume<'a>(volume: &SystemdUnit, name: &String) -> Result<SystemdUnit, ConversionError<'a>> {
+    let mut service = SystemdUnit::new();
+
+    service.merge_from(volume);
+    let volume_name = quad_replace_extension(&PathBuf::from(name), "", "systemd-", "");
+
+    /* FIXME: port
+    warn_for_unknown_keys (container, VOLUME_GROUP, supported_volume_keys, &supported_volume_keys_hash);
+     */
+
+    // Rename old Volume group to x-Volume so that systemd ignores it
+    service.rename_section(CONTAINER_GROUP, X_CONTAINER_GROUP);
+
+    // Need the containers filesystem mounted to start podman
+    service.append_entry(UNIT_GROUP, "RequiresMountsFor", "%t/containers");
+
+    let exec_cond_arg = format!("/usr/bin/bash -c \"! /usr/bin/podman volume exists {}\"", volume_name.to_str().unwrap());
+
+    let labels: Vec<&str> = volume.lookup_all(VOLUME_GROUP, "Label")
+        .collect();
+    let label_args: HashMap<String, String> = parse_keys(&labels);
+
+    let mut podman = PodmanCommand::new_command("volume");
+    podman.add("create");
+
+    let mut opts_arg = String::from("o=");
+    if volume.has_key(VOLUME_GROUP, "User") {
+        let uid = 0.max(
+            volume.lookup_last(VOLUME_GROUP, "User")
+                .map(|s| s.parse::<u32>().unwrap_or(0))  // key found: parse or default
+                .unwrap_or(0)  // key not found: use default
+        );
+        if opts_arg.len() > 2 {
+            opts_arg.push(',');
+        }
+        opts_arg.push_str(format!("uid={uid}").as_str());
+    }
+    if volume.has_key(VOLUME_GROUP, "Group") {
+        let gid = 0.max(
+            volume.lookup_last(VOLUME_GROUP, "Group")
+                .map(|s| s.parse::<u32>().unwrap_or(0))  // key found: parse or default
+                .unwrap_or(0)  // key not found: use default
+        );
+        if opts_arg.len() > 2 {
+            opts_arg.push(',');
+        }
+        opts_arg.push_str(format!("gid={gid}").as_str());
+    }
+    if opts_arg.len() > 2 {
+        podman.add("--opt");
+        podman.add(opts_arg);
+    }
+
+    podman.add_labels(&label_args);
+    podman.add(volume_name.to_string_lossy());
+
+    service.append_entry(SERVICE_GROUP,"Type", "oneshot");
+    service.append_entry(SERVICE_GROUP,"RemainAfterExit", "yes");
+    service.append_entry(SERVICE_GROUP,"ExecCondition", &exec_cond_arg);
+    service.append_entry(
+        SERVICE_GROUP,
+        "ExecStart",
+        podman.to_escaped_string().as_str(),
+    );
+    service.append_entry(SERVICE_GROUP,"SyslogIdentifier", "%N");
+
+    Ok(service)
 }
 
 fn generate_service_file(output_path: &Path, service_name: &PathBuf, service: &mut SystemdUnit, orig_unit: &SystemdUnit) -> io::Result<()> {
@@ -747,7 +812,7 @@ fn main() {
             }
         } else if name.ends_with(".volume") {
             extra_suffix = "-volume";
-            match convert_volume(&unit) {
+            match convert_volume(&unit, &name) {
                 Ok(service_unit) => service_unit,
                 Err(e) => {
                     warn!("Error converting {name:?}, ignoring: {e}");
