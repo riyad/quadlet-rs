@@ -191,7 +191,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         return Err(ConversionError::ImageMissing("No Image key specified"))
     };
 
-    let container_name = container
+    let podman_container_name = container
         .lookup_last(CONTAINER_GROUP, "ContainerName")
         .map(|v| v.to_string())
         // By default, We want to name the container by the service name
@@ -254,7 +254,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
 
     let mut podman = PodmanCommand::new_command("run");
 
-    podman.add(format!("--name={container_name}"));
+    podman.add(format!("--name={podman_container_name}"));
 
     // We store the container id so we can clean it up in case of failure
     podman.add("--cidfile=%t/%N.cid");
@@ -511,7 +511,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
             } else {
                 ""
             };
-            let volume_name: PathBuf;
+            let podman_volume_name: PathBuf;
 
             if source.starts_with("/") {
                 // Absolute path
@@ -525,7 +525,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
 
                 if source.ends_with(".volume") {
                     // the podman volume name is systemd-$name
-                    volume_name = quad_replace_extension(
+                    podman_volume_name = quad_replace_extension(
                         &PathBuf::from(source),
                         "",
                         "systemd-",
@@ -540,7 +540,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
                         "-volume",
                     );
 
-                    source = volume_name.to_str().unwrap();
+                    source = podman_volume_name.to_str().unwrap();
 
                     service.append_entry(
                         UNIT_GROUP,
@@ -676,11 +676,12 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     Ok(service)
 }
 
-fn convert_volume<'a>(volume: &SystemdUnit, name: &String) -> Result<SystemdUnit, ConversionError<'a>> {
+fn convert_volume<'a>(volume: &SystemdUnit, volume_name: &str) -> Result<SystemdUnit, ConversionError<'a>> {
     let mut service = SystemdUnit::new();
 
     service.merge_from(volume);
-    let volume_name = quad_replace_extension(&PathBuf::from(name), "", "systemd-", "");
+    let podman_volume_name = quad_replace_extension(&PathBuf::from(volume_name), "", "systemd-", "");
+    let podman_volume_name = podman_volume_name.to_str().unwrap();
 
     /* FIXME: port
     warn_for_unknown_keys (container, VOLUME_GROUP, supported_volume_keys, &supported_volume_keys_hash);
@@ -692,7 +693,7 @@ fn convert_volume<'a>(volume: &SystemdUnit, name: &String) -> Result<SystemdUnit
     // Need the containers filesystem mounted to start podman
     service.append_entry(UNIT_GROUP, "RequiresMountsFor", "%t/containers");
 
-    let exec_cond_arg = format!("/usr/bin/bash -c \"! /usr/bin/podman volume exists {}\"", volume_name.to_str().unwrap());
+    let exec_cond_arg = format!("/usr/bin/bash -c \"! /usr/bin/podman volume exists {podman_volume_name}\"",);
 
     let labels: Vec<&str> = volume.lookup_all(VOLUME_GROUP, "Label")
         .collect();
@@ -730,7 +731,7 @@ fn convert_volume<'a>(volume: &SystemdUnit, name: &String) -> Result<SystemdUnit
     }
 
     podman.add_labels(&label_args);
-    podman.add(volume_name.to_string_lossy());
+    podman.add(podman_volume_name);
 
     service.append_entry(SERVICE_GROUP,"Type", "oneshot");
     service.append_entry(SERVICE_GROUP,"RemainAfterExit", "yes");
@@ -819,7 +820,7 @@ fn main() {
             }
         } else if name.ends_with(".volume") {
             extra_suffix = "-volume";
-            match convert_volume(&unit, &name) {
+            match convert_volume(&unit, name.as_str()) {
                 Ok(service_unit) => service_unit,
                 Err(e) => {
                     warn!("Error converting {name:?}, ignoring: {e}");
