@@ -16,6 +16,7 @@ use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::os;
 use std::path::{Path, PathBuf};
+
 static RUN_AS_USER: Lazy<bool> = Lazy::new(|| {
     env::args().nth(0).unwrap().contains("user")
 });
