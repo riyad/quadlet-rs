@@ -156,9 +156,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     service.rename_section(CONTAINER_GROUP, X_CONTAINER_GROUP);
 
     // FIXME: move to top
-    /* FIXME: port
-    warn_for_unknown_keys (container, CONTAINER_GROUP, supported_container_keys, &supported_container_keys_hash);
-    */
+    warn_for_unknown_keys(&container, CONTAINER_GROUP, &*SUPPORTED_CONTAINER_KEYS);
 
     // FIXME: move to top
     let image = if let Some(image) = container.lookup_last(CONTAINER_GROUP, "Image") {
@@ -659,9 +657,7 @@ fn convert_volume<'a>(volume: &SystemdUnit, volume_name: &str) -> Result<Systemd
     let podman_volume_name = quad_replace_extension(&PathBuf::from(volume_name), "", "systemd-", "");
     let podman_volume_name = podman_volume_name.to_str().unwrap();
 
-    /* FIXME: port
-    warn_for_unknown_keys (container, VOLUME_GROUP, supported_volume_keys, &supported_volume_keys_hash);
-     */
+    warn_for_unknown_keys(&volume, VOLUME_GROUP, &*SUPPORTED_VOLUME_KEYS);
 
     // Rename old Volume group to x-Volume so that systemd ignores it
     service.rename_section(VOLUME_GROUP, X_VOLUME_GROUP);

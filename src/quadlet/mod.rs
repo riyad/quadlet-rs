@@ -3,6 +3,7 @@ mod podman_command;
 mod ranges;
 
 use crate::systemd_unit::SplitWord;
+use crate::systemd_unit::SystemdUnit;
 
 pub(crate) use self::constants::*;
 pub(crate) use self::podman_command::*;
@@ -12,6 +13,7 @@ use log::warn;
 use once_cell::unsync::Lazy;
 use regex::Regex;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 
@@ -122,6 +124,15 @@ pub(crate) fn quad_split_ports(ports: &str) -> Vec<String> {
     parts.push(next_part);
 
     parts
+}
+
+pub(crate) fn warn_for_unknown_keys(unit: &SystemdUnit, group_name: &str, supported_keys: &HashSet<&'static str>) {
+
+    for (key,_) in unit.section_entries(group_name) {
+        if !supported_keys.contains(key) {
+            warn!("Unsupported key '{key}' in group '{group_name}' in {:?}", unit.path());
+        }
+    }
 }
 
 #[cfg(test)]
