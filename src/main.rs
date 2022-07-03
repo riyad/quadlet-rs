@@ -84,7 +84,14 @@ enum ConversionError<'a> {
 
 impl<'a> Display for ConversionError<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
+        match self {
+            ConversionError::ImageMissing(msg) => {
+                write!(f, "{msg}")
+            },
+            ConversionError::Parsing(e) => {
+                write!(f, "Failed parsing unit file: {e}")
+            },
+        }
     }
 }
 
