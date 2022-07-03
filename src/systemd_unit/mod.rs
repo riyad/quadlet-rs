@@ -1087,4 +1087,79 @@ KeyOne=value 1.2";
         }
     }
 
+    mod round_trip {
+        use crate::quadlet::PodmanCommand;
+
+        use super::*;
+
+        #[test]
+        fn read_write_round_trip_without_modifications() {
+            let input = "[Service]
+ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
+
+            let unit = SystemdUnit::load_from_str(input).unwrap();
+
+            let exec_start = unit.lookup_last(SERVICE_GROUP, "ExecStart");
+            assert_eq!(
+                exec_start,
+                Some("/some/path \"an arg\" \"a;b\nc\td\'e\" a;b\nc\td \'a\"b\'")
+            );
+
+            let mut output = Vec::new();
+            let res = unit.write_to(&mut output);
+            assert!(res.is_ok());
+
+            assert_eq!(
+                // NOTE: we trim here, because `write_to()` ends the file in \n
+                std::str::from_utf8(&output).unwrap().trim_end(),
+                input,
+            );
+        }
+
+        #[test]
+        #[ignore = "SplitWord vs. rust-ini unescaping mismatch"]
+        fn with_word_splitting_and_setting_constructed_command() {
+            let input = "[Service]
+ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
+
+            let mut unit = SystemdUnit::load_from_str(input).unwrap();
+
+            let exec_start = unit.lookup_last(SERVICE_GROUP, "ExecStart");
+            assert_eq!(
+                exec_start,
+                Some("/some/path \"an arg\" \"a;b\nc\td\'e\" a;b\nc\td \'a\"b\'")
+            );
+
+            let mut split_words: Vec<String> = SplitWord::new(exec_start.unwrap()).collect();
+            let mut split = split_words.iter();
+            assert_eq!(split.next(), Some(&"/some/path".into()));
+            assert_eq!(split.next(), Some(&"an arg".into()));
+            assert_eq!(split.next(), Some(&"a;b\nc\td\'e".into()));
+            assert_eq!(split.next(), Some(&"a;b\nc\td".into()));
+            assert_eq!(split.next(), Some(&"a\"b".into()));
+            assert_eq!(split.next(), None);
+
+            let mut command = PodmanCommand::new_command("test");
+            command.add_vec(&mut split_words);
+
+            let new_exec_start = command.to_escaped_string();
+            assert_eq!(
+                new_exec_start,
+                "/usr/bin/podman test /some/path \"an arg\" \"a;b\nc\td\'e\" \"a;b\nc\td\" \"a\\\"b\""
+            );
+
+            unit.set_entry(SERVICE_GROUP, "ExecStart", new_exec_start.as_str());
+
+            let mut output = Vec::new();
+            let res = unit.write_to(&mut output);
+            assert!(res.is_ok());
+
+            assert_eq!(
+                std::str::from_utf8(&output).unwrap(),
+                "[Service]
+ExecStart=/usr/bin/podman test /some/path \"an arg\" \"a;b\\nc\\td'e\" \"a;b\\nc\\td\" \"a\\\"b\"
+",
+            );
+        }
+    }
 }
