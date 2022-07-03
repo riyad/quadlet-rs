@@ -185,7 +185,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     */
 
     // FIXME: move to top
-    let image = if let Some(image) =container.lookup_last(CONTAINER_GROUP, "Image") {
+    let image = if let Some(image) = container.lookup_last(CONTAINER_GROUP, "Image") {
         image.to_string()
     } else {
         return Err(ConversionError::ImageMissing("No Image key specified"))
