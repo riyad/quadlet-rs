@@ -166,10 +166,9 @@ fn load_units_from_dir(source_path: &PathBuf, units: &mut HashMap<String, System
 }
 
 fn quad_replace_extension(file: &PathBuf, new_extension: &str, extra_prefix: &str, extra_suffix: &str) -> PathBuf {
-    let parent = file.parent().unwrap();
     let base_name = file.file_stem().unwrap().to_str().unwrap();
 
-    parent.join(format!("{extra_prefix}{base_name}{extra_suffix}{new_extension}"))
+    file.with_file_name(format!("{extra_prefix}{base_name}{extra_suffix}{new_extension}"))
 }
 
 fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionError> {
