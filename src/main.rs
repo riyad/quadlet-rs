@@ -687,7 +687,7 @@ fn convert_volume<'a>(volume: &SystemdUnit, name: &String) -> Result<SystemdUnit
      */
 
     // Rename old Volume group to x-Volume so that systemd ignores it
-    service.rename_section(CONTAINER_GROUP, X_CONTAINER_GROUP);
+    service.rename_section(VOLUME_GROUP, X_VOLUME_GROUP);
 
     // Need the containers filesystem mounted to start podman
     service.append_entry(UNIT_GROUP, "RequiresMountsFor", "%t/containers");
