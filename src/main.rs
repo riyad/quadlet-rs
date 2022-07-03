@@ -4,14 +4,17 @@ mod systemd_unit;
 use self::quadlet::*;
 use self::systemd_unit::*;
 
+use log::info;
 use log::{debug, warn};
 use nix::unistd::{Gid, Uid};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::env;
 use std::fmt::Display;
+use std::fs;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
+use std::os;
 use std::path::{Path, PathBuf};
 static RUN_AS_USER: Lazy<bool> = Lazy::new(|| {
     env::args().nth(0).unwrap().contains("user")
@@ -742,7 +745,84 @@ fn generate_service_file(output_path: &Path, service_name: &PathBuf, service: &m
     Ok(())
 }
 
+/// This function normalizes relative the paths by dropping multiple slashes,
+/// removing "." elements and making ".." drop the parent element as long
+/// as there is not (otherwise the .. is just removed). Symlinks are not
+/// handled in any way.
+/// TODO: we could use std::path::absolute() here, but it's nightly-only ATM
+/// see https://doc.rust-lang.org/std/path/fn.absolute.html
+fn canonicalize_relative_path(path: PathBuf) -> PathBuf {
+    assert!(path.is_relative());
+
+    // normalized path could be shorter, but never longer
+    let mut normalized = PathBuf::with_capacity(path.as_os_str().len());
+
+    for element in path.components() {
+        if element.as_os_str().is_empty() || element.as_os_str() == "." {
+            continue;
+        } else if element.as_os_str() == ".." {
+            if normalized.components().count() > 0 {
+                normalized.pop();
+            }
+        } else {
+            normalized.push(element);
+        }
+    }
+
+    normalized
+}
+
 fn enable_service_file(output_path: &Path, service_name: &PathBuf, service: &SystemdUnit) -> io::Result<()> {
+    let mut symlinks: Vec<PathBuf> = Vec::new();
+
+    let mut alias: Vec<PathBuf> = service
+        .lookup_all(INSTALL_GROUP, "Alias")
+        .flat_map(|v| SplitWord::new(v))  // quad_split_string_append (res, values[i], WHITESPACE,QUAD_SPLIT_RETAIN_ESCAPE|QUAD_SPLIT_UNQUOTE);
+        .map(|s| canonicalize_relative_path(PathBuf::from(s)))
+        .collect();
+    symlinks.append(&mut alias);
+
+    let mut wanted_by: Vec<PathBuf> = service
+        .lookup_all(INSTALL_GROUP, "WantedBy")
+        .flat_map(|v| SplitWord::new(v))  // quad_split_string_append (res, values[i], WHITESPACE,QUAD_SPLIT_RETAIN_ESCAPE|QUAD_SPLIT_UNQUOTE);
+        .filter(|s| !s.contains('/'))
+        .map(|s| {
+            let wanted_by_unit = s;
+            PathBuf::from(format!("{wanted_by_unit}.wants/{}", service_name.to_str().unwrap()))
+        })
+        .collect();
+    symlinks.append(&mut wanted_by);
+
+    let mut required_by: Vec<PathBuf> = service
+        .lookup_all(INSTALL_GROUP, "RequiredBy")
+        .flat_map(|v| SplitWord::new(v))  // quad_split_string_append (res, values[i], WHITESPACE,QUAD_SPLIT_RETAIN_ESCAPE|QUAD_SPLIT_UNQUOTE);
+        .filter(|s| !s.contains('/'))
+        .map(|s| {
+            let required_by_unit = s;
+            PathBuf::from(format!("{required_by_unit}.requires/{}", service_name.to_str().unwrap()))
+        })
+        .collect();
+    symlinks.append(&mut required_by);
+
+    for symlink_rel in symlinks {
+        let mut target = PathBuf::new();
+
+        // At this point the symlinks are all relative, canonicalized
+        // paths, so number of slashes is the depth
+        // number of slashes == components - 1
+        for _ in 1..symlink_rel.components().count() {
+            target.push("..");
+        }
+        target.push(service_name);
+
+        let symlink_path = output_path.join(symlink_rel);
+        let symlink_dir = symlink_path.parent().unwrap();
+        fs::create_dir_all(&symlink_dir)?;
+
+        info!("Creating symlink {symlink_path:?} -> {target:?}");
+        os::unix::fs::symlink(target, symlink_path)?
+    }
+
     Ok(())
 }
 
