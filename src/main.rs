@@ -773,14 +773,14 @@ fn enable_service_file(output_path: &Path, service_name: &PathBuf, service: &Sys
 
     let mut alias: Vec<PathBuf> = service
         .lookup_all(INSTALL_SECTION, "Alias")
-        .flat_map(|v| SplitWord::new(v))  // quad_split_string_append (res, values[i], WHITESPACE,QUAD_SPLIT_RETAIN_ESCAPE|QUAD_SPLIT_UNQUOTE);
+        .flat_map(|v| SplitStrv::new(v))
         .map(|s| canonicalize_relative_path(PathBuf::from(s)))
         .collect();
     symlinks.append(&mut alias);
 
     let mut wanted_by: Vec<PathBuf> = service
         .lookup_all(INSTALL_SECTION, "WantedBy")
-        .flat_map(|v| SplitWord::new(v))  // quad_split_string_append (res, values[i], WHITESPACE,QUAD_SPLIT_RETAIN_ESCAPE|QUAD_SPLIT_UNQUOTE);
+        .flat_map(|v| SplitStrv::new(v))
         .filter(|s| !s.contains('/'))
         .map(|s| {
             let wanted_by_unit = s;
@@ -791,7 +791,7 @@ fn enable_service_file(output_path: &Path, service_name: &PathBuf, service: &Sys
 
     let mut required_by: Vec<PathBuf> = service
         .lookup_all(INSTALL_SECTION, "RequiredBy")
-        .flat_map(|v| SplitWord::new(v))  // quad_split_string_append (res, values[i], WHITESPACE,QUAD_SPLIT_RETAIN_ESCAPE|QUAD_SPLIT_UNQUOTE);
+        .flat_map(|v| SplitStrv::new(v))
         .filter(|s| !s.contains('/'))
         .map(|s| {
             let required_by_unit = s;
