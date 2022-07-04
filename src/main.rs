@@ -45,11 +45,6 @@ const QUADLET_VERSION: &str = "0.1.0";
 const QUADLET_ADMIN_UNIT_SEARCH_PATH: &str  = "/etc/containers/systemd";
 const QUADLET_DISTRO_UNIT_SEARCH_PATH: &str  = "/usr/share/containers/systemd";
 
-const CONTAINER_GROUP: &str = "Container";
-const X_CONTAINER_GROUP: &str = "X-Container";
-const VOLUME_GROUP: &str = "Volume";
-const X_VOLUME_GROUP: &str = "X-Volume";
-
 #[derive(Debug)]
 struct Config {
     output_path: PathBuf,
@@ -157,51 +152,51 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
 
     service.merge_from(container);
 
-    service.rename_section(CONTAINER_GROUP, X_CONTAINER_GROUP);
+    service.rename_section(CONTAINER_SECTION, X_CONTAINER_SECTION);
 
     // FIXME: move to top
-    warn_for_unknown_keys(&container, CONTAINER_GROUP, &*SUPPORTED_CONTAINER_KEYS);
+    warn_for_unknown_keys(&container, CONTAINER_SECTION, &*SUPPORTED_CONTAINER_KEYS);
 
     // FIXME: move to top
-    let image = if let Some(image) = container.lookup_last(CONTAINER_GROUP, "Image") {
+    let image = if let Some(image) = container.lookup_last(CONTAINER_SECTION, "Image") {
         image.to_string()
     } else {
         return Err(ConversionError::ImageMissing("No Image key specified"))
     };
 
     let podman_container_name = container
-        .lookup_last(CONTAINER_GROUP, "ContainerName")
+        .lookup_last(CONTAINER_SECTION, "ContainerName")
         .map(|v| v.to_string())
         // By default, We want to name the container by the service name
         .unwrap_or("systemd-%N".to_owned());
 
     // Set PODMAN_SYSTEMD_UNIT so that podman auto-update can restart the service.
     service.append_entry(
-        SERVICE_GROUP,
+        SERVICE_SECTION,
         "Environment".into(),
         "PODMAN_SYSTEMD_UNIT=%n".into(),
     );
 
     // Only allow mixed or control-group, as nothing else works well
-    let kill_mode = service.lookup_last(SERVICE_GROUP, "KillMode");
+    let kill_mode = service.lookup_last(SERVICE_SECTION, "KillMode");
     if kill_mode.is_none() || !["mixed", "control-group"].contains(&kill_mode.unwrap().to_string().as_str()) {
         if kill_mode.is_some() {
             warn!("Invalid KillMode {:?}, ignoring", kill_mode.unwrap());
         }
 
         // We default to mixed instead of control-group, because it lets conmon do its thing
-        service.set_entry(SERVICE_GROUP, "KillMode", "mixed");
+        service.set_entry(SERVICE_SECTION, "KillMode", "mixed");
     }
 
     // Read env early so we can override it below
     let environments = container
-        .lookup_all(CONTAINER_GROUP, "Environment")
+        .lookup_all(CONTAINER_SECTION, "Environment")
         .collect();
     let mut env_args: HashMap<String, String> = parse_keys(&environments);
 
     // Need the containers filesystem mounted to start podman
     service.append_entry(
-        UNIT_GROUP,
+        UNIT_SECTION,
         "RequiresMountsFor",
         "%t/containers",
     );
@@ -210,7 +205,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     // We remove any actual pre-existing container by name with --replace=true.
     // But --cidfile will fail if the target exists.
     service.append_entry(
-        SERVICE_GROUP,
+        SERVICE_SECTION,
         "ExecStartPre",
         "-rm -f %t/%N.cid",
     );
@@ -218,14 +213,14 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     // If the conman exited uncleanly it may not have removed the container, so force it,
     // -i makes it ignore non-existing files.
     service.append_entry(
-        SERVICE_GROUP,
+        SERVICE_SECTION,
         "ExecStopPost",
         "-/usr/bin/podman rm -f -i --cidfile=%t/%N.cid",
     );
 
     // Remove the cid file, to avoid confusion as the container is no longer running.
     service.append_entry(
-        SERVICE_GROUP,
+        SERVICE_SECTION,
         "ExecStopPost",
         "-rm -f %t/%N.cid",
     );
@@ -255,20 +250,20 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
 
     // We use crun as the runtime and delegated groups to it
     service.append_entry(
-        SERVICE_GROUP,
+        SERVICE_SECTION,
         "Delegate",
         "yes",
     );
     podman.add_slice(&[ "--runtime", "/usr/bin/crun", "--cgroups=split"]);
 
-    if let Some(timezone) = container.lookup_last(CONTAINER_GROUP, "Timezone") {
+    if let Some(timezone) = container.lookup_last(CONTAINER_SECTION, "Timezone") {
         if !timezone.is_empty() {
             podman.add(format!("--tz={}", timezone));
         }
     }
 
     // Run with a pid1 init to reap zombies by default (as most apps don't do that)
-    let run_init = container.lookup_last(CONTAINER_GROUP, "RunInit")
+    let run_init = container.lookup_last(CONTAINER_SECTION, "RunInit")
         .map(|s| parse_bool(s).unwrap_or(true))  // key found: parse or default
         .unwrap_or(true);  // key not found: use default
     if run_init {
@@ -276,7 +271,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     }
 
     // By default we handle startup notification with conmon, but allow passing it to the container with Notify=yes
-    let notify = container.lookup_last(CONTAINER_GROUP, "Notify")
+    let notify = container.lookup_last(CONTAINER_SECTION, "Notify")
         .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
         .unwrap_or(false);  // key not found: use default
     if notify {
@@ -285,26 +280,26 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         podman.add("--sdnotify=conmon");
     }
     service.set_entry(
-        SERVICE_GROUP,
+        SERVICE_SECTION,
         "Type",
         "notify",
     );
     service.set_entry(
-        SERVICE_GROUP,
+        SERVICE_SECTION,
         "NotifyAccess",
         "all",
     );
 
-    if let None = container.lookup_last(SERVICE_GROUP, "SyslogIdentifier") {
+    if let None = container.lookup_last(SERVICE_SECTION, "SyslogIdentifier") {
         service.set_entry(
-            SERVICE_GROUP,
+            SERVICE_SECTION,
             "SyslogIdentifier",
             "%N",
         );
     }
 
     // Default to no higher level privileges or caps
-    let no_new_privileges = container.lookup_last(CONTAINER_GROUP, "NoNewPrivileges")
+    let no_new_privileges = container.lookup_last(CONTAINER_SECTION, "NoNewPrivileges")
         .map(|s| parse_bool(s).unwrap_or(true))  // key found: parse or default
         .unwrap_or(true);  // key not found: use default
     if no_new_privileges {
@@ -312,7 +307,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     }
 
     let mut drop_caps: Vec<String> = container
-        .lookup_all(CONTAINER_GROUP, "DropCapability")
+        .lookup_all(CONTAINER_SECTION, "DropCapability")
         .map(|s| s.to_ascii_lowercase())
         .collect();
     if drop_caps.is_empty() {
@@ -326,20 +321,20 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
 
     // But allow overrides with AddCapability
     let mut  add_caps: Vec<String> = container
-        .lookup_all(CONTAINER_GROUP, "AddCapability")
+        .lookup_all(CONTAINER_SECTION, "AddCapability")
         .map(|v| format!("--cap-add={}", v.to_string().to_ascii_lowercase()))
         .collect();
     podman.add_vec(&mut add_caps);
 
     // We want /tmp to be a tmpfs, like on rhel host
-    let volatile_tmp = container.lookup_last(CONTAINER_GROUP, "VolatileTmp")
+    let volatile_tmp = container.lookup_last(CONTAINER_SECTION, "VolatileTmp")
         .map(|s| parse_bool(s).unwrap_or(true))  // key found: parse or default
         .unwrap_or(true);  // key not found: use default
     if volatile_tmp {
         podman.add_slice(&["--mount", "type=tmpfs,tmpfs-size=512M,destination=/tmp"]);
     }
 
-    let socket_activated = container.lookup_last(CONTAINER_GROUP, "SocketActivated")
+    let socket_activated = container.lookup_last(CONTAINER_SECTION, "SocketActivated")
         .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
         .unwrap_or(false);  // key not found: use default
     if socket_activated {
@@ -357,7 +352,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     let mut default_container_gid = Gid::from_raw(0);
 
     let mut keep_id = container
-        .lookup_last(CONTAINER_GROUP, "KeepId")
+        .lookup_last(CONTAINER_SECTION, "KeepId")
         .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
         .unwrap_or(false);  // key not found: use default
     if keep_id {
@@ -372,26 +367,26 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     }
     let uid = Uid::from_raw(
         0.max(
-            container.lookup_last(CONTAINER_GROUP, "User")
+            container.lookup_last(CONTAINER_SECTION, "User")
                 .map(|s| s.parse::<u32>().unwrap_or(0))  // key found: parse or default
                 .unwrap_or(0)  // key not found: use default
         )
     );
     let gid = Gid::from_raw(
         0.max(
-            container.lookup_last(CONTAINER_GROUP, "Group")
+            container.lookup_last(CONTAINER_SECTION, "Group")
                 .map(|s| s.parse::<u32>().unwrap_or(0))  // key found: parse or default
                 .unwrap_or(0)  // key not found: use default
         )
     );
 
-    let host_uid = container.lookup_last(CONTAINER_GROUP, "HostUser")
+    let host_uid = container.lookup_last(CONTAINER_SECTION, "HostUser")
         .map(|s| parse_uid(s))
         .unwrap_or(Ok(uid))  // key not found: use default
         .map_err(|e| ConversionError::Parsing(e))?;  // key found, but parsing caused error: propagate error
 
 
-    let host_gid = container.lookup_last(CONTAINER_GROUP, "HostGroup")
+    let host_gid = container.lookup_last(CONTAINER_SECTION, "HostGroup")
         .map(|s| parse_gid(s))
         .unwrap_or(Ok(gid))  // key not found: use default
         .map_err(|e| ConversionError::Parsing(e))?;  // key found, but parsing caused error: propagate error
@@ -406,7 +401,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     }
 
     let mut remap_users = container
-        .lookup_last(CONTAINER_GROUP, "RemapUsers")
+        .lookup_last(CONTAINER_SECTION, "RemapUsers")
         .map(|s| parse_bool(s).unwrap_or(true))  // key found: parse or default
         .unwrap_or(true);
 
@@ -436,23 +431,23 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
             );
         }
     } else {
-        let uid_remap_ids = container.lookup_last(CONTAINER_GROUP, "RemapUidRanges")
+        let uid_remap_ids = container.lookup_last(CONTAINER_SECTION, "RemapUidRanges")
             .map(|s| parse_ranges(s, quad_lookup_host_subuid))
             .unwrap_or(DEFAULT_REMAP_UIDS.clone());
-        let gid_remap_ids = container.lookup_last(CONTAINER_GROUP, "RemapGidRanges")
+        let gid_remap_ids = container.lookup_last(CONTAINER_SECTION, "RemapGidRanges")
             .map(|s| parse_ranges(s, quad_lookup_host_subgid))
             .unwrap_or(DEFAULT_REMAP_GIDS.clone());
 
         let remap_uid_start = Uid::from_raw(
             0.max(
-                container.lookup_last(CONTAINER_GROUP, "RemapUidStart")
+                container.lookup_last(CONTAINER_SECTION, "RemapUidStart")
                     .map(|s| s.parse::<u32>().unwrap_or(1))  // key found: parse or default
                     .unwrap_or(1)  // key not found: use default
             )
         );
         let remap_gid_start = Gid::from_raw(
             0.max(
-                container.lookup_last(CONTAINER_GROUP, "RemapGidStart")
+                container.lookup_last(CONTAINER_SECTION, "RemapGidStart")
                     .map(|s| s.parse::<u32>().unwrap_or(1))  // key found: parse or default
                     .unwrap_or(1)  // key not found: use default
             )
@@ -474,7 +469,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         );
     }
 
-    let mut volume_args: Vec<String> = container.lookup_all(CONTAINER_GROUP, "Volume")
+    let mut volume_args: Vec<String> = container.lookup_all(CONTAINER_SECTION, "Volume")
         .map(|v| {
             let volume = v.to_string();
             let parts: Vec<&str> = volume.split(":").collect();
@@ -494,7 +489,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
             if source.starts_with("/") {
                 // Absolute path
                 service.append_entry(
-                    UNIT_GROUP,
+                    UNIT_SECTION,
                     "RequiresMountsFor",
                     source,
                 );
@@ -521,12 +516,12 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
                     source = podman_volume_name.to_str().unwrap();
 
                     service.append_entry(
-                        UNIT_GROUP,
+                        UNIT_SECTION,
                         "Requires",
                         volume_service_name.to_str().unwrap(),
                     );
                     service.append_entry(
-                        UNIT_GROUP,
+                        UNIT_SECTION,
                         "After",
                         volume_service_name.to_str().unwrap(),
                     );
@@ -545,7 +540,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     podman.add_vec(&mut volume_args);
 
     let mut exposed_port_args: Vec<String> = container
-        .lookup_all(CONTAINER_GROUP, "ExposeHostPort")
+        .lookup_all(CONTAINER_SECTION, "ExposeHostPort")
         .map(|v| {
             let exposed_port = v.to_string().trim_end().to_owned();  // Allow whitespace after
 
@@ -562,7 +557,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     podman.add_vec(&mut exposed_port_args);
 
     let publish_ports: Vec<&str> = container
-        .lookup_all(CONTAINER_GROUP, "PublishPort")
+        .lookup_all(CONTAINER_SECTION, "PublishPort")
         .collect();
     for publish_port in publish_ports {
         let publish_port = publish_port.trim(); // Allow whitespaces before and after
@@ -623,30 +618,30 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
 
     podman.add_env(&env_args);
 
-    let labels: Vec<&str> = container.lookup_all(CONTAINER_GROUP, "Label")
+    let labels: Vec<&str> = container.lookup_all(CONTAINER_SECTION, "Label")
         .collect();
     let label_args: HashMap<String, String> = parse_keys(&labels);
     podman.add_labels(&label_args);
 
-    let annotations: Vec<&str> = container.lookup_all(CONTAINER_GROUP, "Annotation")
+    let annotations: Vec<&str> = container.lookup_all(CONTAINER_SECTION, "Annotation")
         .collect();
     let annotation_args: HashMap<String, String> = parse_keys(&annotations);
     podman.add_annotations(&annotation_args);
 
-    let mut podman_args_args: Vec<String> = container.lookup_all(CONTAINER_GROUP, "PodmanArgs")
+    let mut podman_args_args: Vec<String> = container.lookup_all(CONTAINER_SECTION, "PodmanArgs")
         .flat_map(|v| SplitWord::new(v) )
         .collect();
     podman.add_vec(&mut podman_args_args);
 
     podman.add(image);
 
-    let mut exec_args = container.lookup_last(CONTAINER_GROUP, "Exec")
+    let mut exec_args = container.lookup_last(CONTAINER_SECTION, "Exec")
         .map(|v| SplitWord::new(v).collect())
         .unwrap_or(vec![]);
     podman.add_vec(&mut exec_args);
 
     service.append_entry(
-        SERVICE_GROUP,
+        SERVICE_SECTION,
         "ExecStart",
         podman.to_escaped_string().as_str(),
     );
@@ -661,17 +656,17 @@ fn convert_volume<'a>(volume: &SystemdUnit, volume_name: &str) -> Result<Systemd
     let podman_volume_name = quad_replace_extension(&PathBuf::from(volume_name), "", "systemd-", "");
     let podman_volume_name = podman_volume_name.to_str().unwrap();
 
-    warn_for_unknown_keys(&volume, VOLUME_GROUP, &*SUPPORTED_VOLUME_KEYS);
+    warn_for_unknown_keys(&volume, VOLUME_SECTION, &*SUPPORTED_VOLUME_KEYS);
 
     // Rename old Volume group to x-Volume so that systemd ignores it
-    service.rename_section(VOLUME_GROUP, X_VOLUME_GROUP);
+    service.rename_section(VOLUME_SECTION, X_VOLUME_SECTION);
 
     // Need the containers filesystem mounted to start podman
-    service.append_entry(UNIT_GROUP, "RequiresMountsFor", "%t/containers");
+    service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
 
     let exec_cond_arg = format!("/usr/bin/bash -c \"! /usr/bin/podman volume exists {podman_volume_name}\"",);
 
-    let labels: Vec<&str> = volume.lookup_all(VOLUME_GROUP, "Label")
+    let labels: Vec<&str> = volume.lookup_all(VOLUME_SECTION, "Label")
         .collect();
     let label_args: HashMap<String, String> = parse_keys(&labels);
 
@@ -679,9 +674,9 @@ fn convert_volume<'a>(volume: &SystemdUnit, volume_name: &str) -> Result<Systemd
     podman.add("create");
 
     let mut opts_arg = String::from("o=");
-    if volume.has_key(VOLUME_GROUP, "User") {
+    if volume.has_key(VOLUME_SECTION, "User") {
         let uid = 0.max(
-            volume.lookup_last(VOLUME_GROUP, "User")
+            volume.lookup_last(VOLUME_SECTION, "User")
                 .map(|s| s.parse::<u32>().unwrap_or(0))  // key found: parse or default
                 .unwrap_or(0)  // key not found: use default
         );
@@ -690,9 +685,9 @@ fn convert_volume<'a>(volume: &SystemdUnit, volume_name: &str) -> Result<Systemd
         }
         opts_arg.push_str(format!("uid={uid}").as_str());
     }
-    if volume.has_key(VOLUME_GROUP, "Group") {
+    if volume.has_key(VOLUME_SECTION, "Group") {
         let gid = 0.max(
-            volume.lookup_last(VOLUME_GROUP, "Group")
+            volume.lookup_last(VOLUME_SECTION, "Group")
                 .map(|s| s.parse::<u32>().unwrap_or(0))  // key found: parse or default
                 .unwrap_or(0)  // key not found: use default
         );
@@ -709,15 +704,15 @@ fn convert_volume<'a>(volume: &SystemdUnit, volume_name: &str) -> Result<Systemd
     podman.add_labels(&label_args);
     podman.add(podman_volume_name);
 
-    service.append_entry(SERVICE_GROUP,"Type", "oneshot");
-    service.append_entry(SERVICE_GROUP,"RemainAfterExit", "yes");
-    service.append_entry(SERVICE_GROUP,"ExecCondition", &exec_cond_arg);
+    service.append_entry(SERVICE_SECTION,"Type", "oneshot");
+    service.append_entry(SERVICE_SECTION,"RemainAfterExit", "yes");
+    service.append_entry(SERVICE_SECTION,"ExecCondition", &exec_cond_arg);
     service.append_entry(
-        SERVICE_GROUP,
+        SERVICE_SECTION,
         "ExecStart",
         podman.to_escaped_string().as_str(),
     );
-    service.append_entry(SERVICE_GROUP,"SyslogIdentifier", "%N");
+    service.append_entry(SERVICE_SECTION,"SyslogIdentifier", "%N");
 
     Ok(service)
 }
@@ -733,7 +728,7 @@ fn generate_service_file(output_path: &Path, service_name: &PathBuf, service: &m
 
     if let Some(orig_path) = orig_path {
         service.append_entry(
-            UNIT_GROUP,
+            UNIT_SECTION,
             "SourcePath".into(),
             orig_path.to_str().unwrap().into(),
         );
@@ -777,14 +772,14 @@ fn enable_service_file(output_path: &Path, service_name: &PathBuf, service: &Sys
     let mut symlinks: Vec<PathBuf> = Vec::new();
 
     let mut alias: Vec<PathBuf> = service
-        .lookup_all(INSTALL_GROUP, "Alias")
+        .lookup_all(INSTALL_SECTION, "Alias")
         .flat_map(|v| SplitWord::new(v))  // quad_split_string_append (res, values[i], WHITESPACE,QUAD_SPLIT_RETAIN_ESCAPE|QUAD_SPLIT_UNQUOTE);
         .map(|s| canonicalize_relative_path(PathBuf::from(s)))
         .collect();
     symlinks.append(&mut alias);
 
     let mut wanted_by: Vec<PathBuf> = service
-        .lookup_all(INSTALL_GROUP, "WantedBy")
+        .lookup_all(INSTALL_SECTION, "WantedBy")
         .flat_map(|v| SplitWord::new(v))  // quad_split_string_append (res, values[i], WHITESPACE,QUAD_SPLIT_RETAIN_ESCAPE|QUAD_SPLIT_UNQUOTE);
         .filter(|s| !s.contains('/'))
         .map(|s| {
@@ -795,7 +790,7 @@ fn enable_service_file(output_path: &Path, service_name: &PathBuf, service: &Sys
     symlinks.append(&mut wanted_by);
 
     let mut required_by: Vec<PathBuf> = service
-        .lookup_all(INSTALL_GROUP, "RequiredBy")
+        .lookup_all(INSTALL_SECTION, "RequiredBy")
         .flat_map(|v| SplitWord::new(v))  // quad_split_string_append (res, values[i], WHITESPACE,QUAD_SPLIT_RETAIN_ESCAPE|QUAD_SPLIT_UNQUOTE);
         .filter(|s| !s.contains('/'))
         .map(|s| {

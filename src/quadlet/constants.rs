@@ -25,6 +25,11 @@ pub static DEFAULT_REMAP_UIDS: Lazy<IdRanges> = Lazy::new(|| {
     }
 });
 
+pub const CONTAINER_SECTION: &str = "Container";
+pub const X_CONTAINER_SECTION: &str = "X-Container";
+pub const VOLUME_SECTION: &str = "Volume";
+pub const X_VOLUME_SECTION: &str = "X-Volume";
+
 pub static SUPPORTED_CONTAINER_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     let keys = [
         "ContainerName",
