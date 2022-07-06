@@ -912,6 +912,7 @@ KeyThree=value 3\\
             }
 
             #[test]
+            #[ignore = "rust-ini doesn't handle systemd-style quotes properly"]
             fn adapted_quadlet_escapes_container_case_succeeds() {
                 let input = "[Container]
 Image=imagename
@@ -925,13 +926,9 @@ Exec=/some/path \"an arg\" \"a;b\\nc\\td'e\" a;b\\nc\\td 'a\"b'";
 
                 let mut iter = unit.section_entries("Container");
                 assert_eq!(iter.next().unwrap(), ("Image", "imagename"));
-                // TODO: may not be accurate according to Systemd quoting rules
-                //assert_eq!(iter.next().unwrap(), ("PodmanArgs", "--foo    --bar"));
-                assert_eq!(iter.next().unwrap(), ("PodmanArgs", "\"--foo\"    --bar"));
+                assert_eq!(iter.next().unwrap(), ("PodmanArgs", "--foo    --bar"));
                 assert_eq!(iter.next().unwrap(), ("PodmanArgs", "--also"));
-                // TODO: may not be accurate according to Systemd quoting rules
-                //assert_eq!(iter.next().unwrap(), ("Exec", "/some/path an arg a;b\nc\td'e a;b\nc\td a\"b"));
-                assert_eq!(iter.next().unwrap(), ("Exec", "/some/path \"an arg\" \"a;b\nc\td'e\" a;b\nc\td 'a\"b'"));
+                assert_eq!(iter.next().unwrap(), ("Exec", "/some/path an arg a;b\nc\td'e a;b\nc\td a\"b"));
                 assert_eq!(iter.next(), None);
             }
         }
