@@ -17,7 +17,7 @@ use std::path::{PathBuf, Path};
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ParseError {
-    Bool,
+    ParseBoolError,
     Gid(nix::errno::Errno),
     Uid(nix::errno::Errno),
 }
@@ -25,7 +25,7 @@ pub enum ParseError {
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ParseError::Bool => {
+            ParseError::ParseBoolError => {
                 write!(f, "value must be one of `1`, `yes`, `true`, `on`, `0`, `no`, `false`, `off`")
             },
             ParseError::Gid(e) => {
@@ -45,7 +45,7 @@ pub(crate) fn parse_bool(s: &str) -> Result<bool, ParseError> {
         return Ok(false)
     }
 
-    Err(ParseError::Bool)
+    Err(ParseError::ParseBoolError)
 }
 
 pub(crate) fn parse_gid(s: &str) -> Result<Gid, ParseError> {
@@ -224,6 +224,36 @@ impl SystemdUnit {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod parse_bool {
+        use super::*;
+
+        #[test]
+        fn fails_with_empty_input() {
+            assert_eq!(parse_bool("").err(), Some(ParseError::ParseBoolError));
+        }
+
+        #[test]
+        fn true_with_truthy_input() {
+            assert_eq!(parse_bool("1").ok(), Some(true));
+            assert_eq!(parse_bool("on").ok(), Some(true));
+            assert_eq!(parse_bool("yes").ok(), Some(true));
+            assert_eq!(parse_bool("true").ok(), Some(true));
+        }
+
+        #[test]
+        fn false_with_falthy_input() {
+            assert_eq!(parse_bool("0").ok(), Some(false));
+            assert_eq!(parse_bool("off").ok(), Some(false));
+            assert_eq!(parse_bool("no").ok(), Some(false));
+            assert_eq!(parse_bool("false").ok(), Some(false));
+        }
+
+        #[test]
+        fn fails_with_non_boolean_input() {
+            assert_eq!(parse_bool("foo").err(), Some(ParseError::ParseBoolError));
+        }
+    }
 
     mod parse_gid {
         use nix::errno::Errno;
