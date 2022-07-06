@@ -206,7 +206,7 @@ impl SystemdUnit {
     }
 
     pub(crate) fn set_entry(&mut self, section: &str, key: &str, value: &str) {
-        self.inner.set_to(Some(section), key.into(), value.into())
+        self.inner.set_last_to(Some(section), key.into(), value.into())
     }
 
     /// Write to a writer
@@ -1235,7 +1235,6 @@ KeyOne=value 1";
                 let mut iter = unit.section_entries("Section A");
                 assert_eq!(iter.next(), Some(("KeyOne", "new value")));
                 assert_eq!(iter.next(), None);
-
             }
 
             #[test]
@@ -1248,7 +1247,7 @@ KeyOne=value 3";
                 let mut unit = SystemdUnit::load_from_str(input).unwrap();
                 assert_eq!(unit.len(), 1);
 
-                unit.set_entry("Section A", "KeyOne", "value new");
+                unit.set_entry("Section A", "KeyOne", "new value");
                 assert_eq!(unit.len(), 1);  // shouldn't change the number of sections
 
                 let mut iter = unit.section_entries("Section A");
@@ -1256,7 +1255,6 @@ KeyOne=value 3";
                 assert_eq!(iter.next(), Some(("KeyOne", "value 2")));
                 assert_eq!(iter.next(), Some(("KeyOne", "new value")));
                 assert_eq!(iter.next(), None);
-
             }
         }
 
