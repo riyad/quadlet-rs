@@ -118,7 +118,7 @@ impl SystemdUnit {
     }
 
     pub(crate) fn has_key(&self, section: &str, key: &str) -> bool {
-        self.inner.get_from(Some(section), key).is_some()
+        self.lookup_all(section, key).next().is_some()
     }
 
     /// Retrun `true` if there's an (non-empty) instance of section `name`
@@ -488,6 +488,67 @@ KeyOne=value 2.1";
             assert_eq!(iter.next(), Some(("KeyOne", "value 2.1")));
             assert_eq!(iter.next(), Some(("KeyOne", "new value")));
             assert_eq!(iter.next(), None);
+        }
+    }
+
+    mod has_key {
+        use super::*;
+
+        #[test]
+        fn false_for_unknown_key() {
+            let input = "[Section A]
+KeyOne=value 1";
+
+            let unit = SystemdUnit::load_from_str(input).unwrap();
+
+            assert!(!unit.has_key("Section A", "KeyTwo"));
+            assert!(!unit.has_key("Section B", "KeyFour"));
+        }
+
+        #[test]
+        fn false_for_unknown_section() {
+            let input = "[Section A]
+KeyOne=value 1";
+
+            let unit = SystemdUnit::load_from_str(input).unwrap();
+
+            assert!(!unit.has_key("Section B", "KeyOne"));
+        }
+
+        #[test]
+        fn true_for_key_in_section() {
+            let input = "[Section A]
+KeyOne=value 1
+
+[Section B]
+KeyTwo=value 2
+
+[Section A]
+KeyThree=value 1";
+
+            let unit = SystemdUnit::load_from_str(input).unwrap();
+
+            assert!(unit.has_key("Section A", "KeyOne"));
+            assert!(unit.has_key("Section B", "KeyTwo"));
+            assert!(unit.has_key("Section A", "KeyThree"));
+        }
+
+        #[test]
+        fn false_for_key_in_wrong_section() {
+            let input = "[Section A]
+KeyOne=value 1
+
+[Section B]
+KeyTwo=value 2
+
+[Section A]
+KeyThree=value 1";
+
+            let unit = SystemdUnit::load_from_str(input).unwrap();
+
+            assert!(!unit.has_key("Section A", "KeyTwo"));
+            assert!(!unit.has_key("Section B", "KeyOne"));
+            assert!(!unit.has_key("Section B", "KeyThree"));
         }
     }
 
