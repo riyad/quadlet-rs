@@ -170,6 +170,23 @@ impl SystemdUnit {
         self.inner.get_all_from(Some(section), key)
     }
 
+    /// Get a Vec of values for all `key`s in all instances of `section`
+    /// This mimics quadlet's behavior in that empty values reset the list.
+    pub(crate) fn lookup_all_with_reset<'a>(&'a self, section: &'a str, key: &'a str) -> Vec<&str> {
+        let values = self.inner.get_all_from(Some(section), key);
+
+        // size_hint.0 is not optimal, but may prevent forseeable growing
+        let est_cap = values.size_hint().0;
+        values.fold( Vec::with_capacity(est_cap), |mut res, v| {
+            if v.is_empty() {
+                res.clear();
+            } else {
+                res.push(v);
+            }
+            res
+        })
+    }
+
     // Get the last value for `key` in all instances of `section`
     pub(crate) fn lookup_last<'a>(&'a self, section: &'a str, key: &'a str) -> Option<&'a str> {
         self.inner.get_last_from(Some(section), key)
@@ -983,6 +1000,33 @@ Key2=valA2";
                 assert_eq!(
                     values,
                     vec!["valA1.1", "valA1.2", "valA2.1"],
+                );
+            }
+        }
+
+        mod lookup_all_with_reset{
+            use super::*;
+
+            #[test]
+            fn finds_all_across_different_instances_of_the_section() {
+                let input = "[secA]
+Key1=valA1.1
+Key1=
+[secB]
+Key1=valB1
+[secA]
+Key1=valA2.1
+Key2=valA2
+Key1=
+Key1=valA2.2
+Key1=valA2.3";
+
+                let unit = SystemdUnit::load_from_str(input).unwrap();
+
+                let values: Vec<_> = unit.lookup_all_with_reset("secA", "Key1");
+                assert_eq!(
+                    values,
+                    vec!["valA2.2", "valA2.3"],
                 );
             }
         }
