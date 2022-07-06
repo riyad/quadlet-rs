@@ -1178,6 +1178,88 @@ KeyOne=value 1.2";
             }
         }
 
+        mod set_entry {
+            use super::*;
+
+            #[test]
+            fn adds_entry_to_new_section() {
+                let input = "[Section A]
+KeyOne=value 1";
+
+                let mut unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 1);
+
+                unit.set_entry("Section B", "KeyTwo", "value 2");
+                assert_eq!(unit.len(), 2);  // should have added new section
+
+                // unchanged
+                let mut iter = unit.section_entries("Section A");
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
+                assert_eq!(iter.next(), None);
+
+                // added
+                let mut iter = unit.section_entries("Section B");
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+                assert_eq!(iter.next(), None);
+            }
+
+            #[test]
+            fn adds_entry_with_new_key() {
+                let input = "[Section A]
+KeyOne=value 1";
+
+                let mut unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 1);
+
+                unit.set_entry("Section A", "KeyTwo", "value 2");
+                assert_eq!(unit.len(), 1);  // shouldn't change the number of sections
+
+                let mut iter = unit.section_entries("Section A");
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+                assert_eq!(iter.next(), None);
+
+            }
+
+            #[test]
+            fn replaces_entry_with_same_key_in_section() {
+                let input = "[Section A]
+KeyOne=value 1";
+
+                let mut unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 1);
+
+                unit.set_entry("Section A", "KeyOne", "new value");
+                assert_eq!(unit.len(), 1);  // shouldn't change the number of sections
+
+                let mut iter = unit.section_entries("Section A");
+                assert_eq!(iter.next(), Some(("KeyOne", "new value")));
+                assert_eq!(iter.next(), None);
+
+            }
+
+            #[test]
+            fn replaces_last_entry_with_same_key_in_section() {
+                let input = "[Section A]
+KeyOne=value 1
+KeyOne=value 2
+KeyOne=value 3";
+
+                let mut unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 1);
+
+                unit.set_entry("Section A", "KeyOne", "value new");
+                assert_eq!(unit.len(), 1);  // shouldn't change the number of sections
+
+                let mut iter = unit.section_entries("Section A");
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 2")));
+                assert_eq!(iter.next(), Some(("KeyOne", "new value")));
+                assert_eq!(iter.next(), None);
+
+            }
+        }
+
         mod round_trip {
             use crate::quadlet::PodmanCommand;
 
