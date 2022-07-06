@@ -422,49 +422,52 @@ mod tests {
         }
     }
 
-    mod add_entry {
+    mod systemd_unit {
         use super::*;
 
-        #[test]
-        fn should_add_entry_to_known_section() {
-            let input = "[Section A]
+        mod add_entry {
+            use super::*;
+
+            #[test]
+            fn should_add_entry_to_known_section() {
+                let input = "[Section A]
 KeyOne=value 1";
 
-            let mut unit = SystemdUnit::load_from_str(input).unwrap();
-            assert_eq!(unit.len(), 1);
+                let mut unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 1);
 
-            unit.append_entry("Section A", "NewKey", "new value");
-            assert_eq!(unit.len(), 1);  // shouldn't change the number of sections
+                unit.append_entry("Section A", "NewKey", "new value");
+                assert_eq!(unit.len(), 1);  // shouldn't change the number of sections
 
-            let mut iter = unit.section_entries("Section A");
-            assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
-            assert_eq!(iter.next(), Some(("NewKey", "new value")));
-            assert_eq!(iter.next(), None);
-        }
+                let mut iter = unit.section_entries("Section A");
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
+                assert_eq!(iter.next(), Some(("NewKey", "new value")));
+                assert_eq!(iter.next(), None);
+            }
 
-        #[test]
-        fn should_create_new_section_if_necessary() {
-            let input = "[Section A]
+            #[test]
+            fn should_create_new_section_if_necessary() {
+                let input = "[Section A]
 KeyOne=value 1";
 
-            let mut unit = SystemdUnit::load_from_str(input).unwrap();
-            assert_eq!(unit.len(), 1);
+                let mut unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 1);
 
-            unit.append_entry("New Section", "NewKey", "new value");
-            assert_eq!(unit.len(), 2);
+                unit.append_entry("New Section", "NewKey", "new value");
+                assert_eq!(unit.len(), 2);
 
-            let mut iter = unit.section_entries("Section A");
-            assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
-            assert_eq!(iter.next(), None);
+                let mut iter = unit.section_entries("Section A");
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
+                assert_eq!(iter.next(), None);
 
-            let mut iter = unit.section_entries("New Section");
-            assert_eq!(iter.next(), Some(("NewKey", "new value")));
-            assert_eq!(iter.next(), None);
-        }
+                let mut iter = unit.section_entries("New Section");
+                assert_eq!(iter.next(), Some(("NewKey", "new value")));
+                assert_eq!(iter.next(), None);
+            }
 
-        #[test]
-        fn should_add_entry_to_last_instance_of_a_section() {
-            let input = "[Section A]
+            #[test]
+            fn should_add_entry_to_last_instance_of_a_section() {
+                let input = "[Section A]
 KeyOne=value 1.1
 KeyOne=value 1.2
 
@@ -475,49 +478,49 @@ KeyThree=value 3
 KeyTwo=value 2
 KeyOne=value 2.1";
 
-            let mut unit = SystemdUnit::load_from_str(input).unwrap();
-            assert_eq!(unit.len(), 2);
+                let mut unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 2);
 
-            unit.append_entry("Section A", "KeyOne", "new value");
-            assert_eq!(unit.len(), 2);
+                unit.append_entry("Section A", "KeyOne", "new value");
+                assert_eq!(unit.len(), 2);
 
-            let mut iter = unit.section_entries("Section A");
-            assert_eq!(iter.next(), Some(("KeyOne", "value 1.1")));
-            assert_eq!(iter.next(), Some(("KeyOne", "value 1.2")));
-            assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
-            assert_eq!(iter.next(), Some(("KeyOne", "value 2.1")));
-            assert_eq!(iter.next(), Some(("KeyOne", "new value")));
-            assert_eq!(iter.next(), None);
+                let mut iter = unit.section_entries("Section A");
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1.1")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1.2")));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 2.1")));
+                assert_eq!(iter.next(), Some(("KeyOne", "new value")));
+                assert_eq!(iter.next(), None);
+            }
         }
-    }
 
-    mod has_key {
-        use super::*;
+        mod has_key {
+            use super::*;
 
-        #[test]
-        fn false_for_unknown_key() {
-            let input = "[Section A]
+            #[test]
+            fn false_for_unknown_key() {
+                let input = "[Section A]
 KeyOne=value 1";
 
-            let unit = SystemdUnit::load_from_str(input).unwrap();
+                let unit = SystemdUnit::load_from_str(input).unwrap();
 
-            assert!(!unit.has_key("Section A", "KeyTwo"));
-            assert!(!unit.has_key("Section B", "KeyFour"));
-        }
+                assert!(!unit.has_key("Section A", "KeyTwo"));
+                assert!(!unit.has_key("Section B", "KeyFour"));
+            }
 
-        #[test]
-        fn false_for_unknown_section() {
-            let input = "[Section A]
+            #[test]
+            fn false_for_unknown_section() {
+                let input = "[Section A]
 KeyOne=value 1";
 
-            let unit = SystemdUnit::load_from_str(input).unwrap();
+                let unit = SystemdUnit::load_from_str(input).unwrap();
 
-            assert!(!unit.has_key("Section B", "KeyOne"));
-        }
+                assert!(!unit.has_key("Section B", "KeyOne"));
+            }
 
-        #[test]
-        fn true_for_key_in_section() {
-            let input = "[Section A]
+            #[test]
+            fn true_for_key_in_section() {
+                let input = "[Section A]
 KeyOne=value 1
 
 [Section B]
@@ -526,16 +529,16 @@ KeyTwo=value 2
 [Section A]
 KeyThree=value 1";
 
-            let unit = SystemdUnit::load_from_str(input).unwrap();
+                let unit = SystemdUnit::load_from_str(input).unwrap();
 
-            assert!(unit.has_key("Section A", "KeyOne"));
-            assert!(unit.has_key("Section B", "KeyTwo"));
-            assert!(unit.has_key("Section A", "KeyThree"));
-        }
+                assert!(unit.has_key("Section A", "KeyOne"));
+                assert!(unit.has_key("Section B", "KeyTwo"));
+                assert!(unit.has_key("Section A", "KeyThree"));
+            }
 
-        #[test]
-        fn false_for_key_in_wrong_section() {
-            let input = "[Section A]
+            #[test]
+            fn false_for_key_in_wrong_section() {
+                let input = "[Section A]
 KeyOne=value 1
 
 [Section B]
@@ -544,88 +547,88 @@ KeyTwo=value 2
 [Section A]
 KeyThree=value 1";
 
-            let unit = SystemdUnit::load_from_str(input).unwrap();
+                let unit = SystemdUnit::load_from_str(input).unwrap();
 
-            assert!(!unit.has_key("Section A", "KeyTwo"));
-            assert!(!unit.has_key("Section B", "KeyOne"));
-            assert!(!unit.has_key("Section B", "KeyThree"));
+                assert!(!unit.has_key("Section A", "KeyTwo"));
+                assert!(!unit.has_key("Section B", "KeyOne"));
+                assert!(!unit.has_key("Section B", "KeyThree"));
+            }
         }
-    }
 
-    mod has_section {
-        use super::*;
+        mod has_section {
+            use super::*;
 
-        #[test]
-        fn true_for_non_empty_section() {
-            let input = "[Section A]
+            #[test]
+            fn true_for_non_empty_section() {
+                let input = "[Section A]
 KeyOne=value 1";
 
-            let unit = SystemdUnit::load_from_str(input).unwrap();
+                let unit = SystemdUnit::load_from_str(input).unwrap();
 
-            assert!(unit.has_section("Section A"));
-        }
+                assert!(unit.has_section("Section A"));
+            }
 
-        #[test]
-        fn true_for_empty_section() {
-            let input = "[Section A]
+            #[test]
+            fn true_for_empty_section() {
+                let input = "[Section A]
 KeyOne=value 1
 [Section B]";
 
-            let unit = SystemdUnit::load_from_str(input).unwrap();
+                let unit = SystemdUnit::load_from_str(input).unwrap();
 
-            assert!(unit.has_section("Section B"));
-        }
+                assert!(unit.has_section("Section B"));
+            }
 
-        #[test]
-        fn false_for_unknown_section() {
-            let input = "[Section A]
+            #[test]
+            fn false_for_unknown_section() {
+                let input = "[Section A]
 KeyOne=value 1
 [Section B]";
 
-            let unit = SystemdUnit::load_from_str(input).unwrap();
+                let unit = SystemdUnit::load_from_str(input).unwrap();
 
-            assert!(!unit.has_section("foo"));
-        }
-    }
-
-    mod len {
-        use super::*;
-
-        #[test]
-        fn with_empty_file() {
-            let input = "";
-
-            let unit = SystemdUnit::load_from_str(input).unwrap();
-
-            assert_eq!(unit.len(), 0);
+                assert!(!unit.has_section("foo"));
+            }
         }
 
-        #[test]
-        fn with_non_empty_sections() {
-            let input = "[Section A]
+        mod len {
+            use super::*;
+
+            #[test]
+            fn with_empty_file() {
+                let input = "";
+
+                let unit = SystemdUnit::load_from_str(input).unwrap();
+
+                assert_eq!(unit.len(), 0);
+            }
+
+            #[test]
+            fn with_non_empty_sections() {
+                let input = "[Section A]
 KeyOne=value 1
 [section B]
 KeyTwo=value 2";
 
-            let unit = SystemdUnit::load_from_str(input).unwrap();
+                let unit = SystemdUnit::load_from_str(input).unwrap();
 
-            assert_eq!(unit.len(), 2);
-        }
+                assert_eq!(unit.len(), 2);
+            }
 
-        #[test]
-        fn with_empty_section() {
-            let input = "[Section A]
+            #[test]
+            fn with_empty_section() {
+                let input = "[Section A]
 KeyOne=value 1
 [Section B]";
 
-            let unit = SystemdUnit::load_from_str(input).unwrap();
+                let unit = SystemdUnit::load_from_str(input).unwrap();
 
-            assert_eq!(unit.len(), 2);
-        }
+                assert_eq!(unit.len(), 2);
+            }
 
-        #[test]
-        fn repeated_empty_sections_are_not_counted() {
-            let input = "[Section A]
+            #[test]
+            fn repeated_empty_sections_are_not_counted() {
+                let input = "[Section A]
 KeyOne=value 1
 [Section A]
 [Section B]
@@ -633,14 +636,14 @@ KeyOne=value 1
 [Section C]
 [Section B]";
 
-            let unit = SystemdUnit::load_from_str(input).unwrap();
+                let unit = SystemdUnit::load_from_str(input).unwrap();
 
-            assert_eq!(unit.len(), 3);
-        }
+                assert_eq!(unit.len(), 3);
+            }
 
-        #[test]
-        fn same_section_following_itself_is_only_counted_once() {
-            let input = "[Section A]
+            #[test]
+            fn same_section_following_itself_is_only_counted_once() {
+                let input = "[Section A]
 KeyOne=valueA1
 [Section A]
 [Section B]
@@ -650,228 +653,228 @@ KeyOne=valueB2
 [Section A]
 KeyOne=valueA3";
 
-            let unit = SystemdUnit::load_from_str(input).unwrap();
+                let unit = SystemdUnit::load_from_str(input).unwrap();
 
-            assert_eq!(unit.len(), 2);
+                assert_eq!(unit.len(), 2);
+            }
         }
-    }
 
-    mod load_from_str {
-        use super::*;
+        mod load_from_str {
+            use super::*;
 
-        #[test]
-        fn test_parsing_ignores_comments() {
-            let input = "#[Section A]
+            #[test]
+            fn test_parsing_ignores_comments() {
+                let input = "#[Section A]
 #KeyOne=value 1
 
 ;[Section B]
 ;KeyTwo=value 2";
 
-            let unit = SystemdUnit::load_from_str(input).unwrap();
-            assert_eq!(unit.len(), 0);
-        }
+                let unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 0);
+            }
 
-        // NOTE: the syntax specification doesn't explicitly say this, but all sections should be named
-        #[test]
-        #[ignore = "rust-ini (used internally) keeps an default/empty section"]
-        fn test_key_without_section_should_fail() {
-            let input = "KeyOne=value 1";
+            // NOTE: the syntax specification doesn't explicitly say this, but all sections should be named
+            #[test]
+            #[ignore = "rust-ini (used internally) keeps an default/empty section"]
+            fn test_key_without_section_should_fail() {
+                let input = "KeyOne=value 1";
 
-            let result = SystemdUnit::load_from_str(input);
+                let result = SystemdUnit::load_from_str(input);
 
-            assert!(result.is_err());
-        }
+                assert!(result.is_err());
+            }
 
-        #[test]
-        fn trims_whitespace_after_key() {
-            let input = "[Section A]
+            #[test]
+            fn trims_whitespace_after_key() {
+                let input = "[Section A]
 KeyOne  =value 1";
 
-            let unit = SystemdUnit::load_from_str(input).unwrap();
-            assert_eq!(unit.len(), 1);
+                let unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 1);
 
-            let mut iter = unit.section_entries("Section A");
-            assert_eq!(iter.next().unwrap(), ("KeyOne", "value 1"));
-            assert_eq!(iter.next(), None);
-        }
+                let mut iter = unit.section_entries("Section A");
+                assert_eq!(iter.next().unwrap(), ("KeyOne", "value 1"));
+                assert_eq!(iter.next(), None);
+            }
 
-        // NOTE: the syntax specification is silent about this case, but we'll accept it anyway
-        #[test]
-        fn trims_whitespace_before_key() {
-            let input = "[Section A]
+            // NOTE: the syntax specification is silent about this case, but we'll accept it anyway
+            #[test]
+            fn trims_whitespace_before_key() {
+                let input = "[Section A]
 \tKeyOne=value 1";
 
-            let unit = SystemdUnit::load_from_str(input).unwrap();
-            assert_eq!(unit.len(), 1);
+                let unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 1);
 
-            let mut iter = unit.section_entries("Section A");
-            assert_eq!(iter.next().unwrap(), ("KeyOne", "value 1"));
-            assert_eq!(iter.next(), None);
-        }
+                let mut iter = unit.section_entries("Section A");
+                assert_eq!(iter.next().unwrap(), ("KeyOne", "value 1"));
+                assert_eq!(iter.next(), None);
+            }
 
-        // NOTE: the syntax specification only mentions ignoring whitespace around the '='
-        #[test]
-        fn trims_whitespace_around_unquoted_values() {
-            let input = "[Section A]
+            // NOTE: the syntax specification only mentions ignoring whitespace around the '='
+            #[test]
+            fn trims_whitespace_around_unquoted_values() {
+                let input = "[Section A]
 KeyOne =    value 1
 KeyTwo\t=\tvalue 2\t";
 
-            let unit = SystemdUnit::load_from_str(input).unwrap();
-            assert_eq!(unit.len(), 1);
+                let unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 1);
 
-            let mut iter = unit.section_entries("Section A");
-            assert_eq!(iter.next().unwrap(), ("KeyOne", "value 1"));
-            assert_eq!(iter.next().unwrap(), ("KeyTwo", "value 2\t"));
-            assert_eq!(iter.next(), None);
-        }
+                let mut iter = unit.section_entries("Section A");
+                assert_eq!(iter.next().unwrap(), ("KeyOne", "value 1"));
+                assert_eq!(iter.next().unwrap(), ("KeyTwo", "value 2\t"));
+                assert_eq!(iter.next(), None);
+            }
 
-        #[test]
-        #[ignore = "rust-ini doesn't handle inner quotes properly"]
-        fn trims_whitespace_around_but_not_inside_quoted_values() {
-            let input = "[Section A]
-  KeyThree  =  \"  value 3\t\"";
+            #[test]
+            #[ignore = "rust-ini doesn't handle inner quotes properly"]
+            fn trims_whitespace_around_but_not_inside_quoted_values() {
+                let input = "[Section A]
+KeyThree  =  \"  value 3\t\"";
 
-            let unit = SystemdUnit::load_from_str(input).unwrap();
-            assert_eq!(unit.len(), 1);
+                let unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 1);
 
-            let mut iter = unit.section_entries("Section A");
-            assert_eq!(iter.next().unwrap(), ("KeyThree", "  value 3\t"));
-            assert_eq!(iter.next(), None);
-        }
+                let mut iter = unit.section_entries("Section A");
+                assert_eq!(iter.next().unwrap(), ("KeyThree", "  value 3\t"));
+                assert_eq!(iter.next(), None);
+            }
 
-        // NOTE: according to the syntax specification quotes can start at the beginning or after whitespace
-        #[test]
-        #[ignore = "rust-ini doesn't handle inner quotes properly"]
-        fn unquotes_mutiple_quotes_in_value() {
-            let input = "[Section A]
+            // NOTE: according to the syntax specification quotes can start at the beginning or after whitespace
+            #[test]
+            #[ignore = "rust-ini doesn't handle inner quotes properly"]
+            fn unquotes_mutiple_quotes_in_value() {
+                let input = "[Section A]
 Setting=\"something\" \"some thing\" \'…\'";
 
-            let unit = SystemdUnit::load_from_str(input).unwrap();
-            assert_eq!(unit.len(), 1);
+                let unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 1);
 
-            let mut iter = unit.section_entries("Section A");
-            assert_eq!(iter.next().unwrap(), ("Setting", "something some thing …"));
-            assert_eq!(iter.next(), None);
-        }
+                let mut iter = unit.section_entries("Section A");
+                assert_eq!(iter.next().unwrap(), ("Setting", "something some thing …"));
+                assert_eq!(iter.next(), None);
+            }
 
-        #[test]
-        fn quotes_dont_start_in_words() {
-            let input = "[Section A]
+            #[test]
+            fn quotes_dont_start_in_words() {
+                let input = "[Section A]
 Setting=foo=\"bar baz\"";
 
-            let unit = SystemdUnit::load_from_str(input).unwrap();
-            assert_eq!(unit.len(), 1);
+                let unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 1);
 
-            let mut iter = unit.section_entries("Section A");
-            assert_eq!(iter.next().unwrap(), ("Setting", "foo=\"bar baz\""));
-            assert_eq!(iter.next(), None);
-        }
+                let mut iter = unit.section_entries("Section A");
+                assert_eq!(iter.next().unwrap(), ("Setting", "foo=\"bar baz\""));
+                assert_eq!(iter.next(), None);
+            }
 
-        // TODO: automatically close quotes at end of line (with or witout line continuation)
-        // TODO: test nested quotes
+            // TODO: automatically close quotes at end of line (with or witout line continuation)
+            // TODO: test nested quotes
 
-        mod parse_escape_sequence {
-            use super::*;
+            mod parse_escape_sequences {
+                use super::*;
 
-            #[test]
-            fn with_unknown_escape_char() {
-                let input = "[Section A]
+                #[test]
+                fn with_unknown_escape_char() {
+                    let input = "[Section A]
 unescape=\\_";
 
-                let unit = SystemdUnit::load_from_str(input).unwrap();
-                assert_eq!(unit.len(), 1);
+                    let unit = SystemdUnit::load_from_str(input).unwrap();
+                    assert_eq!(unit.len(), 1);
 
-                let mut iter = unit.section_entries("Section A");
-                // NOTE: not sure if this is the right behaviour, but this is what rust-ini gives us
-                assert_eq!(iter.next().unwrap(), ("unescape", "_"));
-                assert_eq!(iter.next(), None);
-            }
+                    let mut iter = unit.section_entries("Section A");
+                    // NOTE: not sure if this is the right behaviour, but this is what rust-ini gives us
+                    assert_eq!(iter.next().unwrap(), ("unescape", "_"));
+                    assert_eq!(iter.next(), None);
+                }
 
-            #[test]
-            fn unescapes_single_character_sequences() {
-                let input = "[Section A]
+                #[test]
+                fn unescapes_single_character_sequences() {
+                    let input = "[Section A]
 unescape=\\a\\b\\f\\n\\r\\t\\v\\\\\\\"\\\'\\s";
 
-                let unit = SystemdUnit::load_from_str(input).unwrap();
-                assert_eq!(unit.len(), 1);
+                    let unit = SystemdUnit::load_from_str(input).unwrap();
+                    assert_eq!(unit.len(), 1);
 
-                let mut iter = unit.section_entries("Section A");
-                assert_eq!(iter.next().unwrap(), ("unescape", "\u{7}\u{8}\u{c}\n\r\t\u{b}\\\"\' "));
-                assert_eq!(iter.next(), None);
-            }
+                    let mut iter = unit.section_entries("Section A");
+                    assert_eq!(iter.next().unwrap(), ("unescape", "\u{7}\u{8}\u{c}\n\r\t\u{b}\\\"\' "));
+                    assert_eq!(iter.next(), None);
+                }
 
-            #[test]
-            fn unescapes_unicode_sequences() {
-                let input = "[Section A]
+                #[test]
+                fn unescapes_unicode_sequences() {
+                    let input = "[Section A]
 unescape=\\xaa \\u1234 \\U0010cdef \\123";
 
-                let unit = SystemdUnit::load_from_str(input).unwrap();
-                assert_eq!(unit.len(), 1);
+                    let unit = SystemdUnit::load_from_str(input).unwrap();
+                    assert_eq!(unit.len(), 1);
 
-                let mut iter = unit.section_entries("Section A");
-                assert_eq!(iter.next().unwrap(), ("unescape", "\u{aa} \u{1234} \u{10cdef} \u{53}"));
-                assert_eq!(iter.next(), None);
-            }
+                    let mut iter = unit.section_entries("Section A");
+                    assert_eq!(iter.next().unwrap(), ("unescape", "\u{aa} \u{1234} \u{10cdef} \u{53}"));
+                    assert_eq!(iter.next(), None);
+                }
 
-            #[test]
-            fn fails_with_escaped_null() {
-                let input = "[Section A]
+                #[test]
+                fn fails_with_escaped_null() {
+                    let input = "[Section A]
 unescape=\\x00";
 
-                assert_eq!(
-                    SystemdUnit::load_from_str(input).err(),
-                    Some(ini::ParseError{ line: 1, col: 13, msg: "\\0 character not allowd in escape sequence".into()})
-                );
-            }
+                    assert_eq!(
+                        SystemdUnit::load_from_str(input).err(),
+                        Some(ini::ParseError{ line: 1, col: 13, msg: "\\0 character not allowd in escape sequence".into()})
+                    );
+                }
 
-            #[test]
-            fn fails_with_illegal_digit() {
-                let input = "[Section A]
+                #[test]
+                fn fails_with_illegal_digit() {
+                    let input = "[Section A]
 unescape=\\u123x";
 
-                assert_eq!(
-                    SystemdUnit::load_from_str(input).err(),
-                    Some(ini::ParseError{ line: 1, col: 15, msg: "Expected 4 hex values after \"\\x\", but got \"\\x123x\"".into()})
-                );
-            }
+                    assert_eq!(
+                        SystemdUnit::load_from_str(input).err(),
+                        Some(ini::ParseError{ line: 1, col: 15, msg: "Expected 4 hex values after \"\\x\", but got \"\\x123x\"".into()})
+                    );
+                }
 
-            #[test]
-            fn fails_with_illegal_octal_digit() {
-                let input = "[Section A]
+                #[test]
+                fn fails_with_illegal_octal_digit() {
+                    let input = "[Section A]
 unescape=\\678";
 
-                assert_eq!(
-                    SystemdUnit::load_from_str(input).err(),
-                    Some(ini::ParseError{ line: 1, col: 13, msg: "Expected 3 octal values after \"\\\", but got \"\\678\"".into()})
-                );
-            }
+                    assert_eq!(
+                        SystemdUnit::load_from_str(input).err(),
+                        Some(ini::ParseError{ line: 1, col: 13, msg: "Expected 3 octal values after \"\\\", but got \"\\678\"".into()})
+                    );
+                }
 
-            #[test]
-            fn fails_with_incomplete_sequence() {
-                let input = "[Section A]
+                #[test]
+                fn fails_with_incomplete_sequence() {
+                    let input = "[Section A]
 unescape=\\";
 
-                assert_eq!(
-                    SystemdUnit::load_from_str(input).err(),
-                    Some(ini::ParseError{line: 1, col: 10, msg: "expecting escape sequence or '\\n' but found EOF.".into()})
-                );
+                    assert_eq!(
+                        SystemdUnit::load_from_str(input).err(),
+                        Some(ini::ParseError{line: 1, col: 10, msg: "expecting escape sequence or '\\n' but found EOF.".into()})
+                    );
+                }
+
+                #[test]
+                fn fails_with_incomplete_unicode_sequence() {
+                    let input = "[Section A]
+unescape=\\u12";
+
+                    assert_eq!(
+                        SystemdUnit::load_from_str(input).err(),
+                        Some(ini::ParseError{ line: 1, col: 13, msg: "expecting unicode escape sequence but found EOF.".into()})
+                    );
+                }
             }
 
             #[test]
-            fn fails_with_incomplete_unicode_sequence() {
+            fn test_systemd_syntax_example_1_succeeds() {
                 let input = "[Section A]
-unescape=\\u12";
-
-                assert_eq!(
-                    SystemdUnit::load_from_str(input).err(),
-                    Some(ini::ParseError{ line: 1, col: 13, msg: "expecting unicode escape sequence but found EOF.".into()})
-                );
-            }
-        }
-
-        #[test]
-        fn test_systemd_syntax_example_1_succeeds() {
-            let input = "[Section A]
 KeyOne=value 1
 KeyTwo=value 2
 
@@ -888,57 +891,57 @@ KeyThree=value 3\\
 ; this line is ignored too
       value 3 continued";
 
-            let unit = SystemdUnit::load_from_str(input).unwrap();
-            assert_eq!(unit.len(), 3);
+                let unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 3);
 
-            let mut iter = unit.section_entries("Section A");
-            assert_eq!(iter.next().unwrap(), ("KeyOne", "value 1"));
-            assert_eq!(iter.next().unwrap(), ("KeyTwo", "value 2"));
-            assert_eq!(iter.next(), None);
+                let mut iter = unit.section_entries("Section A");
+                assert_eq!(iter.next().unwrap(), ("KeyOne", "value 1"));
+                assert_eq!(iter.next().unwrap(), ("KeyTwo", "value 2"));
+                assert_eq!(iter.next(), None);
 
-            let mut iter = unit.section_entries("Section B");
-            // TODO: may not be accurate according to Systemd quoting rules
-            //assert_eq!(iter.next().unwrap(), ("Setting", "something some thing …"));
-            assert_eq!(iter.next().unwrap(), ("Setting", "\"something\" \"some thing\" \"…\""));
-            assert_eq!(iter.next().unwrap(), ("KeyTwo", "value 2        value 2 continued"));
-            assert_eq!(iter.next(), None);
+                let mut iter = unit.section_entries("Section B");
+                // TODO: may not be accurate according to Systemd quoting rules
+                //assert_eq!(iter.next().unwrap(), ("Setting", "something some thing …"));
+                assert_eq!(iter.next().unwrap(), ("Setting", "\"something\" \"some thing\" \"…\""));
+                assert_eq!(iter.next().unwrap(), ("KeyTwo", "value 2        value 2 continued"));
+                assert_eq!(iter.next(), None);
 
-            let mut iter = unit.section_entries("Section C");
-            assert_eq!(iter.next().unwrap(), ("KeyThree", "value 3       value 3 continued"));
-            assert_eq!(iter.next(), None);
-        }
+                let mut iter = unit.section_entries("Section C");
+                assert_eq!(iter.next().unwrap(), ("KeyThree", "value 3       value 3 continued"));
+                assert_eq!(iter.next(), None);
+            }
 
-        #[test]
-        fn adapted_quadlet_case__escapes_container__succeeds() {
-            let input = "[Container]
+            #[test]
+            fn adapted_quadlet_escapes_container_case_succeeds() {
+                let input = "[Container]
 Image=imagename
 PodmanArgs=\"--foo\" \\
   --bar
 PodmanArgs=--also
 Exec=/some/path \"an arg\" \"a;b\\nc\\td'e\" a;b\\nc\\td 'a\"b'";
 
-            let unit = SystemdUnit::load_from_str(input).unwrap();
-            assert_eq!(unit.len(), 1);
+                let unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 1);
 
-            let mut iter = unit.section_entries("Container");
-            assert_eq!(iter.next().unwrap(), ("Image", "imagename"));
-            // TODO: may not be accurate according to Systemd quoting rules
-            //assert_eq!(iter.next().unwrap(), ("PodmanArgs", "--foo    --bar"));
-            assert_eq!(iter.next().unwrap(), ("PodmanArgs", "\"--foo\"    --bar"));
-            assert_eq!(iter.next().unwrap(), ("PodmanArgs", "--also"));
-            // TODO: may not be accurate according to Systemd quoting rules
-            //assert_eq!(iter.next().unwrap(), ("Exec", "/some/path an arg a;b\nc\td'e a;b\nc\td a\"b"));
-            assert_eq!(iter.next().unwrap(), ("Exec", "/some/path \"an arg\" \"a;b\nc\td'e\" a;b\nc\td 'a\"b'"));
-            assert_eq!(iter.next(), None);
+                let mut iter = unit.section_entries("Container");
+                assert_eq!(iter.next().unwrap(), ("Image", "imagename"));
+                // TODO: may not be accurate according to Systemd quoting rules
+                //assert_eq!(iter.next().unwrap(), ("PodmanArgs", "--foo    --bar"));
+                assert_eq!(iter.next().unwrap(), ("PodmanArgs", "\"--foo\"    --bar"));
+                assert_eq!(iter.next().unwrap(), ("PodmanArgs", "--also"));
+                // TODO: may not be accurate according to Systemd quoting rules
+                //assert_eq!(iter.next().unwrap(), ("Exec", "/some/path an arg a;b\nc\td'e a;b\nc\td a\"b"));
+                assert_eq!(iter.next().unwrap(), ("Exec", "/some/path \"an arg\" \"a;b\nc\td'e\" a;b\nc\td 'a\"b'"));
+                assert_eq!(iter.next(), None);
+            }
         }
-    }
 
-    mod lookup_all {
-        use super::*;
+        mod lookup_all {
+            use super::*;
 
-        #[test]
-        fn finds_all_across_different_instances_of_the_section() {
-            let input = "[secA]
+            #[test]
+            fn finds_all_across_different_instances_of_the_section() {
+                let input = "[secA]
 Key1=valA1.1
 Key1=valA1.2
 [secB]
@@ -947,37 +950,37 @@ Key1=valB1
 Key1=valA2.1
 Key2=valA2";
 
-            let unit = SystemdUnit::load_from_str(input).unwrap();
+                let unit = SystemdUnit::load_from_str(input).unwrap();
 
-            let values: Vec<_> = unit.lookup_all("secA", "Key1").collect();
-            assert_eq!(
-                values,
-                vec!["valA1.1", "valA1.2", "valA2.1"],
-            );
+                let values: Vec<_> = unit.lookup_all("secA", "Key1").collect();
+                assert_eq!(
+                    values,
+                    vec!["valA1.1", "valA1.2", "valA2.1"],
+                );
+            }
         }
-    }
 
-    mod lookup_last {
-        use super::*;
+        mod lookup_last {
+            use super::*;
 
-        #[test]
-        fn finds_last_of_multiple_values() {
-            let input = "[secA]
+            #[test]
+            fn finds_last_of_multiple_values() {
+                let input = "[secA]
 Key1=val1
 Key2=val2
 Key1=val1.2";
 
-            let unit = SystemdUnit::load_from_str(input).unwrap();
+                let unit = SystemdUnit::load_from_str(input).unwrap();
 
-            assert_eq!(
-                unit.lookup_last("secA", "Key1"),
-                Some("val1.2"),
-            );
-        }
+                assert_eq!(
+                    unit.lookup_last("secA", "Key1"),
+                    Some("val1.2"),
+                );
+            }
 
-        #[test]
-        fn finds_last_when_the_last_instance_of_the_section_does_not_have_the_key() {
-            let input = "[secA]
+            #[test]
+            fn finds_last_when_the_last_instance_of_the_section_does_not_have_the_key() {
+                let input = "[secA]
 Key1=valA1
 Key1=valA1.2
 [secB]
@@ -985,149 +988,149 @@ Key1=valB1
 [secA]
 Key2=valA2";
 
-            let unit = SystemdUnit::load_from_str(input).unwrap();
+                let unit = SystemdUnit::load_from_str(input).unwrap();
 
-            assert_eq!(
-                unit.lookup_last("secA", "Key1"),
-                Some("valA1.2"),
-            );
+                assert_eq!(
+                    unit.lookup_last("secA", "Key1"),
+                    Some("valA1.2"),
+                );
+            }
         }
-    }
 
-    mod rename_section {
-        use super::*;
+        mod rename_section {
+            use super::*;
 
-        #[test]
-        fn with_single_instance_of_the_section() {
-            let input = "[Section A]
+            #[test]
+            fn with_single_instance_of_the_section() {
+                let input = "[Section A]
 KeyOne=value 1
 KeyTwo=value 2";
 
-            let mut unit = SystemdUnit::load_from_str(input).unwrap();
-            assert_eq!(unit.len(), 1);
+                let mut unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 1);
 
-            let from_section = "Section A";
-            let to_section = "New Section";
-            unit.rename_section(from_section, to_section);
-            assert_eq!(unit.len(), 1);  // shouldn't change the number of sections
+                let from_section = "Section A";
+                let to_section = "New Section";
+                unit.rename_section(from_section, to_section);
+                assert_eq!(unit.len(), 1);  // shouldn't change the number of sections
 
-            assert!(!unit.has_section(from_section));
-            let mut iter = unit.section_entries(from_section);
-            assert_eq!(iter.next(), None);
+                assert!(!unit.has_section(from_section));
+                let mut iter = unit.section_entries(from_section);
+                assert_eq!(iter.next(), None);
 
-            assert!(unit.has_section(to_section));
-            let mut iter = unit.section_entries(to_section);
-            assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
-            assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
-            assert_eq!(iter.next(), None);
-        }
+                assert!(unit.has_section(to_section));
+                let mut iter = unit.section_entries(to_section);
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+                assert_eq!(iter.next(), None);
+            }
 
-        #[test]
-        fn with_multiple_instances_of_a_section() {
-            let input = "[Section A]
+            #[test]
+            fn with_multiple_instances_of_a_section() {
+                let input = "[Section A]
 KeyOne=value 1
 [Section B]
 [Section A]
 KeyTwo=value 2";
 
-            let mut unit = SystemdUnit::load_from_str(input).unwrap();
-            assert_eq!(unit.len(), 2);
+                let mut unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 2);
 
-            let from_section = "Section A";
-            let to_section = "New Section";
-            unit.rename_section(from_section, to_section);
-            assert_eq!(unit.len(), 2);  // shouldn't change the number of sections
+                let from_section = "Section A";
+                let to_section = "New Section";
+                unit.rename_section(from_section, to_section);
+                assert_eq!(unit.len(), 2);  // shouldn't change the number of sections
 
-            assert!(!unit.has_section(from_section));
-            let mut iter = unit.section_entries(from_section);
-            assert_eq!(iter.next(), None);
+                assert!(!unit.has_section(from_section));
+                let mut iter = unit.section_entries(from_section);
+                assert_eq!(iter.next(), None);
 
-            assert!(unit.has_section(to_section));
-            let mut iter = unit.section_entries(to_section);
-            assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
-            assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
-            assert_eq!(iter.next(), None);
-        }
+                assert!(unit.has_section(to_section));
+                let mut iter = unit.section_entries(to_section);
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+                assert_eq!(iter.next(), None);
+            }
 
-        #[test]
-        fn with_unknown_section_should_do_anything() {
-            let input = "[Section A]
+            #[test]
+            fn with_unknown_section_should_do_anything() {
+                let input = "[Section A]
 KeyOne=value 1
 KeyTwo=value 2";
 
-            let mut unit = SystemdUnit::load_from_str(input).unwrap();
-            assert_eq!(unit.len(), 1);
+                let mut unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 1);
 
-            let from_section = "foo";
-            let to_section = "New";
-            let other_section = "Section A";
+                let from_section = "foo";
+                let to_section = "New";
+                let other_section = "Section A";
 
-            assert!(!unit.has_section(from_section));
-            unit.rename_section(from_section, to_section);
-            assert_eq!(unit.len(), 1);  // shouldn't change the number of sections
+                assert!(!unit.has_section(from_section));
+                unit.rename_section(from_section, to_section);
+                assert_eq!(unit.len(), 1);  // shouldn't change the number of sections
 
-            assert!(unit.has_section(other_section));
-            let mut iter = unit.section_entries(other_section);
-            assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
-            assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
-            assert_eq!(iter.next(), None);
+                assert!(unit.has_section(other_section));
+                let mut iter = unit.section_entries(other_section);
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+                assert_eq!(iter.next(), None);
 
-            assert!(!unit.has_section(to_section));
-            let mut iter = unit.section_entries(to_section);
-            assert_eq!(iter.next(), None);
-        }
+                assert!(!unit.has_section(to_section));
+                let mut iter = unit.section_entries(to_section);
+                assert_eq!(iter.next(), None);
+            }
 
-        #[test]
-        fn keeps_entries_already_present_in_destination_section() {
-            let input = "[Section A]
+            #[test]
+            fn keeps_entries_already_present_in_destination_section() {
+                let input = "[Section A]
 KeyOne=value 1
 [Section B]
 KeyTwo=value 2
 [Section A]
 KeyThree=value 3";
 
-            let mut unit = SystemdUnit::load_from_str(input).unwrap();
-            assert_eq!(unit.len(), 2);
+                let mut unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 2);
 
-            let from_section = "Section A";
-            let to_section = "Section B";
-            unit.rename_section(from_section, to_section);
-            assert_eq!(unit.len(), 1);
+                let from_section = "Section A";
+                let to_section = "Section B";
+                unit.rename_section(from_section, to_section);
+                assert_eq!(unit.len(), 1);
 
-            assert!(!unit.has_section(from_section));
-            let mut iter = unit.section_entries(from_section);
-            assert_eq!(iter.next(), None);
+                assert!(!unit.has_section(from_section));
+                let mut iter = unit.section_entries(from_section);
+                assert_eq!(iter.next(), None);
 
-            assert!(unit.has_section(to_section));
-            let mut iter = unit.section_entries(to_section);
-            assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
-            assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
-            assert_eq!(iter.next(), Some(("KeyThree", "value 3")));
-            assert_eq!(iter.next(), None);
+                assert!(unit.has_section(to_section));
+                let mut iter = unit.section_entries(to_section);
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
+                assert_eq!(iter.next(), Some(("KeyThree", "value 3")));
+                assert_eq!(iter.next(), None);
+            }
         }
-    }
 
-    mod section_entries {
-        use super::*;
+        mod section_entries {
+            use super::*;
 
-        #[test]
-        fn with_one_section() {
-            let input = "[Section A]
+            #[test]
+            fn with_one_section() {
+                let input = "[Section A]
 KeyOne=value 1
 KeyTwo=value 2";
 
-            let unit = SystemdUnit::load_from_str(input).unwrap();
-            assert_eq!(unit.len(), 1);
+                let unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 1);
 
-            let mut iter = unit.section_entries("Section A");
-            assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
-            assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
-            assert_eq!(iter.next(), None);
-        }
+                let mut iter = unit.section_entries("Section A");
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+                assert_eq!(iter.next(), None);
+            }
 
-        #[test]
-        fn test_with_same_section_occuring_multiple_times() {
-            let input = "[Section A]
+            #[test]
+            fn test_with_same_section_occuring_multiple_times() {
+                let input = "[Section A]
 KeyOne=value 1
 KeyTwo=value 2
 
@@ -1137,90 +1140,89 @@ Key=value
 [Section A]
 KeyOne=value 1.2";
 
-            let unit = SystemdUnit::load_from_str(input).unwrap();
-            assert_eq!(unit.len(), 2);
+                let unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 2);
 
-            let mut iter = unit.section_entries("Section A");
-            assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
-            assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
-            assert_eq!(iter.next(), Some(("KeyOne", "value 1.2")));
-            assert_eq!(iter.next(), None);
-        }
-    }
-
-    mod round_trip {
-        use crate::quadlet::PodmanCommand;
-
-        use super::*;
-
-        #[test]
-        fn read_write_round_trip_without_modifications() {
-            let input = "[Service]
-ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
-
-            let unit = SystemdUnit::load_from_str(input).unwrap();
-
-            let exec_start = unit.lookup_last(SERVICE_SECTION, "ExecStart");
-            assert_eq!(
-                exec_start,
-                Some("/some/path \"an arg\" \"a;b\nc\td\'e\" a;b\nc\td \'a\"b\'")
-            );
-
-            let mut output = Vec::new();
-            let res = unit.write_to(&mut output);
-            assert!(res.is_ok());
-
-            assert_eq!(
-                // NOTE: we trim here, because `write_to()` ends the file in \n
-                std::str::from_utf8(&output).unwrap().trim_end(),
-                input,
-            );
+                let mut iter = unit.section_entries("Section A");
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1.2")));
+                assert_eq!(iter.next(), None);
+            }
         }
 
-        #[test]
-        #[ignore = "SplitWord vs. rust-ini unescaping mismatch"]
-        fn with_word_splitting_and_setting_constructed_command() {
-            let input = "[Service]
+        mod round_trip {
+            use crate::quadlet::PodmanCommand;
+
+            use super::*;
+
+            #[test]
+            fn read_write_round_trip_without_modifications() {
+                let input = "[Service]
 ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
 
-            let mut unit = SystemdUnit::load_from_str(input).unwrap();
+                let unit = SystemdUnit::load_from_str(input).unwrap();
 
-            let exec_start = unit.lookup_last(SERVICE_SECTION, "ExecStart");
-            assert_eq!(
-                exec_start,
-                Some("/some/path \"an arg\" \"a;b\nc\td\'e\" a;b\nc\td \'a\"b\'")
-            );
+                let exec_start = unit.lookup_last(SERVICE_SECTION, "ExecStart");
+                assert_eq!(
+                    exec_start,
+                    Some("/some/path \"an arg\" \"a;b\nc\td\'e\" a;b\nc\td \'a\"b\'")
+                );
 
-            let mut split_words: Vec<String> = SplitWord::new(exec_start.unwrap()).collect();
-            let mut split = split_words.iter();
-            assert_eq!(split.next(), Some(&"/some/path".into()));
-            assert_eq!(split.next(), Some(&"an arg".into()));
-            assert_eq!(split.next(), Some(&"a;b\nc\td\'e".into()));
-            assert_eq!(split.next(), Some(&"a;b\nc\td".into()));
-            assert_eq!(split.next(), Some(&"a\"b".into()));
-            assert_eq!(split.next(), None);
+                let mut output = Vec::new();
+                let res = unit.write_to(&mut output);
+                assert!(res.is_ok());
 
-            let mut command = PodmanCommand::new_command("test");
-            command.add_vec(&mut split_words);
+                assert_eq!(
+                    // NOTE: we trim here, because `write_to()` ends the file in \n
+                    std::str::from_utf8(&output).unwrap().trim_end(),
+                    input,
+                );
+            }
 
-            let new_exec_start = command.to_escaped_string();
-            assert_eq!(
-                new_exec_start,
-                "/usr/bin/podman test /some/path \"an arg\" \"a;b\nc\td\'e\" \"a;b\nc\td\" \"a\\\"b\""
-            );
+            #[test]
+            #[ignore = "SplitWord vs. rust-ini unescaping mismatch"]
+            fn with_word_splitting_and_setting_constructed_command() {
+                let input = "[Service]
+ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
 
-            unit.set_entry(SERVICE_SECTION, "ExecStart", new_exec_start.as_str());
+                let mut unit = SystemdUnit::load_from_str(input).unwrap();
 
-            let mut output = Vec::new();
-            let res = unit.write_to(&mut output);
-            assert!(res.is_ok());
+                let exec_start = unit.lookup_last(SERVICE_SECTION, "ExecStart");
+                assert_eq!(
+                    exec_start,
+                    Some("/some/path \"an arg\" \"a;b\nc\td\'e\" a;b\nc\td \'a\"b\'")
+                );
 
-            assert_eq!(
-                std::str::from_utf8(&output).unwrap(),
-                "[Service]
-ExecStart=/usr/bin/podman test /some/path \"an arg\" \"a;b\\nc\\td'e\" \"a;b\\nc\\td\" \"a\\\"b\"
-",
-            );
+                let mut split_words: Vec<String> = SplitWord::new(exec_start.unwrap()).collect();
+                let mut split = split_words.iter();
+                assert_eq!(split.next(), Some(&"/some/path".into()));
+                assert_eq!(split.next(), Some(&"an arg".into()));
+                assert_eq!(split.next(), Some(&"a;b\nc\td\'e".into()));
+                assert_eq!(split.next(), Some(&"a;b\nc\td".into()));
+                assert_eq!(split.next(), Some(&"a\"b".into()));
+                assert_eq!(split.next(), None);
+
+                let mut command = PodmanCommand::new_command("test");
+                command.add_vec(&mut split_words);
+
+                let new_exec_start = command.to_escaped_string();
+                assert_eq!(
+                    new_exec_start,
+                    "/usr/bin/podman test /some/path \"an arg\" \"a;b\nc\td\'e\" \"a;b\nc\td\" \"a\\\"b\""
+                );
+
+                unit.set_entry(SERVICE_SECTION, "ExecStart", new_exec_start.as_str());
+
+                let mut output = Vec::new();
+                let res = unit.write_to(&mut output);
+                assert!(res.is_ok());
+
+                assert_eq!(
+                    std::str::from_utf8(&output).unwrap(),
+                    "[Service]\nExecStart=/usr/bin/podman test /some/path \"an arg\" \"a;b\\nc\\td'e\" \"a;b\\nc\\td\" \"a\\\"b\"\n",
+                );
+            }
         }
     }
 }
