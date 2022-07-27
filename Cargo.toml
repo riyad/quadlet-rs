@@ -10,6 +10,7 @@ dirs = "4.0"
 log = "0.4.0"
 nix = { version = "0.24.1", default-features = false, features = ["user"] }
 once_cell = "1.12.0"
+ordered-multimap = "0.4"
 rangemap = "1.0.3"
 shlex = "1.1.0"
 simplelog = "0.12.0"

@@ -1,10 +1,13 @@
 mod constants;
+mod parser;
 mod split;
+mod value;
 
 use crate::quadlet::IdRanges;
 
 pub use self::constants::*;
 pub use self::split::*;
+pub use self::value::*;
 
 use ini::EscapePolicy;
 use ini::WriteOption;
@@ -13,6 +16,7 @@ use nix::unistd::{Gid, Uid, User, Group};
 use std::fmt;
 use std::io;
 use std::path::{PathBuf, Path};
+use ordered_multimap::list_ordered_multimap::ListOrderedMultimap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -106,7 +110,7 @@ pub(crate) fn parse_uid(s: &str) -> Result<Uid, ParseError> {
 
 pub(crate) struct SystemdUnit {
     path: Option<PathBuf>,
-    inner: Ini,
+    sections: ListOrderedMultimap<SectionKey, Entries>,
 }
 
 impl SystemdUnit {
