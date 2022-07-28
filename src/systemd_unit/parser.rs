@@ -81,14 +81,14 @@ impl<'a> Parser<'a> {
         let key = self.parse_key()?;
 
         // skip whitespace before '='
-        let _ = self.parse_until_none_of(&WHITESPACE);
+        let _ = self.parse_until_none_of(&[' ', '\t']);
         match self.cur {
             Some('=') => self.bump(),
             Some(c) => return Err(ParseError::General(format!("expected '=' after key, but found {c:?}"))),
             None => return Err(ParseError::General(format!("expected '=' after key, but found EOF"))),
         }
         // skip whitespace after '='
-        let _ = self.parse_until_none_of(&WHITESPACE);
+        let _ = self.parse_until_none_of(&[' ', '\t']);
 
         let value = self.parse_value()?;
 
