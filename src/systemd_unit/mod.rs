@@ -7,52 +7,61 @@ use crate::quadlet::IdRanges;
 
 pub use self::constants::*;
 pub use self::split::*;
-pub use self::value::*;
+use self::value::*;
 
-use ini::EscapePolicy;
-use ini::WriteOption;
-use ini::{Ini, ParseOption};
 use nix::unistd::{Gid, Uid, User, Group};
 use std::fmt;
 use std::io;
 use std::path::{PathBuf, Path};
 use ordered_multimap::list_ordered_multimap::ListOrderedMultimap;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+// TODO: mimic https://doc.rust-lang.org/std/num/enum.IntErrorKind.html
+// TODO: use thiserror?
+#[derive(Debug, PartialEq)]
 #[non_exhaustive]
-pub enum ParseError {
-    ParseBoolError,
+pub enum Error {
+    ParseBool,
+    Unit(parser::ParseError),
     Gid(nix::errno::Errno),
     Uid(nix::errno::Errno),
 }
 
-impl fmt::Display for ParseError {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ParseError::ParseBoolError => {
+            Error::ParseBool => {
                 write!(f, "value must be one of `1`, `yes`, `true`, `on`, `0`, `no`, `false`, `off`")
             },
-            ParseError::Gid(e) => {
+            Error::Unit(e) => {
+                write!(f, "failed to parse unit file: {e}")
+            },
+            Error::Gid(e) => {
                 write!(f, "failed to parse group name/id: {e}")
             },
-            ParseError::Uid(e) => {
+            Error::Uid(e) => {
                 write!(f, "failed to parse user name/id: {e}")
             },
         }
     }
 }
 
-pub(crate) fn parse_bool(s: &str) -> Result<bool, ParseError> {
+impl From<parser::ParseError> for Error {
+    fn from(e: parser::ParseError) -> Self {
+        Error::Unit(e)
+    }
+}
+
+pub(crate) fn parse_bool(s: &str) -> Result<bool, Error> {
     if ["1", "yes", "true", "on"].contains(&s) {
         return Ok(true);
     } else if ["0", "no", "false", "off"].contains(&s) {
         return Ok(false)
     }
 
-    Err(ParseError::ParseBoolError)
+    Err(Error::ParseBool)
 }
 
-pub(crate) fn parse_gid(s: &str) -> Result<Gid, ParseError> {
+pub(crate) fn parse_gid(s: &str) -> Result<Gid, Error> {
     match s.parse::<u32>() {
         Ok(uid) => return Ok(Gid::from_raw(uid)),
         Err(_) => (),
@@ -60,7 +69,7 @@ pub(crate) fn parse_gid(s: &str) -> Result<Gid, ParseError> {
 
     return match Group::from_name(s) {
         Ok(g) => return Ok(g.unwrap().gid),
-        Err(e) => Err(ParseError::Gid(e)),
+        Err(e) => Err(Error::Gid(e)),
     }
 }
 
@@ -96,7 +105,7 @@ pub(crate) fn parse_ranges<F>(s: &str, name_lookup: F) -> IdRanges
     IdRanges::parse(s)
 }
 
-pub(crate) fn parse_uid(s: &str) -> Result<Uid, ParseError> {
+pub(crate) fn parse_uid(s: &str) -> Result<Uid, Error> {
     match s.parse::<u32>() {
         Ok(uid) => return Ok(Uid::from_raw(uid)),
         Err(_) => (),
@@ -104,10 +113,11 @@ pub(crate) fn parse_uid(s: &str) -> Result<Uid, ParseError> {
 
     return match User::from_name(s) {
         Ok(u) => return Ok(u.unwrap().uid),
-        Err(e) => Err(ParseError::Uid(e)),
+        Err(e) => Err(Error::Uid(e)),
     }
 }
 
+#[derive(Debug, PartialEq)]
 pub(crate) struct SystemdUnit {
     path: Option<PathBuf>,
     sections: ListOrderedMultimap<SectionKey, Entries>,
@@ -115,28 +125,35 @@ pub(crate) struct SystemdUnit {
 
 impl SystemdUnit {
     /// Appends `key=value` to last instance of `section`
-    pub(crate) fn append_entry(&mut self, section: &str, key: &str, value: &str) {
-        self.inner
-            .with_section(Some(section))
-            .append(key, value);
+    pub(crate) fn append_entry<S, K, V>(&mut self, section: S, key: K, value: V)
+    where S: Into<String>,
+          K: Into<String>,
+          V: Into<String>,
+    {
+        self.sections
+            .entry(section.into())
+            .or_insert_entry(Entries::default())
+            .into_mut()
+            .data.append(key.into(), EntryValue::from_raw(value));
     }
 
-    pub(crate) fn has_key(&self, section: &str, key: &str) -> bool {
-        self.lookup_all(section, key).next().is_some()
+    pub(crate) fn has_key<S, K>(&self, section: S, key: K) -> bool
+    where S: Into<String>,
+          K: Into<String>,
+    {
+        self.sections
+            .get(&section.into())
+            .map_or(false, |e| e.data.contains_key(&key.into()))
     }
 
     /// Retrun `true` if there's an (non-empty) instance of section `name`
-    pub(crate) fn has_section(&self, name: &str) -> bool {
-        match self.inner.section(Some(name)) {
-            Some(_) => true,
-            None => false,
-        }
+    pub(crate) fn has_section<S: Into<String>>(&self, name: S) -> bool {
+        self.sections.contains_key(&name.into())
     }
 
-    /// Number of unique sections (i.e. with different name)
+    /// Number of unique sections (i.e. with different names)
     pub fn len(&self) -> usize {
-        // rust-ini always includes the default/empty section
-        self.inner.len() - 1
+        self.sections.keys_len()
     }
 
     /// Load from a file
@@ -169,15 +186,30 @@ impl SystemdUnit {
         })
     }
 
-    // Get an interator of values for all `key`s in all instances of `section`
-    pub(crate) fn lookup_all<'a>(&'a self, section: &'a str, key: &'a str) -> impl DoubleEndedIterator<Item = &str> {
-        self.inner.get_all_from(Some(section), key)
+    /// Get an interator of values for all `key`s in all instances of `section`
+    pub(crate) fn lookup_all<'a, S, K>(&'a self, section: S, key: K) -> impl DoubleEndedIterator<Item = &'a str>
+    where S: Into<String>,
+          K: Into<String>,
+    {
+        self.sections
+            .get(&section.into())
+            .unwrap_or_default()
+            .data
+            .get_all(&key.into())
+            .map(|v| v.unquoted().as_str())
     }
 
     /// Get a Vec of values for all `key`s in all instances of `section`
     /// This mimics quadlet's behavior in that empty values reset the list.
-    pub(crate) fn lookup_all_with_reset<'a>(&'a self, section: &'a str, key: &'a str) -> Vec<&str> {
-        let values = self.inner.get_all_from(Some(section), key);
+    pub(crate) fn lookup_all_with_reset<'a, S, K>(&'a self, section: S, key: K) -> Vec<&'a str>
+    where S: Into<String>,
+          K: Into<String>,
+    {
+        let values = self.sections
+            .get(&section.into())
+            .unwrap_or_default()
+            .data.get_all(&key.into())
+            .map(|v| v.unquoted().as_str());
 
         // size_hint.0 is not optimal, but may prevent forseeable growing
         let est_cap = values.size_hint().0;
@@ -192,14 +224,24 @@ impl SystemdUnit {
     }
 
     // Get the last value for `key` in all instances of `section`
-    pub(crate) fn lookup_last<'a>(&'a self, section: &'a str, key: &'a str) -> Option<&'a str> {
-        self.inner.get_last_from(Some(section), key)
+    pub(crate) fn lookup_last<'a, S, K>(&'a self, section: S, key: K) -> Option<&'a str>
+    where S: Into<String>,
+          K: Into<String>,
+    {
+        self.sections
+            .get(&section.into())
+            .unwrap_or_default()
+            .data
+            .get_all(&key.into())
+            .last()
+            .map(|v| v.unquoted().as_str())
+
     }
 
     pub(crate) fn new() -> Self {
         SystemdUnit {
             path: None,
-            inner: Default::default(),
+            sections: Default::default(),
         }
     }
 
@@ -216,18 +258,60 @@ impl SystemdUnit {
         &self.path
     }
 
-    pub(crate) fn rename_section(&mut self, from: &str, to: &str) {
-        self.inner.rename_section_all(Some(from), Some(to));
+    pub(crate) fn rename_section<S: Into<String>>(&mut self, from: S, to: S) {
+        let from_key = from.into();
+
+        if !self.sections.contains_key(&from_key) {
+            return
+        }
+
+        let from_values: Vec<Entries> = self.sections.remove_all(&from_key).collect();
+
+        if from_values.is_empty() {
+            return
+        }
+
+        let to_key = to.into();
+        for entries in from_values {
+            for (ek, ev) in entries.data {
+                self.append_entry(to_key.clone(), ek, ev.raw());
+            }
+        }
     }
 
-    pub(crate) fn section_entries<'a>(&'a self, name: &'a str) -> impl DoubleEndedIterator<Item=(&'a str, &'a str)> {
-        self.inner
-            .section_all(Some(name))
-            .flat_map(|props| props.iter())
+    pub(crate) fn section_entries<'a, S: Into<String>>(&'a self, name: S) -> impl DoubleEndedIterator<Item=(&'a str, &'a str)> {
+        self.sections
+            .get(&name.into())
+            .unwrap_or_default()
+            .data
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.unquoted().as_str()))
     }
 
-    pub(crate) fn set_entry(&mut self, section: &str, key: &str, value: &str) {
-        self.inner.set_last_to(Some(section), key.into(), value.into())
+    pub(crate) fn set_entry<S, K, V>(&mut self, section: S, key: K, value: V)
+    where S: Into<String>,
+          K: Into<String>,
+          V: Into<String>,
+    {
+        let entries = self.sections
+            .entry(section.into())
+            .or_insert(Entries::default());
+
+        let key = key.into();
+
+        // we can't replace the last value directly, so we have to get "creative" O.o
+        // we do a stupid form of read-modify-write called remove-modify-append m(
+        // the good thing is: both remove() and append preserve the order of values (with this key)
+        let mut values: Vec<_> = entries.data.remove_all(&key).collect();
+        values.pop();  // remove the "old" last value ...
+        // ... reinsert all the values again ...
+        for v in values {
+            entries.data.append(key.clone(), v);
+
+        }
+        // ... and append a "new" last value
+        entries.data.append(key.into(), EntryValue::from_raw(value));
+
     }
 
     /// Write to a writer
@@ -251,7 +335,7 @@ mod tests {
 
         #[test]
         fn fails_with_empty_input() {
-            assert_eq!(parse_bool("").err(), Some(ParseError::ParseBoolError));
+            assert_eq!(parse_bool("").err(), Some(Error::ParseBool));
         }
 
         #[test]
@@ -272,7 +356,7 @@ mod tests {
 
         #[test]
         fn fails_with_non_boolean_input() {
-            assert_eq!(parse_bool("foo").err(), Some(ParseError::ParseBoolError));
+            assert_eq!(parse_bool("foo").err(), Some(Error::ParseBool));
         }
     }
 
@@ -286,7 +370,7 @@ mod tests {
             let input = "";
 
             let res = parse_gid(input);
-            assert_eq!(res.err(), Some(ParseError::Gid(Errno::ENOENT)));
+            assert_eq!(res.err(), Some(Error::Gid(Errno::ENOENT)));
         }
 
         #[test]
@@ -302,7 +386,7 @@ mod tests {
             let input = "12345%";
 
             let res = parse_gid(input);
-            assert_eq!(res.err(), Some(ParseError::Gid(Errno::ENOENT)));
+            assert_eq!(res.err(), Some(Error::Gid(Errno::ENOENT)));
         }
 
         #[test]
@@ -435,7 +519,7 @@ mod tests {
             let input = "";
 
             let res = parse_uid(input);
-            assert_eq!(res.err(), Some(ParseError::Uid(Errno::ENOENT)));
+            assert_eq!(res.err(), Some(Error::Uid(Errno::ENOENT)));
         }
 
         #[test]
@@ -451,7 +535,7 @@ mod tests {
             let input = "12345%";
 
             let res = parse_uid(input);
-            assert_eq!(res.err(), Some(ParseError::Uid(Errno::ENOENT)));
+            assert_eq!(res.err(), Some(Error::Uid(Errno::ENOENT)));
         }
 
         #[test]
@@ -727,13 +811,16 @@ KeyOne=valueA3";
 
             // NOTE: the syntax specification doesn't explicitly say this, but all sections should be named
             #[test]
-            #[ignore = "rust-ini (used internally) keeps an default/empty section"]
             fn test_key_without_section_should_fail() {
                 let input = "KeyOne=value 1";
 
                 let result = SystemdUnit::load_from_str(input);
 
                 assert!(result.is_err());
+                assert_eq!(
+                    result,
+                    Err(Error::Unit(parser::ParseError::General("Expected comment or section".into()))),
+                )
             }
 
             #[test]
@@ -946,19 +1033,19 @@ KeyThree=value 3\\
                 assert_eq!(unit.len(), 3);
 
                 let mut iter = unit.section_entries("Section A");
-                assert_eq!(iter.next().unwrap(), ("KeyOne", "value 1"));
-                assert_eq!(iter.next().unwrap(), ("KeyTwo", "value 2"));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
                 assert_eq!(iter.next(), None);
 
                 let mut iter = unit.section_entries("Section B");
                 // TODO: may not be accurate according to Systemd quoting rules
-                //assert_eq!(iter.next().unwrap(), ("Setting", "something some thing …"));
-                assert_eq!(iter.next().unwrap(), ("Setting", "\"something\" \"some thing\" \"…\""));
-                assert_eq!(iter.next().unwrap(), ("KeyTwo", "value 2        value 2 continued"));
+                //assert_eq!(iter.next(), Some(("Setting", "something some thing …")));
+                assert_eq!(iter.next(), Some(("Setting", "\"something\" \"some thing\" \"…\"")));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2        value 2 continued")));
                 assert_eq!(iter.next(), None);
 
                 let mut iter = unit.section_entries("Section C");
-                assert_eq!(iter.next().unwrap(), ("KeyThree", "value 3       value 3 continued"));
+                assert_eq!(iter.next(), Some(("KeyThree", "value 3       value 3 continued")));
                 assert_eq!(iter.next(), None);
             }
 
@@ -976,10 +1063,10 @@ Exec=/some/path \"an arg\" \"a;b\\nc\\td'e\" a;b\\nc\\td 'a\"b'";
                 assert_eq!(unit.len(), 1);
 
                 let mut iter = unit.section_entries("Container");
-                assert_eq!(iter.next().unwrap(), ("Image", "imagename"));
-                assert_eq!(iter.next().unwrap(), ("PodmanArgs", "--foo    --bar"));
-                assert_eq!(iter.next().unwrap(), ("PodmanArgs", "--also"));
-                assert_eq!(iter.next().unwrap(), ("Exec", "/some/path an arg a;b\nc\td'e a;b\nc\td a\"b"));
+                assert_eq!(iter.next(), Some(("Image", "imagename")));
+                assert_eq!(iter.next(), Some(("PodmanArgs", "--foo    --bar")));
+                assert_eq!(iter.next(), Some(("PodmanArgs", "--also")));
+                assert_eq!(iter.next(), Some(("Exec", "/some/path an arg a;b\nc\td'e a;b\nc\td a\"b")));
                 assert_eq!(iter.next(), None);
             }
         }
@@ -1266,7 +1353,6 @@ KeyOne=value 1";
                 assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
                 assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
                 assert_eq!(iter.next(), None);
-
             }
 
             #[test]

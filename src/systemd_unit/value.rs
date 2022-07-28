@@ -7,6 +7,7 @@ pub(crate) struct Entries {
     pub(crate) data: ListOrderedMultimap<EntryKey, EntryValue>,
 }
 
+
 pub(crate) type EntryKey = String;
 
 pub(crate) type EntryRawValue = String;
@@ -25,8 +26,9 @@ impl EntryValue {
         &self.raw
     }
 
-    pub fn unquoted(&self) -> String {
-        unimplemented!()
+    pub fn unquoted(&self) -> &String {
+        // TODO: implement
+        self.raw()
     }
 
     pub fn to_bool(&self) -> Result<bool, super::Error> {
