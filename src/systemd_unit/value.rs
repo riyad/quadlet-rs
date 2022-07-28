@@ -1,3 +1,4 @@
+use once_cell::sync::Lazy;
 use ordered_multimap::ListOrderedMultimap;
 
 use super::parse_bool;
@@ -7,6 +8,12 @@ pub(crate) struct Entries {
     pub(crate) data: ListOrderedMultimap<EntryKey, EntryValue>,
 }
 
+impl Default for &Entries {
+    fn default() -> Self {
+        static EMPTY: Lazy<Entries> = Lazy::new(|| Entries::default());
+        &EMPTY
+    }
+}
 
 pub(crate) type EntryKey = String;
 
