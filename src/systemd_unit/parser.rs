@@ -164,6 +164,8 @@ impl<'a> Parser<'a> {
                 },
                 '[' => {
                     let (section, entries) = self.parse_section()?;
+                    // make sure there's a section entry (even if `entries` is empty)
+                    unit.sections.entry(section.clone()).or_insert(Entries::default());
                     for (key, value) in entries {
                         unit.append_entry(section.as_str(), key, value)
                     }
@@ -527,9 +529,9 @@ mod tests {
             let mut parser = Parser::new(tokens);
 
             let unit = parser.parse_unit().unwrap();
-            assert_eq!(unit.len(), 0);
+            assert_eq!(unit.len(), 1);
 
-            let mut iter = unit.sections.iter();
+            let mut iter = unit.section_entries("Section A");
             assert_eq!(iter.next(), None);
         }
 
