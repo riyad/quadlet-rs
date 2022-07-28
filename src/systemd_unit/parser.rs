@@ -99,7 +99,7 @@ impl<'a> Parser<'a> {
     fn parse_key(&mut self) -> ParseResult<EntryKey> {
         let key: String = self.parse_until_any_of(&['=', /*+ WHITESAPCE*/' ', '\t', '\n', '\r'] );
 
-        if !key.chars().all(|c| c.is_ascii_alphabetic() || c == '-') {
+        if !key.chars().all(|c| c.is_alphanumeric() || c == '-') {
             return Err(ParseError::InvalidKey(key.into()))
         }
 
