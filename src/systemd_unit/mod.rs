@@ -819,7 +819,7 @@ KeyOne=valueA3";
                 assert!(result.is_err());
                 assert_eq!(
                     result,
-                    Err(Error::Unit(parser::ParseError::General("Expected comment or section".into()))),
+                    Err(Error::Unit(parser::ParseError{ line: 0, col: 1, msg: "Expected comment or section".into() })),
                 )
             }
 

@@ -8,19 +8,15 @@ const WHITESPACE: [char; 4] = [' ', '\t', '\n', '\r'];
 
 type ParseResult<T> = Result<T, ParseError>;
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) enum ParseError {
-    General(String),
-    InvalidKey(String),
+pub struct ParseError {
+    pub(crate) line: usize,
+    pub(crate) col: usize,
+    pub(crate) msg: String,
 }
 
 impl Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::General(msg) =>
-                write!(f, "{msg:?}"),
-            Self::InvalidKey(key) =>
-                write!(f, "Invalid key {key:?}. Allowed characters are A-Za-z0-9-"),
-        }
+        write!(f, "{}:{} {}", self.line, self.col, self.msg)
     }
 }
 
@@ -58,6 +54,14 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn error(&self, msg: String) -> ParseError {
+        ParseError {
+            line: self.line,
+            col: self.column,
+            msg: msg,
+         }
+    }
+
     pub(crate) fn parse(&mut self) -> ParseResult<SystemdUnit> {
         self.parse_unit()
     }
@@ -66,8 +70,8 @@ impl<'a> Parser<'a> {
     fn parse_comment(&mut self) -> ParseResult<String> {
         match self.cur {
             Some('#' | ';') => (),
-            Some(c) => return Err(ParseError::General(format!("expected comment, but found {c:?}"))),
-            None => return Err(ParseError::General(format!("expected comment, but found EOF"))),
+            Some(c) => return Err(self.error(format!("expected comment, but found {c:?}"))),
+            None => return Err(self.error(format!("expected comment, but found EOF"))),
         }
 
         let comment = self.parse_until_any_of(&['\n']);
@@ -84,8 +88,8 @@ impl<'a> Parser<'a> {
         let _ = self.parse_until_none_of(&[' ', '\t']);
         match self.cur {
             Some('=') => self.bump(),
-            Some(c) => return Err(ParseError::General(format!("expected '=' after key, but found {c:?}"))),
-            None => return Err(ParseError::General(format!("expected '=' after key, but found EOF"))),
+            Some(c) => return Err(self.error(format!("expected '=' after key, but found {c:?}"))),
+            None => return Err(self.error(format!("expected '=' after key, but found EOF"))),
         }
         // skip whitespace after '='
         let _ = self.parse_until_none_of(&[' ', '\t']);
@@ -100,7 +104,7 @@ impl<'a> Parser<'a> {
         let key: String = self.parse_until_any_of(&['=', /*+ WHITESAPCE*/' ', '\t', '\n', '\r'] );
 
         if !key.chars().all(|c| c.is_alphanumeric() || c == '-') {
-            return Err(ParseError::InvalidKey(key.into()))
+            return Err(self.error(format!("Invalid key {:?}. Allowed characters are A-Za-z0-9-", key)))
         }
 
         Ok(key)
@@ -133,20 +137,20 @@ impl<'a> Parser<'a> {
     fn parse_section_header(&mut self) -> ParseResult<String> {
         match self.cur {
             Some('[') => self.bump(),
-            Some(c) => return Err(ParseError::General(format!("expected '[' as start of section header, but found {c:?}"))),
-            None => return Err(ParseError::General(format!("expected '[' as start of section header, but found EOF"))),
+            Some(c) => return Err(self.error(format!("expected '[' as start of section header, but found {c:?}"))),
+            None => return Err(self.error(format!("expected '[' as start of section header, but found EOF"))),
         }
 
         let section_name = self.parse_until_any_of(&[']', '\n']);
 
         match self.cur {
             Some(']') => self.bump(),
-            Some(c) => return Err(ParseError::General(format!("expected ']' as end of section header, but found {c:?}"))),
-            None => return Err(ParseError::General(format!("expected ']' as end of section header, but found EOF"))),
+            Some(c) => return Err(self.error(format!("expected ']' as end of section header, but found {c:?}"))),
+            None => return Err(self.error(format!("expected ']' as end of section header, but found EOF"))),
         }
 
         if section_name.is_empty() {
-            return Err(ParseError::General("section header cannot be empty".into()));
+            return Err(self.error("section header cannot be empty".into()));
         }
 
         Ok(section_name)
@@ -171,7 +175,7 @@ impl<'a> Parser<'a> {
                     }
                 },
                 _ if c.is_ascii_whitespace() => self.bump(),
-                _ => return Err(ParseError::General("Expected comment or section".into())),
+                _ => return Err(self.error("Expected comment or section".into())),
             };
         }
 
@@ -273,11 +277,11 @@ mod tests {
         }
 
         #[test]
-        fn test_error_does_not_consume_token() {
+        fn fails_with_unexpected_character() {
             let input = "[\n; bar";
             let mut parser = Parser::new(input);
             let old_pos = parser.column;
-            assert_eq!(parser.parse_comment(), Err(parser::ParseError::General("expected comment, but found '['".into())));
+            assert_eq!(parser.parse_comment(), Err(ParseError{ line: 0, col: 1, msg: "expected comment, but found '['".into() }));
             assert_eq!(parser.column, old_pos);
         }
     }
@@ -331,7 +335,7 @@ mod tests {
             let old_pos = parser.column;
             assert_eq!(
                 parser.parse_key(),
-                Err(ParseError::InvalidKey("Key_One".into()))
+                Err(ParseError{ line: 0, col: 7, msg: "Invalid key \"Key_One\". Allowed characters are A-Za-z0-9-".into() })
             );
             assert_eq!(parser.column, old_pos+6);
             assert_eq!(parser.cur, None);
@@ -410,7 +414,7 @@ mod tests {
                     "Section A".into(),
                     vec![
                         ("KeyOne".into(), "value 1".into()),
-                        ("KeyOne".into(), "value 2 value 2 continued".into()),
+                        ("KeyOne".into(), "value 2\\\nvalue 2 continued".into()),
                     ],
                 ))
             );
@@ -426,7 +430,7 @@ mod tests {
             let old_col = parser.column;
             assert_eq!(
                 parser.parse_section(),
-                Err(ParseError::General("expected '=' after key, but found 't'".into()))
+                Err(ParseError{ line: 2, col: 6, msg: "expected '=' after key, but found 't'".into() })
             );
             assert_eq!(parser.line, old_line+2);
             assert_eq!(parser.column, old_col+5);
@@ -440,7 +444,7 @@ mod tests {
             let old_col = parser.column;
             assert_eq!(
                 parser.parse_section(),
-                Err(ParseError::General("expected '=' after key, but found EOF".into()))
+                Err(ParseError{ line: 1, col: 13, msg: "expected '=' after key, but found EOF".into() })
             );
             assert_eq!(parser.line, old_line+1);
             assert_eq!(parser.column, old_col+12);
@@ -465,7 +469,7 @@ mod tests {
             let mut parser = Parser::new(input);
             assert_eq!(
                 parser.parse_section_header(),
-                Err(ParseError::General("expected '[' as start of section header, but found 'S'".into())),
+                Err(ParseError{ line: 0, col: 1, msg: "expected '[' as start of section header, but found 'S'".into() }),
             );
         }
 
@@ -475,7 +479,7 @@ mod tests {
             let mut parser = Parser::new(input);
             assert_eq!(
                 parser.parse_section_header(),
-                Err(ParseError::General("section header cannot be empty".into())),
+                Err(ParseError{ line: 0, col: 2, msg: "section header cannot be empty".into() }),
             );
         }
 
@@ -485,7 +489,7 @@ mod tests {
             let mut parser = Parser::new(input);
             assert_eq!(
                 parser.parse_section_header(),
-                Err(ParseError::General("expected ']' as end of section header, but found EOF".into())),
+                Err(ParseError{ line: 0, col: 11, msg: "expected ']' as end of section header, but found EOF".into() }),
             );
         }
 
@@ -495,7 +499,7 @@ mod tests {
             let mut parser = Parser::new(input);
             assert_eq!(
                 parser.parse_section_header(),
-                Err(ParseError::General("expected ']' as end of section header, but found EOF".into())),
+                Err(ParseError{ line: 0, col: 1, msg: "expected ']' as end of section header, but found EOF".into() }),
             );
         }
 
@@ -505,7 +509,7 @@ mod tests {
             let mut parser = Parser::new(input);
             assert_eq!(
                 parser.parse_section_header(),
-                Err(ParseError::General("expected ']' as end of section header, but found EOF".into())),
+                Err(ParseError{ line: 0, col: 10, msg: "expected ']' as end of section header, but found EOF".into() }),
             );
         }
     }
