@@ -12,7 +12,7 @@ use self::value::*;
 use nix::unistd::{Gid, Uid, User, Group};
 use std::fmt;
 use std::io;
-use std::path::{PathBuf, Path};
+use std::path::PathBuf;
 use ordered_multimap::list_ordered_multimap::ListOrderedMultimap;
 
 // TODO: mimic https://doc.rust-lang.org/std/num/enum.IntErrorKind.html
@@ -119,7 +119,7 @@ pub(crate) fn parse_uid(s: &str) -> Result<Uid, Error> {
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct SystemdUnit {
-    path: Option<PathBuf>,
+    pub(crate) path: Option<PathBuf>,
     sections: ListOrderedMultimap<SectionKey, Entries>,
 }
 
@@ -156,34 +156,12 @@ impl SystemdUnit {
         self.sections.keys_len()
     }
 
-    /// Load from a file
-    pub fn load_from_file<P: AsRef<Path>>(filename: P) -> Result<Self, ini::Error> {
-        Ok(SystemdUnit {
-            path: Some(filename.as_ref().into()),
-            inner: Ini::load_from_file_opt(
-                filename,
-                ParseOption {
-                    enabled_quote: false,
-                    enabled_escape: true,
-                    ..ParseOption::default()
-                },
-            )?,
-        })
-    }
-
     /// Load from a string
-    pub fn load_from_str(buf: &str) -> Result<Self, ini::ParseError> {
-        Ok(SystemdUnit {
-            path: None,
-            inner: Ini::load_from_str_opt(
-                buf,
-                ParseOption {
-                    enabled_quote: false,
-                    enabled_escape: true,
-                    ..ParseOption::default()
-                },
-            )?,
-        })
+    pub fn load_from_str(data: &str) -> Result<Self, Error> {
+        let mut parser = parser::Parser::new(data);
+        let unit = parser.parse()?;
+
+        Ok(unit)
     }
 
     /// Get an interator of values for all `key`s in all instances of `section`

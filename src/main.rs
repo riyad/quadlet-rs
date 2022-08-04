@@ -52,11 +52,11 @@ struct Config {
     version: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 #[non_exhaustive]
 enum ConversionError<'a> {
     ImageMissing(&'a str),
-    Parsing(ParseError),
+    Parsing(Error),
 }
 
 impl<'a> Display for ConversionError<'a> {
@@ -127,8 +127,19 @@ fn load_units_from_dir(source_path: &PathBuf, units: &mut HashMap<String, System
 
         debug!("Loading source unit file {path:?}");
 
-        let unit = match SystemdUnit::load_from_file(&path) {
-            Ok(unit) => unit,
+        let buf = match fs::read_to_string(&path) {
+            Ok(buf) => buf,
+            Err(e) => {
+                warn!("Error loading {path:?}, ignoring: {e}");
+                continue;
+           },
+        };
+
+        let unit = match SystemdUnit::load_from_str(buf.as_str()) {
+            Ok(mut unit) => {
+                unit.path = Some(path);
+                unit
+            },
             Err(e) => {
                 warn!("Error loading {path:?}, ignoring: {e}");
                 continue;
