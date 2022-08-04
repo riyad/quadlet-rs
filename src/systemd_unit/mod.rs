@@ -961,7 +961,7 @@ unescape=\\x00";
 
                     assert_eq!(
                         SystemdUnit::load_from_str(input).err(),
-                        Some(ini::ParseError{ line: 1, col: 13, msg: "\\0 character not allowd in escape sequence".into()})
+                        Some(Error::Unit(parser::ParseError{ line: 1, col: 13, msg: "\\0 character not allowd in escape sequence".into()}))
                     );
                 }
 
@@ -972,7 +972,7 @@ unescape=\\u123x";
 
                     assert_eq!(
                         SystemdUnit::load_from_str(input).err(),
-                        Some(ini::ParseError{ line: 1, col: 15, msg: "Expected 4 hex values after \"\\x\", but got \"\\x123x\"".into()})
+                        Some(Error::Unit(parser::ParseError{ line: 1, col: 15, msg: "Expected 4 hex values after \"\\x\", but got \"\\x123x\"".into()}))
                     );
                 }
 
@@ -983,7 +983,7 @@ unescape=\\678";
 
                     assert_eq!(
                         SystemdUnit::load_from_str(input).err(),
-                        Some(ini::ParseError{ line: 1, col: 13, msg: "Expected 3 octal values after \"\\\", but got \"\\678\"".into()})
+                        Some(Error::Unit(parser::ParseError{ line: 1, col: 13, msg: "Expected 3 octal values after \"\\\", but got \"\\678\"".into()}))
                     );
                 }
 
@@ -994,7 +994,7 @@ unescape=\\";
 
                     assert_eq!(
                         SystemdUnit::load_from_str(input).err(),
-                        Some(ini::ParseError{line: 1, col: 10, msg: "expecting escape sequence or '\\n' but found EOF.".into()})
+                        Some(Error::Unit(parser::ParseError{line: 1, col: 10, msg: "expecting escape sequence or '\\n' but found EOF.".into()}))
                     );
                 }
 
@@ -1005,7 +1005,7 @@ unescape=\\u12";
 
                     assert_eq!(
                         SystemdUnit::load_from_str(input).err(),
-                        Some(ini::ParseError{ line: 1, col: 13, msg: "expecting unicode escape sequence but found EOF.".into()})
+                        Some(Error::Unit(parser::ParseError{ line: 1, col: 13, msg: "expecting unicode escape sequence but found EOF.".into()}))
                     );
                 }
             }
