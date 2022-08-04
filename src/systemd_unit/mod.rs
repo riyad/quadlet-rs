@@ -130,11 +130,27 @@ impl SystemdUnit {
           K: Into<String>,
           V: Into<String>,
     {
+        let value = value.into();
+
+        self.append_entry_value(
+            section,
+            key,
+            EntryValue {
+                raw: Quote::quote(value.as_str()),
+                unquoted: value,
+            }
+        );
+    }
+    /// Appends `key=value` to last instance of `section`
+    pub(crate) fn append_entry_value<S, K>(&mut self, section: S, key: K, value: EntryValue)
+    where S: Into<String>,
+          K: Into<String>,
+    {
         self.sections
             .entry(section.into())
             .or_insert_entry(Entries::default())
             .into_mut()
-            .data.append(key.into(), EntryValue::from_raw(value));
+            .data.append(key.into(), value);
     }
 
     pub(crate) fn has_key<S, K>(&self, section: S, key: K) -> bool
@@ -169,12 +185,21 @@ impl SystemdUnit {
     where S: Into<String>,
           K: Into<String>,
     {
+        self.lookup_all_values(section, key)
+            .map(|v| v.unquoted().as_str())
+    }
+
+    /// Get an interator of values for all `key`s in all instances of `section`
+    pub(crate) fn lookup_all_values<'a, S, K>(&'a self, section: S, key: K) -> impl DoubleEndedIterator<Item = &EntryValue>
+    where S: Into<String>,
+          K: Into<String>,
+    {
         self.sections
             .get(&section.into())
             .unwrap_or_default()
             .data
             .get_all(&key.into())
-            .map(|v| v.unquoted().as_str())
+            .map(|v| v)
     }
 
     /// Get a Vec of values for all `key`s in all instances of `section`
@@ -206,14 +231,21 @@ impl SystemdUnit {
     where S: Into<String>,
           K: Into<String>,
     {
+        self.lookup_last_value(section, key)
+            .map(|v| v.unquoted().as_str())
+    }
+
+    // Get the last value for `key` in all instances of `section`
+    pub(crate) fn lookup_last_value<'a, S, K>(&'a self, section: S, key: K) -> Option<&EntryValue>
+    where S: Into<String>,
+          K: Into<String>,
+    {
         self.sections
             .get(&section.into())
             .unwrap_or_default()
             .data
             .get_all(&key.into())
             .last()
-            .map(|v| v.unquoted().as_str())
-
     }
 
     pub(crate) fn new() -> Self {
@@ -252,24 +284,45 @@ impl SystemdUnit {
         let to_key = to.into();
         for entries in from_values {
             for (ek, ev) in entries.data {
-                self.append_entry(to_key.clone(), ek, ev.raw());
+                self.append_entry_value(to_key.clone(), ek, ev);
             }
         }
     }
 
     pub(crate) fn section_entries<'a, S: Into<String>>(&'a self, name: S) -> impl DoubleEndedIterator<Item=(&'a str, &'a str)> {
+        self.section_entry_values(name)
+            .map(|(k, v)| (k, v.unquoted().as_str()))
+    }
+
+    pub(crate) fn section_entry_values<'a, S: Into<String>>(&'a self, name: S) -> impl DoubleEndedIterator<Item=(&'a str, &EntryValue)> {
         self.sections
             .get(&name.into())
             .unwrap_or_default()
             .data
             .iter()
-            .map(|(k, v)| (k.as_str(), v.unquoted().as_str()))
+            .map(|(k, v)| (k.as_str(), v))
     }
 
     pub(crate) fn set_entry<S, K, V>(&mut self, section: S, key: K, value: V)
     where S: Into<String>,
           K: Into<String>,
           V: Into<String>,
+    {
+        let value = value.into();
+
+        self.set_entry_value(
+            section,
+            key,
+            EntryValue {
+                raw: Quote::quote(value.as_str()),
+                unquoted: value,
+            }
+        );
+    }
+
+    pub(crate) fn set_entry_value<S, K>(&mut self, section: S, key: K, value: EntryValue)
+    where S: Into<String>,
+          K: Into<String>,
     {
         let entries = self.sections
             .entry(section.into())
@@ -288,7 +341,7 @@ impl SystemdUnit {
 
         }
         // ... and append a "new" last value
-        entries.data.append(key.into(), EntryValue::from_raw(value));
+        entries.data.append(key.into(), value);
 
     }
 
