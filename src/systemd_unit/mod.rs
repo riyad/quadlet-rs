@@ -1,11 +1,13 @@
 mod constants;
 mod parser;
+mod quote;
 mod split;
 mod value;
 
 use crate::quadlet::IdRanges;
 
 pub use self::constants::*;
+use self::quote::Quote;
 pub use self::split::*;
 use self::value::*;
 

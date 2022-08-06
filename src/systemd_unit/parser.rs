@@ -3,9 +3,6 @@ use super::*;
 use std::fmt::Display;
 use std::str::Chars;
 
-const LINE_CONTINUATION_REPLACEMENT: &str = " ";
-const WHITESPACE: [char; 4] = [' ', '\t', '\n', '\r'];
-
 type ParseResult<T> = Result<T, ParseError>;
 #[derive(Debug, PartialEq, Eq)]
 pub struct ParseError {
@@ -75,8 +72,6 @@ impl<'a> Parser<'a> {
         }
 
         let comment = self.parse_until_any_of(&['\n']);
-
-        self.bump();
         Ok(comment)
     }
 
@@ -151,7 +146,11 @@ impl<'a> Parser<'a> {
 
         if section_name.is_empty() {
             return Err(self.error("section header cannot be empty".into()));
+        } else {
+            // TODO: validate section name
         }
+
+        // TODO: silently accept whitespace until EOL
 
         Ok(section_name)
     }
@@ -171,7 +170,18 @@ impl<'a> Parser<'a> {
                     // make sure there's a section entry (even if `entries` is empty)
                     unit.sections.entry(section.clone()).or_insert(Entries::default());
                     for (key, value) in entries {
-                        unit.append_entry(section.as_str(), key, value)
+                        unit.append_entry_value(
+                            section.as_str(),
+                            key,
+                            EntryValue {
+                                unquoted: match Quote::unquote(value.as_str()) {
+                                    Ok(s) => s,
+                                    Err(msg) => return Err(self.error(msg)),
+                                },
+                                raw: value,
+                            }
+                            ,
+                        );
                     }
                 },
                 _ if c.is_ascii_whitespace() => self.bump(),
@@ -212,46 +222,58 @@ impl<'a> Parser<'a> {
 
     // VALUE          = ANY* CONTINUE_NL [COMMENT]* VALUE
     fn parse_value(&mut self) -> ParseResult<EntryRawValue> {
-        let mut value: String = self.parse_until_any_of(&['\\', '\n']);
+        let mut value: String = String::new();
+        let mut backslash = false;
+        let mut line_continuation = false;
 
         while let Some(c) = self.cur {
-            match c {
-                '\\' => {
-                    self.bump();
-
-                    while let Some(c) = self.cur {
-                        match c {
-                            // line continuation
-                            '\n' => {
-                                self.bump();
-
-                                while let Some(c) = self.cur {
-                                    match c {
-                                        '#' | ';' => {
-                                            // ignore comment
-                                            let _ = self.parse_comment();
-                                        },
-                                        // make parser more lenient to accidental continuations
-                                        '[' => return Ok(value),
-                                        _ => {
-                                            value += LINE_CONTINUATION_REPLACEMENT;
-                                            value += self.parse_value()?.as_str();
-                                            break;
-                                        },
-                                    }
-                                }
-                            },
-                            // no line continuation after backslash, continue parsing value
-                            _ => {
-                                value.push('\\');
-                                value += self.parse_value()?.as_str();
-                                break;
-                            },
+            if backslash {
+                backslash = false;
+                match c {
+                    // line continuation, hold off on adding it to value
+                    '\n' => line_continuation = true,
+                    // just an escape sequence -> add to value and continue normally
+                    _ => {
+                        value.push('\\');
+                        value.push(c);
+                    },
+                }
+            } else if line_continuation {
+                line_continuation = false;
+                match c {
+                    '#' | ';' => {
+                        // ignore interspersed comments
+                        let _ = self.parse_comment();
+                        line_continuation = true;
+                    },
+                    // end of value
+                    '\n' => break,
+                    // start of section header (although an unexpected one), i.e. end of value
+                    // NOTE: we try to be clever here and assume the line continuation was a mistake
+                    '[' => break,
+                    // value continues after line continuation, add the actual line
+                    // continuation characters back to value and continue normally
+                    _ => {
+                        value.push('\\');
+                        value.push('\n');
+                        if c == '\\' {
+                            // we may have a line continuation following another line continuation
+                            backslash = true;
+                        } else {
+                            value.push(c);
                         }
-                    }
-                },
-                _ => break,
+                    },
+                }
+            } else {
+                match c {
+                    // may be start of a line continuation
+                    '\\' => backslash = true,
+                    // end of value
+                    '\n' => break,
+                    _ => value.push(c),
+                }
             }
+            self.bump();
         }
 
         Ok(value)
@@ -273,7 +295,7 @@ mod tests {
             let old_col = parser.column;
             assert_eq!(parser.parse_comment(), Ok("# foo".into()));
             assert_eq!(parser.line, old_line+1);
-            assert_eq!(parser.column, old_col);
+            assert_eq!(parser.column, 0);
         }
 
         #[test]
@@ -607,7 +629,7 @@ mod tests {
             let old_pos = parser.column;
             assert_eq!(
                 parser.parse_value(),
-                Ok("".into()),
+                Ok(input.into()),
             );
             assert_eq!(parser.column, old_pos+0);
         }
@@ -619,7 +641,7 @@ mod tests {
             let old_pos = parser.column;
             assert_eq!(
                 parser.parse_value(),
-                Ok("this is some text".into()),
+                Ok(input.into()),
             );
             assert_eq!(parser.column, old_pos+16);
         }
@@ -632,7 +654,7 @@ mod tests {
             let old_col = parser.column;
             assert_eq!(
                 parser.parse_value(),
-                Ok("this is some text more text".into()),
+                Ok(input.into()),
             );
             assert_eq!(parser.line, old_line+1);
             assert_eq!(parser.column, old_col+8);
@@ -646,7 +668,7 @@ mod tests {
             let old_col = parser.column;
             assert_eq!(
                 parser.parse_value(),
-                Ok("  late text".into()),
+                Ok(input.into()),
             );
             assert_eq!(parser.line, old_line+2);
             assert_eq!(parser.column, old_col+8);
@@ -660,7 +682,7 @@ mod tests {
             let old_col = parser.column;
             assert_eq!(
                 parser.parse_value(),
-                Ok("some text more text some more".into()),
+                Ok("some text\\\nmore text\\\nsome more".into()),
             );
             assert_eq!(parser.line, old_line+5);
             assert_eq!(parser.column, old_col+8);
@@ -702,7 +724,7 @@ mod tests {
             let old_col = parser.column;
             assert_eq!(
                 parser.parse_value(),
-                Ok("org.foo.Arg1=arg1 \"org.foo.Arg2=arg 2\"    org.foo.Arg3=arg3".into()),
+                Ok(input.into()),
             );
             assert_eq!(parser.line, old_line+1);
             assert_eq!(parser.column, old_col+18);

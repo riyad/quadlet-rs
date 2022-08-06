@@ -1,5 +1,6 @@
 use once_cell::sync::Lazy;
 use ordered_multimap::ListOrderedMultimap;
+use super::quote::Quote;
 
 use super::parse_bool;
 
@@ -22,20 +23,16 @@ pub(crate) type EntryRawValue = String;
 #[derive(Clone, Default, Debug, PartialEq)]
 pub(crate) struct EntryValue {
     pub(crate) raw: EntryRawValue,
+    pub(crate) unquoted: String,
 }
 
 impl EntryValue {
-    pub fn from_raw<S: Into<String>>(raw: S) -> Self {
-        Self::from(raw.into())
-    }
-
     pub fn raw(&self) -> &String {
         &self.raw
     }
 
     pub fn unquoted(&self) -> &String {
-        // TODO: implement
-        self.raw()
+        &self.unquoted
     }
 
     pub fn to_bool(&self) -> Result<bool, super::Error> {
