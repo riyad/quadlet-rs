@@ -3,6 +3,8 @@ use super::*;
 use std::fmt::Display;
 use std::str::Chars;
 
+const LINE_CONTINUATION_REPLACEMENT: &str = " ";
+
 type ParseResult<T> = Result<T, ParseError>;
 #[derive(Debug, PartialEq, Eq)]
 pub struct ParseError {
@@ -230,8 +232,11 @@ impl<'a> Parser<'a> {
             if backslash {
                 backslash = false;
                 match c {
-                    // line continuation, hold off on adding it to value
-                    '\n' => line_continuation = true,
+                    // line continuation -> add replacement to value and continue normally
+                    '\n' => {
+                        value.push_str(LINE_CONTINUATION_REPLACEMENT);
+                        line_continuation = true;
+                    },
                     // just an escape sequence -> add to value and continue normally
                     _ => {
                         value.push('\\');
@@ -249,13 +254,11 @@ impl<'a> Parser<'a> {
                     // end of value
                     '\n' => break,
                     // start of section header (although an unexpected one), i.e. end of value
-                    // NOTE: we try to be clever here and assume the line continuation was a mistake
+                    // NOTE: we're trying to be clever here and assume the line continuation was a mistake
                     '[' => break,
                     // value continues after line continuation, add the actual line
                     // continuation characters back to value and continue normally
                     _ => {
-                        value.push('\\');
-                        value.push('\n');
                         if c == '\\' {
                             // we may have a line continuation following another line continuation
                             backslash = true;
@@ -654,7 +657,7 @@ mod tests {
             let old_col = parser.column;
             assert_eq!(
                 parser.parse_value(),
-                Ok(input.into()),
+                Ok("this is some text more text".into()),
             );
             assert_eq!(parser.line, old_line+1);
             assert_eq!(parser.column, old_col+8);
@@ -668,7 +671,7 @@ mod tests {
             let old_col = parser.column;
             assert_eq!(
                 parser.parse_value(),
-                Ok(input.into()),
+                Ok("  late text".into()),
             );
             assert_eq!(parser.line, old_line+2);
             assert_eq!(parser.column, old_col+8);
@@ -682,7 +685,7 @@ mod tests {
             let old_col = parser.column;
             assert_eq!(
                 parser.parse_value(),
-                Ok("some text\\\nmore text\\\nsome more".into()),
+                Ok("some text more text some more".into()),
             );
             assert_eq!(parser.line, old_line+5);
             assert_eq!(parser.column, old_col+8);
@@ -696,7 +699,7 @@ mod tests {
             let old_col = parser.column;
             assert_eq!(
                 parser.parse_value(),
-                Ok("text".into()),
+                Ok("text ".into()),
             );
             assert_eq!(parser.line, old_line+2);
             assert_eq!(parser.column, old_col+4);
@@ -710,7 +713,7 @@ mod tests {
             let old_col = parser.column;
             assert_eq!(
                 parser.parse_value(),
-                Ok("text".into()),
+                Ok("text ".into()),
             );
             assert_eq!(parser.line, old_line+1);
             assert_eq!(parser.column, old_col+0);
@@ -724,7 +727,7 @@ mod tests {
             let old_col = parser.column;
             assert_eq!(
                 parser.parse_value(),
-                Ok(input.into()),
+                Ok("org.foo.Arg1=arg1 \"org.foo.Arg2=arg 2\"    org.foo.Arg3=arg3".into()),
             );
             assert_eq!(parser.line, old_line+1);
             assert_eq!(parser.column, old_col+18);
