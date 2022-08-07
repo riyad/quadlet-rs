@@ -900,7 +900,6 @@ KeyTwo\t=\tvalue 2\t";
             }
 
             #[test]
-            #[ignore = "rust-ini doesn't handle inner quotes properly"]
             fn trims_whitespace_around_but_not_inside_quoted_values() {
                 let input = "[Section A]
 KeyThree  =  \"  value 3\t\"";
@@ -915,7 +914,6 @@ KeyThree  =  \"  value 3\t\"";
 
             // NOTE: according to the syntax specification quotes can start at the beginning or after whitespace
             #[test]
-            #[ignore = "rust-ini doesn't handle inner quotes properly"]
             fn unquotes_mutiple_quotes_in_value() {
                 let input = "[Section A]
 Setting=\"something\" \"some thing\" \'…\'";
@@ -941,24 +939,20 @@ Setting=foo=\"bar baz\"";
                 assert_eq!(iter.next(), None);
             }
 
-            // TODO: automatically close quotes at end of line (with or witout line continuation)
             // TODO: test nested quotes
 
             mod parse_escape_sequences {
                 use super::*;
 
                 #[test]
-                fn with_unknown_escape_char() {
+                fn fails_with_unknown_escape_char() {
                     let input = "[Section A]
 unescape=\\_";
 
-                    let unit = SystemdUnit::load_from_str(input).unwrap();
-                    assert_eq!(unit.len(), 1);
-
-                    let mut iter = unit.section_entries("Section A");
-                    // NOTE: not sure if this is the right behaviour, but this is what rust-ini gives us
-                    assert_eq!(iter.next().unwrap(), ("unescape", "_"));
-                    assert_eq!(iter.next(), None);
+                    assert_eq!(
+                        SystemdUnit::load_from_str(input).err(),
+                        Some(Error::Unit(parser::ParseError{ line: 1, col: 11, msg: "expecting escape sequence, but found '_'.".into()}))
+                    );
                 }
 
                 #[test]
@@ -994,7 +988,7 @@ unescape=\\x00";
 
                     assert_eq!(
                         SystemdUnit::load_from_str(input).err(),
-                        Some(Error::Unit(parser::ParseError{ line: 1, col: 13, msg: "\\0 character not allowd in escape sequence".into()}))
+                        Some(Error::Unit(parser::ParseError{ line: 1, col: 13, msg: "\\0 character not allowed in escape sequence".into()}))
                     );
                 }
 
@@ -1023,11 +1017,11 @@ unescape=\\678";
                 #[test]
                 fn fails_with_incomplete_sequence() {
                     let input = "[Section A]
-unescape=\\";
+unescape=\\äöü";
 
                     assert_eq!(
                         SystemdUnit::load_from_str(input).err(),
-                        Some(Error::Unit(parser::ParseError{line: 1, col: 10, msg: "expecting escape sequence or '\\n' but found EOF.".into()}))
+                        Some(Error::Unit(parser::ParseError{line: 1, col: 13, msg: "expecting escape sequence, but found 'ä'.".into()}))
                     );
                 }
 
@@ -1038,7 +1032,7 @@ unescape=\\u12";
 
                     assert_eq!(
                         SystemdUnit::load_from_str(input).err(),
-                        Some(Error::Unit(parser::ParseError{ line: 1, col: 13, msg: "expecting unicode escape sequence but found EOF.".into()}))
+                        Some(Error::Unit(parser::ParseError{ line: 1, col: 13, msg: "expecting unicode escape sequence, but found EOF.".into()}))
                     );
                 }
             }
@@ -1071,9 +1065,7 @@ KeyThree=value 3\\
                 assert_eq!(iter.next(), None);
 
                 let mut iter = unit.section_entries("Section B");
-                // TODO: may not be accurate according to Systemd quoting rules
-                //assert_eq!(iter.next(), Some(("Setting", "something some thing …")));
-                assert_eq!(iter.next(), Some(("Setting", "\"something\" \"some thing\" \"…\"")));
+                assert_eq!(iter.next(), Some(("Setting", "something some thing …")));
                 assert_eq!(iter.next(), Some(("KeyTwo", "value 2        value 2 continued")));
                 assert_eq!(iter.next(), None);
 
@@ -1083,7 +1075,6 @@ KeyThree=value 3\\
             }
 
             #[test]
-            #[ignore = "rust-ini doesn't handle systemd-style quotes properly"]
             fn adapted_quadlet_escapes_container_case_succeeds() {
                 let input = "[Container]
 Image=imagename
@@ -1437,10 +1428,14 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
 
                 let unit = SystemdUnit::load_from_str(input).unwrap();
 
-                let exec_start = unit.lookup_last(SERVICE_SECTION, "ExecStart");
+                let exec_start = unit.lookup_last_value(SERVICE_SECTION, "ExecStart");
                 assert_eq!(
-                    exec_start,
-                    Some("/some/path \"an arg\" \"a;b\nc\td\'e\" a;b\nc\td \'a\"b\'")
+                    exec_start.map(|ev| ev.raw().as_str()),
+                    Some("/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'")
+                );
+                assert_eq!(
+                    exec_start.map(|ev| ev.unquoted().as_str()),
+                    Some("/some/path an arg a;b\nc\td\'e a;b\nc\td a\"b")
                 );
 
                 let mut output = Vec::new();
@@ -1455,20 +1450,23 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
             }
 
             #[test]
-            #[ignore = "SplitWord vs. rust-ini unescaping mismatch"]
             fn with_word_splitting_and_setting_constructed_command() {
                 let input = "[Service]
 ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
 
                 let mut unit = SystemdUnit::load_from_str(input).unwrap();
 
-                let exec_start = unit.lookup_last(SERVICE_SECTION, "ExecStart");
+                let exec_start = unit.lookup_last_value(SERVICE_SECTION, "ExecStart");
                 assert_eq!(
-                    exec_start,
-                    Some("/some/path \"an arg\" \"a;b\nc\td\'e\" a;b\nc\td \'a\"b\'")
+                    exec_start.map(|ev| ev.raw().as_str()),
+                    Some("/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'")
+                );
+                assert_eq!(
+                    exec_start.map(|ev| ev.unquoted().as_str()),
+                    Some("/some/path an arg a;b\nc\td\'e a;b\nc\td a\"b")
                 );
 
-                let mut split_words: Vec<String> = SplitWord::new(exec_start.unwrap()).collect();
+                let mut split_words: Vec<String> = SplitWord::new(exec_start.unwrap().raw()).collect();
                 let mut split = split_words.iter();
                 assert_eq!(split.next(), Some(&"/some/path".into()));
                 assert_eq!(split.next(), Some(&"an arg".into()));

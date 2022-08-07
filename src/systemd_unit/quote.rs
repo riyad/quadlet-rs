@@ -1,7 +1,5 @@
 use std::str::Chars;
 
-const LINE_CONTINUATION_REPLACEMENT: &str = " ";
-
 pub(crate) struct Quote<'a> {
     chars: Chars<'a>,
     cur: Option<char>,
@@ -24,7 +22,6 @@ impl<'a> Quote<'a> {
 
     fn parse_and_unquote(&mut self) -> Result<String, String> {
         let mut result: String = String::new();
-        let mut just_after_line_continuation: bool = false;
         let mut quote: Option<char> = None;
 
         while self.cur.is_some() {
@@ -34,16 +31,10 @@ impl<'a> Quote<'a> {
                     quote = self.cur;
                 }
                 Some('\\') => {
-                    just_after_line_continuation = false;
                     self.bump();
                     match self.cur {
-                        None => return Err("expecting escape sequence or '\\n' but found EOF.".into()),
+                        None => return Err("expecting escape sequence, but found EOF.".into()),
                         // line continuation (i.e. value continues on the next line)
-                        Some('\n') => {
-                            just_after_line_continuation = true;
-                            result.push_str(LINE_CONTINUATION_REPLACEMENT);
-                            self.bump();
-                        },
                         Some(_) => result.push(self.parse_escape_sequence()?),
                     }
                 }
@@ -54,12 +45,9 @@ impl<'a> Quote<'a> {
                     } else {
                         result.push(c);
                     }
-                    just_after_line_continuation = false;
                 }
             }
-            if !just_after_line_continuation {
-                self.bump();
-            }
+            self.bump();
         }
         Ok(result)
     }
@@ -94,12 +82,12 @@ impl<'a> Quote<'a> {
                 '0'..='7' => {  // 3 character octal encoding
                     self.parse_unicode_escape(None, 3, 8)?
                 }
-                c => c
+                c => return Err(format!("expecting escape sequence, but found {c:?}."))
             };
 
             Ok(r)
         } else {
-            return Err("expecting escape sequence or '\\n', but found EOF.".into())
+            return Err("expecting escape sequence, but found EOF.".into())
         }
     }
 
@@ -117,7 +105,7 @@ impl<'a> Quote<'a> {
                     return Err(format!("Expected {max_chars} octal values after \"\\\", but got \"\\{code}\"" ))
                 }
             } else {
-                return Err("expecting unicode escape sequence but found EOF.".into())
+                return Err("expecting unicode escape sequence, but found EOF.".into())
             }
 
             if code.len() != max_chars {
@@ -127,7 +115,7 @@ impl<'a> Quote<'a> {
 
         let ucp = u32::from_str_radix(code.as_str(), radix).unwrap();
         if ucp == 0 {
-            return Err("\\0 character not allowd in escape sequence".into())
+            return Err("\\0 character not allowed in escape sequence".into())
         }
 
         return match char::try_from(ucp) {
@@ -154,16 +142,6 @@ impl<'a> Quote<'a> {
 mod tests {
     mod quote {
         use crate::systemd_unit::quote::Quote;
-
-        #[test]
-        fn merges_continued_lines() {
-            let input = "foo\\\nbar";
-
-            assert_eq!(
-                Quote::unquote(input),
-                Ok("foo bar".into()),
-            );
-        }
 
         #[test]
         fn keeps_quotes_inside_words() {
@@ -221,7 +199,7 @@ mod tests {
 
             assert_eq!(
                 Quote::unquote(input),
-                Err("\\0 character not allowd in escape sequence".into()),
+                Err("\\0 character not allowed in escape sequence".into()),
             );
         }
 
@@ -251,7 +229,7 @@ mod tests {
 
             assert_eq!(
                 Quote::unquote(input),
-                Err("expecting escape sequence or '\\n' but found EOF.".into()),
+                Err("expecting escape sequence, but found EOF.".into()),
             );
         }
 
@@ -261,7 +239,17 @@ mod tests {
 
             assert_eq!(
                 Quote::unquote(input),
-                Err("expecting unicode escape sequence but found EOF.".into()),
+                Err("expecting unicode escape sequence, but found EOF.".into()),
+            );
+        }
+
+        #[test]
+        fn fails_with_unknown_escape_char() {
+            let input = "\\_";
+
+            assert_eq!(
+                Quote::unquote(input),
+                Err("expecting escape sequence, but found '_'.".into()),
             );
         }
     }

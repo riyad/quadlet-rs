@@ -439,7 +439,7 @@ mod tests {
                     "Section A".into(),
                     vec![
                         ("KeyOne".into(), "value 1".into()),
-                        ("KeyOne".into(), "value 2\\\nvalue 2 continued".into()),
+                        ("KeyOne".into(), "value 2 value 2 continued".into()),
                     ],
                 ))
             );
