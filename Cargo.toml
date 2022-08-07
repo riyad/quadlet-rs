@@ -22,9 +22,3 @@ default-features = false
 # regex currently requires the standard library, we must re-enable it.
 # unicode-perl is required for character classes
 features = ["std", "unicode-perl"]
-
-[dependencies.rust-ini]
-#rust-ini = "0.18"
-path = "vendor/rust-ini"
-default-features = false
-features = ["systemd-unit"]

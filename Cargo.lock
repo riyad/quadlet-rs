@@ -148,7 +148,6 @@ dependencies = [
  "ordered-multimap",
  "rangemap",
  "regex",
- "rust-ini",
  "shlex",
  "simplelog",
 ]
@@ -202,14 +201,6 @@ name = "regex-syntax"
 version = "0.6.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a3f87b73ce11b1619a3c6332f45341e0047173771e8b8b73f87bfeefb7b56244"
-
-[[package]]
-name = "rust-ini"
-version = "0.18.0"
-dependencies = [
- "cfg-if",
- "ordered-multimap",
-]
 
 [[package]]
 name = "shlex"
