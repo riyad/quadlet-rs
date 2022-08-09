@@ -21,12 +21,19 @@ pub(crate) type EntryKey = String;
 pub(crate) type EntryRawValue = String;
 
 #[derive(Clone, Default, Debug, PartialEq)]
-pub(crate) struct EntryValue {
+pub struct EntryValue {
     pub(crate) raw: EntryRawValue,
     pub(crate) unquoted: String,
 }
 
 impl EntryValue {
+    pub fn try_from_raw(raw: &str) -> Result<Self, Error> {
+        Ok(Self {
+            unquoted: unquote_value(raw)?,
+            raw: raw.to_owned(),
+        })
+    }
+
     pub fn raw(&self) -> &String {
         &self.raw
     }

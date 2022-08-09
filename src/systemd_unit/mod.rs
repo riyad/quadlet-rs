@@ -9,7 +9,7 @@ use crate::quadlet::IdRanges;
 pub use self::constants::*;
 pub use self::quoted::*;
 pub use self::split::*;
-use self::value::*;
+pub(crate) use self::value::*;
 
 use nix::unistd::{Gid, Uid, User, Group};
 use std::fmt;
