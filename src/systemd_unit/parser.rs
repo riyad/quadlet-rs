@@ -178,7 +178,7 @@ impl<'a> Parser<'a> {
                             EntryValue {
                                 unquoted: match unquote_value(value.as_str()) {
                                     Ok(s) => s,
-                                    Err(msg) => return Err(self.error(msg)),
+                                    Err(e) => return Err(self.error(e.to_string())),
                                 },
                                 raw: value,
                             }

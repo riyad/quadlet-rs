@@ -1,7 +1,7 @@
 use once_cell::sync::Lazy;
 use ordered_multimap::ListOrderedMultimap;
+use super::Error;
 use super::unquote_value;
-
 use super::parse_bool;
 
 #[derive(Clone, Debug, Default, PartialEq)]

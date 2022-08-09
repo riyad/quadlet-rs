@@ -1,5 +1,7 @@
 use std::str::Chars;
 
+use super::Error;
+
 fn char_needs_escaping(c: char) -> bool {
     if c as usize > 128 {
         return false;
@@ -50,10 +52,12 @@ pub fn quote_words<'a, S>(words: impl Iterator<Item=S>) -> String
         } else {
             word.to_string()
         }
-    }).collect::<Vec<String>>().join(" ")
+    })
+    .collect::<Vec<String>>()
+    .join(" ")
 }
 
-pub fn unquote_value(raw: &str) -> Result<String, String> {
+pub fn unquote_value(raw: &str) -> Result<String, Error> {
     let mut parser = Quoted {
         chars: raw.chars(),
         cur: None,
@@ -77,20 +81,20 @@ impl<'a> Quoted<'a> {
         self.cur = self.chars.next();
     }
 
-    fn parse_and_unquote(&mut self) -> Result<String, String> {
+    fn parse_and_unquote(&mut self) -> Result<String, Error> {
         let mut result: String = String::new();
         let mut quote: Option<char> = None;
 
         while self.cur.is_some() {
             match self.cur {
-                None => return Err("found early EOF".into()),
+                None => return Err(Error::Unquoting("found early EOF".into())),
                 Some('\'' | '"') if result.ends_with([' ', '\t', '\n']) || result.is_empty() => {
                     quote = self.cur;
                 }
                 Some('\\') => {
                     self.bump();
                     match self.cur {
-                        None => return Err("expecting escape sequence, but found EOF.".into()),
+                        None => return Err(Error::Unquoting("expecting escape sequence, but found EOF.".into())),
                         // line continuation (i.e. value continues on the next line)
                         Some(_) => result.push(self.parse_escape_sequence()?),
                     }
@@ -109,7 +113,7 @@ impl<'a> Quoted<'a> {
         Ok(result)
     }
 
-    fn parse_escape_sequence(&mut self) -> Result<char, String> {
+    fn parse_escape_sequence(&mut self) -> Result<char, Error> {
         if let Some(c) = self.cur {
             let r = match c {
                 'a'  => '\u{7}',
@@ -139,16 +143,16 @@ impl<'a> Quoted<'a> {
                 '0'..='7' => {  // 3 character octal encoding
                     self.parse_unicode_escape(None, 3, 8)?
                 }
-                c => return Err(format!("expecting escape sequence, but found {c:?}."))
+                c => return Err(Error::Unquoting(format!("expecting escape sequence, but found {c:?}.")))
             };
 
             Ok(r)
         } else {
-            return Err("expecting escape sequence, but found EOF.".into())
+            return Err(Error::Unquoting("expecting escape sequence, but found EOF.".into()))
         }
     }
 
-    fn parse_unicode_escape(&mut self, prefix: Option<char>, max_chars: usize, radix: u32) -> Result<char, String> {
+    fn parse_unicode_escape(&mut self, prefix: Option<char>, max_chars: usize, radix: u32) -> Result<char, Error> {
         assert!(prefix.is_none() || (prefix.is_some() && ['x', 'u', 'U'].contains(&prefix.unwrap())));
         assert!([8, 16].contains(&radix));
 
@@ -157,12 +161,12 @@ impl<'a> Quoted<'a> {
             if let Some(c) = self.cur {
                 code.push(c);
                 if radix == 16 && !c.is_ascii_hexdigit() {
-                    return Err(format!("Expected {max_chars} hex values after \"\\{c}\", but got \"\\{c}{code}\"" ))
+                    return Err(Error::Unquoting(format!("expected {max_chars} hex values after \"\\{c}\", but got \"\\{c}{code}\"" )))
                 } else if radix == 8 && (!c.is_ascii_digit() || c == '8' || c == '9') {
-                    return Err(format!("Expected {max_chars} octal values after \"\\\", but got \"\\{code}\"" ))
+                    return Err(Error::Unquoting(format!("expected {max_chars} octal values after \"\\\", but got \"\\{code}\"" )))
                 }
             } else {
-                return Err("expecting unicode escape sequence, but found EOF.".into())
+                return Err(Error::Unquoting("expecting unicode escape sequence, but found EOF.".into()))
             }
 
             if code.len() != max_chars {
@@ -172,12 +176,12 @@ impl<'a> Quoted<'a> {
 
         let ucp = u32::from_str_radix(code.as_str(), radix).unwrap();
         if ucp == 0 {
-            return Err("\\0 character not allowed in escape sequence".into())
+            return Err(Error::Unquoting("\\0 character not allowed in escape sequence".into()))
         }
 
         return match char::try_from(ucp) {
             Ok(u) => Ok(u),
-            Err(e) => Err(format!("invalid unicode character in escape sequence: {e}")),
+            Err(e) => Err(Error::Unquoting(format!("invalid unicode character in escape sequence: {e}"))),
         }
     }
 
@@ -307,7 +311,7 @@ mod tests {
     }
 
     mod unquote_value {
-        use super::super::unquote_value;
+        use super::super::{Error, unquote_value};
 
         #[test]
         fn keeps_quotes_inside_words() {
@@ -365,7 +369,7 @@ mod tests {
 
             assert_eq!(
                 unquote_value(input),
-                Err("\\0 character not allowed in escape sequence".into()),
+                Err(Error::Unquoting("\\0 character not allowed in escape sequence".into())),
             );
         }
 
@@ -375,7 +379,7 @@ mod tests {
 
             assert_eq!(
                 unquote_value(input),
-                Err("Expected 4 hex values after \"\\x\", but got \"\\x123x\"".into()),
+                Err(Error::Unquoting("expected 4 hex values after \"\\x\", but got \"\\x123x\"".into())),
             );
         }
 
@@ -385,7 +389,7 @@ mod tests {
 
             assert_eq!(
                 unquote_value(input),
-                Err("Expected 3 octal values after \"\\\", but got \"\\678\"".into()),
+                Err(Error::Unquoting("expected 3 octal values after \"\\\", but got \"\\678\"".into())),
             );
         }
 
@@ -395,7 +399,7 @@ mod tests {
 
             assert_eq!(
                 unquote_value(input),
-                Err("expecting escape sequence, but found EOF.".into()),
+                Err(Error::Unquoting("expecting escape sequence, but found EOF.".into())),
             );
         }
 
@@ -405,7 +409,7 @@ mod tests {
 
             assert_eq!(
                 unquote_value(input),
-                Err("expecting unicode escape sequence, but found EOF.".into()),
+                Err(Error::Unquoting("expecting unicode escape sequence, but found EOF.".into())),
             );
         }
 
@@ -415,7 +419,7 @@ mod tests {
 
             assert_eq!(
                 unquote_value(input),
-                Err("expecting escape sequence, but found '_'.".into()),
+                Err(Error::Unquoting("expecting escape sequence, but found '_'.".into())),
             );
         }
     }

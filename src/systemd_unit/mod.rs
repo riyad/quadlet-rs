@@ -23,6 +23,7 @@ use ordered_multimap::list_ordered_multimap::ListOrderedMultimap;
 #[non_exhaustive]
 pub enum Error {
     ParseBool,
+    Unquoting(String),
     Unit(parser::ParseError),
     Gid(nix::errno::Errno),
     Uid(nix::errno::Errno),
@@ -33,6 +34,9 @@ impl fmt::Display for Error {
         match self {
             Error::ParseBool => {
                 write!(f, "value must be one of `1`, `yes`, `true`, `on`, `0`, `no`, `false`, `off`")
+            },
+            Error::Unquoting(msg) => {
+                write!(f, "failed unquoting value: {msg}")
             },
             Error::Unit(e) => {
                 write!(f, "failed to parse unit file: {e}")
@@ -968,7 +972,7 @@ unescape=\\_";
 
                     assert_eq!(
                         SystemdUnit::load_from_str(input).err(),
-                        Some(Error::Unit(parser::ParseError{ line: 1, col: 11, msg: "expecting escape sequence, but found '_'.".into()}))
+                        Some(Error::Unit(parser::ParseError{ line: 1, col: 11, msg: "failed unquoting value: expecting escape sequence, but found '_'.".into()}))
                     );
                 }
 
@@ -1005,7 +1009,7 @@ unescape=\\x00";
 
                     assert_eq!(
                         SystemdUnit::load_from_str(input).err(),
-                        Some(Error::Unit(parser::ParseError{ line: 1, col: 13, msg: "\\0 character not allowed in escape sequence".into()}))
+                        Some(Error::Unit(parser::ParseError{ line: 1, col: 13, msg: "failed unquoting value: \\0 character not allowed in escape sequence".into()}))
                     );
                 }
 
@@ -1016,7 +1020,7 @@ unescape=\\u123x";
 
                     assert_eq!(
                         SystemdUnit::load_from_str(input).err(),
-                        Some(Error::Unit(parser::ParseError{ line: 1, col: 15, msg: "Expected 4 hex values after \"\\x\", but got \"\\x123x\"".into()}))
+                        Some(Error::Unit(parser::ParseError{ line: 1, col: 15, msg: "failed unquoting value: expected 4 hex values after \"\\x\", but got \"\\x123x\"".into()}))
                     );
                 }
 
@@ -1027,7 +1031,7 @@ unescape=\\678";
 
                     assert_eq!(
                         SystemdUnit::load_from_str(input).err(),
-                        Some(Error::Unit(parser::ParseError{ line: 1, col: 13, msg: "Expected 3 octal values after \"\\\", but got \"\\678\"".into()}))
+                        Some(Error::Unit(parser::ParseError{ line: 1, col: 13, msg: "failed unquoting value: expected 3 octal values after \"\\\", but got \"\\678\"".into()}))
                     );
                 }
 
@@ -1038,7 +1042,7 @@ unescape=\\äöü";
 
                     assert_eq!(
                         SystemdUnit::load_from_str(input).err(),
-                        Some(Error::Unit(parser::ParseError{line: 1, col: 13, msg: "expecting escape sequence, but found 'ä'.".into()}))
+                        Some(Error::Unit(parser::ParseError{line: 1, col: 13, msg: "failed unquoting value: expecting escape sequence, but found 'ä'.".into()}))
                     );
                 }
 
@@ -1049,7 +1053,7 @@ unescape=\\u12";
 
                     assert_eq!(
                         SystemdUnit::load_from_str(input).err(),
-                        Some(Error::Unit(parser::ParseError{ line: 1, col: 13, msg: "expecting unicode escape sequence, but found EOF.".into()}))
+                        Some(Error::Unit(parser::ParseError{ line: 1, col: 13, msg: "failed unquoting value: expecting unicode escape sequence, but found EOF.".into()}))
                     );
                 }
             }

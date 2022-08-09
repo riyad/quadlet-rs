@@ -59,8 +59,8 @@ enum ConversionError<'a> {
     Parsing(Error),
 }
 
-impl<'a> Display for ConversionError<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for ConversionError<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             ConversionError::ImageMissing(msg) => {
                 write!(f, "{msg}")
@@ -69,6 +69,12 @@ impl<'a> Display for ConversionError<'a> {
                 write!(f, "Failed parsing unit file: {e}")
             },
         }
+    }
+}
+
+impl From<Error> for ConversionError<'_> {
+    fn from(e: Error) -> Self {
+        ConversionError::Parsing(e)
     }
 }
 
