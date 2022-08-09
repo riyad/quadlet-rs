@@ -1,5 +1,58 @@
 use std::str::Chars;
 
+fn char_needs_escaping(c: char) -> bool {
+    if c as usize > 128 {
+        return false;
+    }
+
+    return c.is_ascii_control() ||
+        c.is_ascii_whitespace() ||
+        c == '"' ||
+        c == '\'' ||
+        c == '\\'
+}
+
+pub fn quote_value(value: &str) -> String {
+    let mut escaped: String = String::with_capacity(value.len());
+    for c in value.chars() {
+        // anything beyond ASCII doesn't need to be escaped (yay Unicode)
+        // we only care about ASCII control characters AND '\'
+        if !char_needs_escaping(c) {
+            escaped.push(c);
+            continue;
+        }
+
+        match c {
+            '\x07' => escaped.push_str("\\a"),
+            '\x08' => escaped.push_str("\\b"),
+            '\n'   => escaped.push_str("\\n"),
+            '\r'   => escaped.push_str("\\r"),
+            '\t'   => escaped.push_str("\\t"),
+            '\x0b' => escaped.push_str("\\v"),
+            '\x0c' => escaped.push_str("\\f"),
+            '\\'   => escaped.push_str("\\\\"),
+            ' '    => escaped.push_str(" "),
+            '"'    => escaped.push_str("\\\""),
+            '\''    => escaped.push_str("'"),
+            _ => escaped.push_str(&format!("\\x{:02x}", c as isize)[..])
+        }
+    }
+    escaped
+}
+
+pub fn quote_words<'a, S>(words: impl Iterator<Item=S>) -> String
+    where S: Into<&'a str>
+{
+    words.map(|word| {
+        let word = word.into();
+        if word_needs_escaping(word) {
+            format!("\"{}\"", quote_value(word))
+        } else {
+            word.to_string()
+        }
+    }).collect::<Vec<String>>().join(" ")
+}
+
 pub fn unquote_value(raw: &str) -> Result<String, String> {
     let mut parser = Quoted {
         chars: raw.chars(),
@@ -8,6 +61,10 @@ pub fn unquote_value(raw: &str) -> Result<String, String> {
     parser.bump();
 
     parser.parse_and_unquote()
+}
+
+fn word_needs_escaping(word: &str) -> bool {
+    word.chars().any(char_needs_escaping)
 }
 
 struct Quoted<'a> {
@@ -140,6 +197,115 @@ impl<'a> Quoted<'a> {
 }
 
 mod tests {
+    mod quote_value {
+        use super::super::quote_value;
+
+        #[test]
+        fn does_not_escape_non_ascii_characters() {
+            let input = "äöü";
+
+            assert_eq!(
+                quote_value(input),
+                input
+            )
+        }
+
+        #[test]
+        fn does_not_escape_printable_ascii_characters() {
+            let input = "abc&-:?*~123";
+
+            assert_eq!(
+                quote_value(input),
+                input
+            )
+        }
+
+        #[test]
+        fn escape_ascii_whitespace() {
+            let input = " \t\r\n\u{b}\u{c}";
+
+            assert_eq!(
+                quote_value(input),
+                " \\t\\r\\n\\v\\f".to_string()
+            )
+        }
+
+        #[test]
+        fn escapes_ascii_control_characters() {
+            let input = "\u{7}\u{8}\u{1b}";
+
+            assert_eq!(
+                quote_value(input),
+                "\\a\\b\\x1b".to_string()
+            )
+        }
+
+        #[test]
+        fn escapes_double_quotes() {
+            let input = "\"'un'quoted\"";
+
+            assert_eq!(
+                quote_value(input),
+                "\\\"'un'quoted\\\"".to_string()
+            )
+        }
+
+        #[test]
+        fn does_not_escape_single_quotes() {
+            let input = "'quoted'";
+
+            assert_eq!(
+                quote_value(input),
+                "'quoted'".to_string()
+            )
+        }
+
+        #[test]
+        fn escapes_backslash() {
+            let input = "\\'quoted\\'";
+
+            assert_eq!(
+                quote_value(input),
+                "\\\\'quoted\\\\'".to_string()
+            )
+        }
+    }
+
+    mod quote_words {
+        use super::super::quote_words;
+
+        #[test]
+        fn keeps_words_that_do_not_need_quoting() {
+            let words = vec!["foo", "bar"];
+
+            assert_eq!(
+                quote_words(words.into_iter()),
+                "foo bar".to_string()
+            )
+        }
+
+        #[test]
+        fn adds_quotes_around_words_that_need_quoting() {
+            let words = vec![" ", "foo=\"bar\"", "baz='\t\r\näöü\\'"];
+
+            assert_eq!(
+                quote_words(words.into_iter()),
+                "\" \" \"foo=\\\"bar\\\"\" \"baz='\\t\\r\\näöü\\\\'\"".to_string()
+            )
+        }
+
+        #[test]
+        fn joins_words_with_space() {
+            let words = vec!["foo", "bar", "baz"];
+
+            assert_eq!(
+                quote_words(words.into_iter()),
+                "foo bar baz".to_string()
+            )
+        }
+
+    }
+
     mod unquote_value {
         use super::super::unquote_value;
 
