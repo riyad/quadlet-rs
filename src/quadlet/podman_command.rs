@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use super::ranges::IdRanges;
+use crate::systemd_unit::quote_words;
 
 pub(crate) struct PodmanCommand {
     args: Vec<String>,
@@ -138,6 +139,6 @@ impl PodmanCommand {
     }
 
     pub(crate) fn to_escaped_string(&mut self) -> String {
-        shlex::join(self.args.iter().map(String::as_str))
+        quote_words(self.args.iter().map(|s| s.as_str()))
     }
 }
