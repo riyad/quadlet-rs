@@ -190,8 +190,8 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     // Set PODMAN_SYSTEMD_UNIT so that podman auto-update can restart the service.
     service.append_entry(
         SERVICE_SECTION,
-        "Environment".into(),
-        "PODMAN_SYSTEMD_UNIT=%n".into(),
+        "Environment",
+        "PODMAN_SYSTEMD_UNIT=%n",
     );
 
     // Only allow mixed or control-group, as nothing else works well
@@ -207,7 +207,8 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
 
     // Read env early so we can override it below
     let environments = container
-        .lookup_all(CONTAINER_SECTION, "Environment")
+        .lookup_all_values(CONTAINER_SECTION, "Environment")
+        .map(|v| v.raw().as_str())
         .collect();
     let mut env_args: HashMap<String, String> = parse_keys(&environments);
 
@@ -635,32 +636,34 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
 
     podman.add_env(&env_args);
 
-    let labels: Vec<&str> = container.lookup_all(CONTAINER_SECTION, "Label")
+    let labels: Vec<&str> = container.lookup_all_values(CONTAINER_SECTION, "Label")
+        .map(|v| v.raw().as_str())
         .collect();
     let label_args: HashMap<String, String> = parse_keys(&labels);
     podman.add_labels(&label_args);
 
-    let annotations: Vec<&str> = container.lookup_all(CONTAINER_SECTION, "Annotation")
+    let annotations: Vec<&str> = container.lookup_all_values(CONTAINER_SECTION, "Annotation")
+        .map(|v| v.raw().as_str())
         .collect();
     let annotation_args: HashMap<String, String> = parse_keys(&annotations);
     podman.add_annotations(&annotation_args);
 
-    let mut podman_args_args: Vec<String> = container.lookup_all(CONTAINER_SECTION, "PodmanArgs")
-        .flat_map(|v| SplitWord::new(v) )
+    let mut podman_args_args: Vec<String> = container.lookup_all_values(CONTAINER_SECTION, "PodmanArgs")
+        .flat_map(|v| SplitWord::new(v.raw()) )
         .collect();
     podman.add_vec(&mut podman_args_args);
 
     podman.add(image);
 
-    let mut exec_args = container.lookup_last(CONTAINER_SECTION, "Exec")
-        .map(|v| SplitWord::new(v).collect())
+    let mut exec_args = container.lookup_last_value(CONTAINER_SECTION, "Exec")
+        .map(|v| SplitWord::new(&v.raw()).collect())
         .unwrap_or(vec![]);
     podman.add_vec(&mut exec_args);
 
-    service.append_entry(
+    service.append_entry_value(
         SERVICE_SECTION,
         "ExecStart",
-        podman.to_escaped_string().as_str(),
+        EntryValue::try_from_raw(podman.to_escaped_string().as_str())?,
     );
 
     Ok(service)
@@ -683,7 +686,8 @@ fn convert_volume<'a>(volume: &SystemdUnit, volume_name: &str) -> Result<Systemd
 
     let exec_cond_arg = format!("/usr/bin/bash -c \"! /usr/bin/podman volume exists {podman_volume_name}\"",);
 
-    let labels: Vec<&str> = volume.lookup_all(VOLUME_SECTION, "Label")
+    let labels: Vec<&str> = volume.lookup_all_values(VOLUME_SECTION, "Label")
+        .map(|v| v.raw().as_str())
         .collect();
     let label_args: HashMap<String, String> = parse_keys(&labels);
 
@@ -723,11 +727,15 @@ fn convert_volume<'a>(volume: &SystemdUnit, volume_name: &str) -> Result<Systemd
 
     service.append_entry(SERVICE_SECTION,"Type", "oneshot");
     service.append_entry(SERVICE_SECTION,"RemainAfterExit", "yes");
-    service.append_entry(SERVICE_SECTION,"ExecCondition", &exec_cond_arg);
-    service.append_entry(
+    service.append_entry_value(
+        SERVICE_SECTION,
+        "ExecCondition",
+        EntryValue::try_from_raw(&exec_cond_arg)?,
+    );
+    service.append_entry_value(
         SERVICE_SECTION,
         "ExecStart",
-        podman.to_escaped_string().as_str(),
+        EntryValue::try_from_raw(podman.to_escaped_string().as_str())?,
     );
     service.append_entry(SERVICE_SECTION,"SyslogIdentifier", "%N");
 
@@ -746,8 +754,8 @@ fn generate_service_file(output_path: &Path, service_name: &PathBuf, service: &m
     if let Some(orig_path) = orig_path {
         service.append_entry(
             UNIT_SECTION,
-            "SourcePath".into(),
-            orig_path.to_str().unwrap().into(),
+            "SourcePath",
+            orig_path.to_str().unwrap(),
         );
     }
 
@@ -789,15 +797,15 @@ fn enable_service_file(output_path: &Path, service_name: &PathBuf, service: &Sys
     let mut symlinks: Vec<PathBuf> = Vec::new();
 
     let mut alias: Vec<PathBuf> = service
-        .lookup_all(INSTALL_SECTION, "Alias")
-        .flat_map(|v| SplitStrv::new(v))
+        .lookup_all_values(INSTALL_SECTION, "Alias")
+        .flat_map(|v| SplitStrv::new(v.raw()))
         .map(|s| canonicalize_relative_path(PathBuf::from(s)))
         .collect();
     symlinks.append(&mut alias);
 
     let mut wanted_by: Vec<PathBuf> = service
-        .lookup_all(INSTALL_SECTION, "WantedBy")
-        .flat_map(|v| SplitStrv::new(v))
+        .lookup_all_values(INSTALL_SECTION, "WantedBy")
+        .flat_map(|v| SplitStrv::new(v.raw()))
         .filter(|s| !s.contains('/'))
         .map(|s| {
             let wanted_by_unit = s;
@@ -807,8 +815,8 @@ fn enable_service_file(output_path: &Path, service_name: &PathBuf, service: &Sys
     symlinks.append(&mut wanted_by);
 
     let mut required_by: Vec<PathBuf> = service
-        .lookup_all(INSTALL_SECTION, "RequiredBy")
-        .flat_map(|v| SplitStrv::new(v))
+        .lookup_all_values(INSTALL_SECTION, "RequiredBy")
+        .flat_map(|v| SplitStrv::new(v.raw()))
         .filter(|s| !s.contains('/'))
         .map(|s| {
             let required_by_unit = s;
