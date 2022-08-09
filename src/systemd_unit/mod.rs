@@ -258,11 +258,10 @@ impl SystemdUnit {
     }
 
     pub(crate) fn merge_from(&mut self, other: &SystemdUnit) {
-        for (section, props) in other.inner.iter() {
-            match self.inner.entry(section.map(|s| s.to_string())) {
-                ini::SectionEntry::Vacant(se) => { se.insert(props.clone()); },
-                ini::SectionEntry::Occupied(mut se) => se.append(props.clone()),
-            };
+        for (section, entries) in other.sections.iter() {
+            for (key, value) in entries.data.iter() {
+                self.append_entry_value(section, key, value.clone());
+            }
         }
     }
 
@@ -1198,6 +1197,92 @@ Key2=valA2";
                     unit.lookup_last("secA", "Key1"),
                     Some("valA1.2"),
                 );
+            }
+        }
+
+        mod merge_from {
+            use super::super::SystemdUnit;
+
+            #[test]
+            fn merging_non_overlapping_section_succeeds() {
+                let input_to = "[Section A]
+KeyOne=value 1
+KeyTwo=value 2";
+                let input_from = "[New Section]
+KeyOne=value 1
+KeyTwo=value 2";
+
+                let mut unit_to = SystemdUnit::load_from_str(input_to).unwrap();
+                let unit_from = SystemdUnit::load_from_str(input_from).unwrap();
+
+                let unchanged_section = "Section A";
+                let added_section = "New Section";
+                unit_to.merge_from(&unit_from);
+                assert_eq!(unit_to.len(), 2);
+
+                // newly added
+                assert!(unit_to.has_section(added_section));
+                let mut iter = unit_to.section_entries(added_section);
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+                assert_eq!(iter.next(), None);
+
+                // should not have changed
+                assert!(unit_to.has_section(unchanged_section));
+                let mut iter = unit_to.section_entries(unchanged_section);
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+                assert_eq!(iter.next(), None);
+            }
+
+            #[test]
+            fn merging_overlapping_sections_appends_entries() {
+                let input_to = "[Section A]
+KeyOne=value a1
+KeyTwo=value a2
+
+[Section B]
+KeyOne=value b1
+KeyTwo=value b2";
+                let input_from = "[New Section]
+KeyOne=value 1
+KeyTwo=value 2
+
+[Section A]
+KeyOne=value a1.from
+KeyThree=value a3.from";
+
+                let mut unit_to = SystemdUnit::load_from_str(input_to).unwrap();
+                let unit_from = SystemdUnit::load_from_str(input_from).unwrap();
+
+                let extended_section = "Section A";
+                let unchanged_section = "Section B";
+                let added_section = "New Section";
+                unit_to.merge_from(&unit_from);
+                assert_eq!(unit_to.len(), 3);
+
+                // newly added
+                assert!(unit_to.has_section(added_section));
+                let mut iter = unit_to.section_entries(added_section);
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+                assert_eq!(iter.next(), None);
+
+                // extended with new entries
+                assert!(unit_to.has_section(extended_section));
+                let mut iter = unit_to.section_entries(extended_section);
+                assert_eq!(iter.next(), Some(("KeyOne", "value a1")));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value a2")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value a1.from")));
+                assert_eq!(iter.next(), Some(("KeyThree", "value a3.from")));
+                assert_eq!(iter.next(), None);
+
+                // should not have changed
+                assert!(unit_to.has_section(unchanged_section));
+                let mut iter = unit_to.section_entries(unchanged_section);
+                assert_eq!(iter.next(), Some(("KeyOne", "value b1")));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value b2")));
+                assert_eq!(iter.next(), None);
             }
         }
 
