@@ -1,23 +1,23 @@
 use std::str::Chars;
 
-pub(crate) struct Quote<'a> {
+pub fn unquote_value(raw: &str) -> Result<String, String> {
+    let mut parser = Quoted {
+        chars: raw.chars(),
+        cur: None,
+    };
+    parser.bump();
+
+    parser.parse_and_unquote()
+}
+
+struct Quoted<'a> {
     chars: Chars<'a>,
     cur: Option<char>,
 }
 
-impl<'a> Quote<'a> {
+impl<'a> Quoted<'a> {
     fn bump(&mut self) {
         self.cur = self.chars.next();
-    }
-
-    pub(crate) fn unquote(raw: &'a str) -> Result<String, String> {
-        let mut parser = Self {
-            chars: raw.chars(),
-            cur: None,
-        };
-        parser.bump();
-
-        parser.parse_and_unquote()
     }
 
     fn parse_and_unquote(&mut self) -> Result<String, String> {
@@ -140,15 +140,15 @@ impl<'a> Quote<'a> {
 }
 
 mod tests {
-    mod quote {
-        use crate::systemd_unit::quote::Quote;
+    mod unquote_value {
+        use super::super::unquote_value;
 
         #[test]
         fn keeps_quotes_inside_words() {
             let input = "foo=\'bar\' \"bar=baz\"";
 
             assert_eq!(
-                Quote::unquote(input),
+                unquote_value(input),
                 Ok("foo=\'bar\' bar=baz".into()),
             );
         }
@@ -158,7 +158,7 @@ mod tests {
             let input = "foo \"bar\tbaz\"";
 
             assert_eq!(
-                Quote::unquote(input),
+                unquote_value(input),
                 Ok("foo bar\tbaz".into()),
             );
         }
@@ -168,7 +168,7 @@ mod tests {
             let input = "\'bar \tbar=\"baz\"\'";
 
             assert_eq!(
-                Quote::unquote(input),
+                unquote_value(input),
                 Ok("bar \tbar=\"baz\"".into()),
             );
         }
@@ -178,7 +178,7 @@ mod tests {
             let input = "\\a\\b\\f\\n\\r\\t\\v\\\\\\\"\\\'\\s";
 
             assert_eq!(
-                Quote::unquote(input),
+                unquote_value(input),
                 Ok("\u{7}\u{8}\u{c}\n\r\t\u{b}\\\"\' ".into()),
             );
         }
@@ -188,7 +188,7 @@ mod tests {
             let input = "\\xaa \\u1234 \\U0010cdef \\123";
 
             assert_eq!(
-                Quote::unquote(input),
+                unquote_value(input),
                 Ok("\u{aa} \u{1234} \u{10cdef} \u{53}".into()),
             );
         }
@@ -198,7 +198,7 @@ mod tests {
             let input = "\\x00";
 
             assert_eq!(
-                Quote::unquote(input),
+                unquote_value(input),
                 Err("\\0 character not allowed in escape sequence".into()),
             );
         }
@@ -208,7 +208,7 @@ mod tests {
             let input = "\\u123x";
 
             assert_eq!(
-                Quote::unquote(input),
+                unquote_value(input),
                 Err("Expected 4 hex values after \"\\x\", but got \"\\x123x\"".into()),
             );
         }
@@ -218,7 +218,7 @@ mod tests {
             let input = "\\678";
 
             assert_eq!(
-                Quote::unquote(input),
+                unquote_value(input),
                 Err("Expected 3 octal values after \"\\\", but got \"\\678\"".into()),
             );
         }
@@ -228,7 +228,7 @@ mod tests {
             let input = "\\";
 
             assert_eq!(
-                Quote::unquote(input),
+                unquote_value(input),
                 Err("expecting escape sequence, but found EOF.".into()),
             );
         }
@@ -238,7 +238,7 @@ mod tests {
             let input = "\\u12";
 
             assert_eq!(
-                Quote::unquote(input),
+                unquote_value(input),
                 Err("expecting unicode escape sequence, but found EOF.".into()),
             );
         }
@@ -248,7 +248,7 @@ mod tests {
             let input = "\\_";
 
             assert_eq!(
-                Quote::unquote(input),
+                unquote_value(input),
                 Err("expecting escape sequence, but found '_'.".into()),
             );
         }

@@ -176,7 +176,7 @@ impl<'a> Parser<'a> {
                             section.as_str(),
                             key,
                             EntryValue {
-                                unquoted: match Quote::unquote(value.as_str()) {
+                                unquoted: match unquote_value(value.as_str()) {
                                     Ok(s) => s,
                                     Err(msg) => return Err(self.error(msg)),
                                 },

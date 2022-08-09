@@ -1,13 +1,13 @@
 mod constants;
 mod parser;
-mod quote;
+mod quoted;
 mod split;
 mod value;
 
 use crate::quadlet::IdRanges;
 
 pub use self::constants::*;
-use self::quote::Quote;
+pub use self::quoted::*;
 pub use self::split::*;
 use self::value::*;
 
@@ -138,7 +138,7 @@ impl SystemdUnit {
             section,
             key,
             EntryValue {
-                raw: Quote::quote(value.as_str()),
+                raw: quote_value(value.as_str()),
                 unquoted: value,
             }
         );
@@ -316,7 +316,7 @@ impl SystemdUnit {
             section,
             key,
             EntryValue {
-                raw: Quote::quote(value.as_str()),
+                raw: quote_value(value.as_str()),
                 unquoted: value,
             }
         );
