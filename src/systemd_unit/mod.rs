@@ -322,6 +322,23 @@ impl SystemdUnit {
         );
     }
 
+    pub(crate) fn set_entry_raw<S, K, V>(&mut self, section: S, key: K, value: V)
+    where S: Into<String>,
+          K: Into<String>,
+          V: Into<String>,
+    {
+        let value = value.into();
+
+        self.set_entry_value(
+            section,
+            key,
+            EntryValue {
+                unquoted: unquote_value(value.as_str()).unwrap(),
+                raw: value,
+            }
+        );
+    }
+
     pub(crate) fn set_entry_value<S, K>(&mut self, section: S, key: K, value: EntryValue)
     where S: Into<String>,
           K: Into<String>,
@@ -344,7 +361,6 @@ impl SystemdUnit {
         }
         // ... and append a "new" last value
         entries.data.append(key.into(), value);
-
     }
 
     /// Write to a writer
@@ -1481,10 +1497,10 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
                 let new_exec_start = command.to_escaped_string();
                 assert_eq!(
                     new_exec_start,
-                    "/usr/bin/podman test /some/path \"an arg\" \"a;b\nc\td\'e\" \"a;b\nc\td\" \"a\\\"b\""
+                    "/usr/bin/podman test /some/path \"an arg\" \"a;b\\nc\\td\'e\" \"a;b\\nc\\td\" \"a\\\"b\""
                 );
 
-                unit.set_entry(SERVICE_SECTION, "ExecStart", new_exec_start.as_str());
+                unit.set_entry_raw(SERVICE_SECTION, "ExecStart", new_exec_start.as_str());
 
                 let mut output = Vec::new();
                 let res = unit.write_to(&mut output);
