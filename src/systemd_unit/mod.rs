@@ -365,13 +365,15 @@ impl SystemdUnit {
 
     /// Write to a writer
     pub(crate) fn write_to<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
-        self.inner.write_to_opt(
-            writer,
-            WriteOption {
-                escape_policy: EscapePolicy::Basics,
-                ..WriteOption::default()
-            },
-        )
+        for (section, entries) in &self.sections {
+            write!(writer, "[{}]\n", section)?;
+            for (k, v) in &entries.data {
+                write!(writer, "{}={}\n", k, v.raw())?;
+            }
+            write!(writer, "\n")?;
+        }
+
+        Ok(())
     }
 }
 
@@ -1508,7 +1510,7 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
 
                 assert_eq!(
                     std::str::from_utf8(&output).unwrap(),
-                    "[Service]\nExecStart=/usr/bin/podman test /some/path \"an arg\" \"a;b\\nc\\td'e\" \"a;b\\nc\\td\" \"a\\\"b\"\n",
+                    "[Service]\nExecStart=/usr/bin/podman test /some/path \"an arg\" \"a;b\\nc\\td'e\" \"a;b\\nc\\td\" \"a\\\"b\"\n\n",
                 );
             }
         }
