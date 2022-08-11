@@ -1,24 +1,40 @@
 use rangemap::RangeSet;
 use std::ops::Range;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+// TODO: investigate, if we actually need this struct
 pub struct IdMap {
-    pub start: u32,
-    pub length: u32,
+    inner: Range<u32>,
 }
 
 impl IdMap {
     pub fn new(start: u32, length: u32) -> Self {
         IdMap {
-            start: start,
-            length: length,
+            inner: Range { start: start, end: start+length }
+        }
+    }
+
+    pub fn length(&self) -> u32 {
+        self.inner.end-self.inner.start
+    }
+
+    pub fn start(&self) -> u32 {
+        self.inner.start
+    }
+}
+
+impl From<Range<u32>> for IdMap {
+    fn from(r: Range<u32>) -> Self {
+        IdMap {
+            inner: r
         }
     }
 }
 
 impl From<&Range<u32>> for IdMap {
     fn from(r: &Range<u32>) -> Self {
-        IdMap::new(r.start, r.end-r.start)
+        // without clone() it'll recurse infinitely
+        r.clone().into()
     }
 }
 
@@ -104,6 +120,24 @@ impl IdRanges {
         self.inner.remove(start..start+length);
     }
 }
+
+// impl FromStr for IdRanges {
+//     type Err;
+
+//     fn from_str(s: &str) -> Result<Self, Self::Err> {
+//         todo!()
+//     }
+// }
+
+// impl IntoIterator for &IdRanges {
+//     type Item = IdMap;
+
+//     type IntoIter = Iterator<Item=Self::Item>;
+
+//     fn into_iter(&self) -> Self::IntoIter {
+//         self.iter()
+//     }
+// }
 
 #[cfg(test)]
 mod tests {
@@ -258,6 +292,10 @@ mod tests {
                 assert_eq!(iter.next(), Some(IdMap::new(0, u32::MAX)));
                 assert_eq!(iter.next(), None)
             }
+        }
+
+        mod remove {
+            use super::*;
         }
     }
 }

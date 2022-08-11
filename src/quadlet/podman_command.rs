@@ -75,21 +75,21 @@ impl PodmanCommand {
         // Map unmapped ids to equivalent host range, and remove from mapped_ids to avoid double-mapping
         // FIXME: implement FromIterator
         for range in unmapped_ids.iter() {
-            self.add_id_map(arg_prefix, range.start, range.start, range.length);
-            mapped_ids.remove(range.start, range.length);
-            available_host_ids.remove(range.start, range.length);
+            self.add_id_map(arg_prefix, range.start(), range.start(), range.length());
+            mapped_ids.remove(range.start(), range.length());
+            available_host_ids.remove(range.start(), range.length());
         }
 
         // Go through the rest of mapped_ids and map ids overlapping with available_host_id
         // FIXME: implement FromIterator
         for c_range in mapped_ids.iter() {
-            let mut c_start = c_range.start;
-            let mut c_length = c_range.length;
+            let mut c_start = c_range.start();
+            let mut c_length = c_range.length();
             while c_length > 0 {
                 let h_range = available_host_ids.iter().next();
                 if let Some(h_range) = h_range {
-                    let h_start = h_range.start;
-                    let h_length = h_range.length;
+                    let h_start = h_range.start();
+                    let h_length = h_range.length();
 
                     let next_length = h_length.min(c_length);
 
