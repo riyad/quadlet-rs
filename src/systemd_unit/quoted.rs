@@ -184,20 +184,6 @@ impl<'a> Quoted<'a> {
             Err(e) => Err(Error::Unquoting(format!("invalid unicode character in escape sequence: {e}"))),
         }
     }
-
-    fn parse_until_any_of(&mut self, end: &[char]) -> String {
-        let mut s = String::new();
-
-        while let Some(c) = self.cur {
-            if end.contains(&c) {
-                break;
-            }
-            s.push(c);
-            self.bump();
-        }
-
-        s
-    }
 }
 
 mod tests {
