@@ -1,5 +1,6 @@
 use once_cell::sync::Lazy;
 use ordered_multimap::ListOrderedMultimap;
+use std::str::FromStr;
 use super::{Error, parse_bool, quote_value, unquote_value};
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -54,15 +55,27 @@ impl EntryValue {
     }
 }
 
+
+/// experimental: not sure if this is the right way
 impl From<&str> for EntryValue {
-    fn from(s: &str) -> Self {
-        Self::from_unquoted(s)
+    fn from(unquoted: &str) -> Self {
+        Self::from_unquoted(unquoted)
     }
 }
 
+/// experimental: not sure if this is the right way
 impl From<String> for EntryValue {
-    fn from(s: String) -> Self {
-        Self::from_unquoted(s)
+    fn from(unquoted: String) -> Self {
+        Self::from_unquoted(unquoted)
+    }
+}
+
+/// experimental: not sure if this is the right way
+impl FromStr for EntryValue {
+    type Err = Error;
+
+    fn from_str(raw: &str) -> Result<Self, Self::Err> {
+        Self::try_from_raw(raw)
     }
 }
 
@@ -109,7 +122,7 @@ mod tests {
         }
     }
 
-    mod from_str_for_entry_value {
+    mod from_ref_str_for_entry_value {
         use super::super::{EntryValue, quote_value};
 
         #[test]
@@ -127,6 +140,26 @@ mod tests {
             );
         }
     }
+
+    mod from_str_for_entry_value {
+        use super::super::EntryValue;
+
+        #[test]
+        fn value_gets_unquoted() {
+            let input = "foo \"bar\"";
+            let value = EntryValue::try_from_raw(input).unwrap();
+
+            assert_eq!(
+                value.raw(),
+                input
+            );
+            assert_eq!(
+                value.unquoted(),
+                "foo bar"
+            );
+        }
+    }
+
     mod from_string_for_entry_value {
         use super::super::{EntryValue, quote_value};
 
