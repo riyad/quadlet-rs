@@ -210,7 +210,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         .lookup_all_values(CONTAINER_SECTION, "Environment")
         .map(|v| v.raw().as_str())
         .collect();
-    let mut env_args: HashMap<String, String> = parse_keys(&environments);
+    let mut env_args: HashMap<String, String> = quad_parse_kvs(&environments);
 
     // Need the containers filesystem mounted to start podman
     service.append_entry(
@@ -639,13 +639,13 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     let labels: Vec<&str> = container.lookup_all_values(CONTAINER_SECTION, "Label")
         .map(|v| v.raw().as_str())
         .collect();
-    let label_args: HashMap<String, String> = parse_keys(&labels);
+    let label_args: HashMap<String, String> = quad_parse_kvs(&labels);
     podman.add_labels(&label_args);
 
     let annotations: Vec<&str> = container.lookup_all_values(CONTAINER_SECTION, "Annotation")
         .map(|v| v.raw().as_str())
         .collect();
-    let annotation_args: HashMap<String, String> = parse_keys(&annotations);
+    let annotation_args: HashMap<String, String> = quad_parse_kvs(&annotations);
     podman.add_annotations(&annotation_args);
 
     let mut podman_args_args: Vec<String> = container.lookup_all_values(CONTAINER_SECTION, "PodmanArgs")
@@ -689,7 +689,7 @@ fn convert_volume<'a>(volume: &SystemdUnit, volume_name: &str) -> Result<Systemd
     let labels: Vec<&str> = volume.lookup_all_values(VOLUME_SECTION, "Label")
         .map(|v| v.raw().as_str())
         .collect();
-    let label_args: HashMap<String, String> = parse_keys(&labels);
+    let label_args: HashMap<String, String> = quad_parse_kvs(&labels);
 
     let mut podman = PodmanCommand::new_command("volume");
     podman.add("create");

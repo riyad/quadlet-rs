@@ -89,7 +89,7 @@ pub(crate) fn quad_is_port_range(port: &str) -> bool {
 }
 
 /// parse `key=value` pairs from given list
-pub(crate) fn parse_keys<'a>(key_vals: &'a Vec<&str>) -> HashMap<String, String> {
+pub(crate) fn quad_parse_kvs<'a>(key_vals: &'a Vec<&str>) -> HashMap<String, String> {
     let mut res = HashMap::new();
 
     for key_val in key_vals {
@@ -100,7 +100,7 @@ pub(crate) fn parse_keys<'a>(key_vals: &'a Vec<&str>) -> HashMap<String, String>
                 let v = splits.next().unwrap();
                 res.insert(k.to_string(), v.to_string());
             } else {
-                warn!("Invalid key=value assignment '{assign_s}'");
+                warn!("Invalid key=value assignment {assign_s:?}");
             }
         }
     }
