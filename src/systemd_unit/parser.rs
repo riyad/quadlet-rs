@@ -175,14 +175,10 @@ impl<'a> Parser<'a> {
                         unit.append_entry_value(
                             section.as_str(),
                             key,
-                            EntryValue {
-                                unquoted: match unquote_value(value.as_str()) {
-                                    Ok(s) => s,
-                                    Err(e) => return Err(self.error(e.to_string())),
-                                },
-                                raw: value,
-                            }
-                            ,
+                            match EntryValue::try_from_raw(value) {
+                                Ok(v) => v,
+                                Err(e) => return Err(self.error(e.to_string())),
+                            },
                         );
                     }
                 },

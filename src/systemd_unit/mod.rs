@@ -136,15 +136,10 @@ impl SystemdUnit {
           K: Into<String>,
           V: Into<String>,
     {
-        let value = value.into();
-
         self.append_entry_value(
             section,
             key,
-            EntryValue {
-                raw: quote_value(value.as_str()),
-                unquoted: value,
-            }
+            EntryValue::from_unquoted(value),
         );
     }
     /// Appends `key=value` to last instance of `section`
@@ -318,10 +313,7 @@ impl SystemdUnit {
         self.set_entry_value(
             section,
             key,
-            EntryValue {
-                raw: quote_value(value.as_str()),
-                unquoted: value,
-            }
+            EntryValue::from_unquoted(value),
         );
     }
 
@@ -330,15 +322,10 @@ impl SystemdUnit {
           K: Into<String>,
           V: Into<String>,
     {
-        let value = value.into();
-
         self.set_entry_value(
             section,
             key,
-            EntryValue {
-                unquoted: unquote_value(value.as_str()).unwrap(),
-                raw: value,
-            }
+            EntryValue::try_from_raw(value).unwrap(),
         );
     }
 
