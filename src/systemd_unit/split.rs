@@ -128,12 +128,6 @@ impl<'a> SplitWord<'a> {
         let mut backslash = false;  // whether we've just seen a backslash
         while let Some(c) = self.c {
             if backslash {
-                match self.c {
-                    // eat up trailing backslash
-                    None => break,
-                    _ => (),
-                }
-
                 match self.parse_escape_sequence() {
                     Ok(r) => word.push(r),
                     Err(_) => return None,
@@ -169,6 +163,11 @@ impl<'a> SplitWord<'a> {
 
             self.bump();
         }
+
+        // if backslash {
+        //     // do nothing -> eat up trailing backslash
+        //     // otherwise we'd have to push it onto `word`
+        // }
 
         if word.is_empty() {
             None
@@ -342,6 +341,18 @@ mod tests {
             }
 
             #[test]
+            #[ignore = "doesn't seem to work yet"]
+            fn some_with_empty_word() {
+                let input = "\tfoo \"\"";
+
+                let mut split = SplitStrv::new(input);
+                assert_eq!(split.next(), Some("foo".into()));
+                assert_eq!(split.next(), Some("".into()));
+                assert_eq!(split.next(), None);
+            }
+
+
+            #[test]
             fn escaped_whitespace_is_part_of_word() {
                 let input = "\tfoo bar\\tbaz\\r\n";
 
@@ -455,6 +466,17 @@ mod tests {
             }
 
             #[test]
+            #[ignore = "doesn't seem to work yet"]
+            fn some_with_empty_word() {
+                let input = "\tfoo \"\"";
+
+                let mut split = SplitWord::new(input);
+                assert_eq!(split.next(), Some("foo".into()));
+                assert_eq!(split.next(), Some("".into()));
+                assert_eq!(split.next(), None);
+            }
+
+            #[test]
             fn removes_quotes_arround_words() {
                 let input = "\tfoo \"bar\"\t\'baz\'\r\n";
 
@@ -519,6 +541,26 @@ mod tests {
                 let mut split = SplitWord::new(input);
                 assert_eq!(split.next(), Some("\tfoo".into()));
                 assert_eq!(split.next(), Some("bar\tbaz\n".into()));
+                assert_eq!(split.next(), None);
+            }
+
+            #[test]
+            fn unescapes_spaces_inside_quotes() {
+                let input = "\tfoo \"bar\\tbaz\"\r\n";
+
+                let mut split = SplitWord::new(input);
+                assert_eq!(split.next(), Some("foo".into()));
+                assert_eq!(split.next(), Some("bar\tbaz".into()));
+                assert_eq!(split.next(), None);
+            }
+
+            #[test]
+            fn eats_up_trailing_backslash() {
+                let input = "\tfoo bar\\";
+
+                let mut split = SplitWord::new(input);
+                assert_eq!(split.next(), Some("foo".into()));
+                assert_eq!(split.next(), Some("bar".into()));
                 assert_eq!(split.next(), None);
             }
         }
