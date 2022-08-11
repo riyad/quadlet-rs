@@ -562,7 +562,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         .map(|v| {
             let exposed_port = v.to_string().trim_end().to_owned();  // Allow whitespace after
 
-            if !is_port_range(exposed_port.as_str()) {
+            if !quad_is_port_range(exposed_port.as_str()) {
                 warn!("Ignoring invalid exposed port: '{exposed_port}'");
                 return None
             }
@@ -615,12 +615,12 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
             ip.clear();
         }
 
-        if !host_port.is_empty() && !is_port_range(host_port.as_str()) {
+        if !host_port.is_empty() && !quad_is_port_range(host_port.as_str()) {
             warn!("Invalid port format '{host_port}'");
             continue;
         }
 
-        if !container_port.is_empty() && !is_port_range(container_port.as_str()) {
+        if !container_port.is_empty() && !quad_is_port_range(container_port.as_str()) {
             warn!("Invalid port format '{container_port}'");
             continue;
         }

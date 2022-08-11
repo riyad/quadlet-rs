@@ -16,7 +16,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 
-pub(crate) fn is_port_range(port: &str) -> bool {
+pub(crate) fn quad_is_port_range(port: &str) -> bool {
     // NOTE: We chose to implement a parser ouselves, because pulling in the regex crate just for this
     // increases the binary size by at least 0.5M. :/
     // But if we were to use the regex crate, all this function does is this:
