@@ -1,7 +1,7 @@
 use once_cell::sync::Lazy;
 use ordered_multimap::ListOrderedMultimap;
 use std::str::FromStr;
-use super::{Error, parse_bool, quote_value, unquote_value};
+use super::{parse_bool, quote_value, unquote_value};
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct Entries {
@@ -38,6 +38,11 @@ impl EntryValue {
         &self.raw
     }
 
+    pub fn unquote(&self) -> String {
+        self.try_unquote().expect("parsing error")
+    }
+
+    #[deprecated = "use unquote() or try_unquote()"]
     pub fn unquoted(&self) -> &String {
         &self.unquoted
     }
@@ -46,12 +51,16 @@ impl EntryValue {
         parse_bool(self.raw.as_str())
     }
 
-    pub fn try_from_raw<S: Into<String>>(raw: S) -> Result<Self, Error> {
+    pub fn try_from_raw<S: Into<String>>(raw: S) -> Result<Self, super::Error> {
         let raw = raw.into();
         Ok(Self {
             unquoted: unquote_value(raw.as_str())?,
             raw: raw,
         })
+    }
+
+    pub fn try_unquote(&self) -> Result<String, super::Error> {
+        unquote_value(self.raw.as_str())
     }
 }
 
@@ -72,7 +81,7 @@ impl From<String> for EntryValue {
 
 /// experimental: not sure if this is the right way
 impl FromStr for EntryValue {
-    type Err = Error;
+    type Err = super::Error;
 
     fn from_str(raw: &str) -> Result<Self, Self::Err> {
         Self::try_from_raw(raw)
@@ -92,7 +101,7 @@ mod tests {
                 let value = EntryValue::from_unquoted(input);
 
                 assert_eq!(
-                    value.unquoted(),
+                    value.unquote(),
                     input
                 );
                 assert_eq!(
@@ -115,9 +124,54 @@ mod tests {
                     input
                 );
                 assert_eq!(
-                    value.unquoted(),
+                    value.unquote(),
                     "foo bar"
                 );
+            }
+        }
+
+        mod try_unquote {
+            use crate::systemd_unit::{EntryValue, Error};
+
+            #[test]
+            fn unquotes_value() {
+                let value = EntryValue {
+                    raw: "foo \"bar\" foo=\"bar\"".into(),
+                    unquoted: String::new(),
+                };
+
+                assert_eq!(
+                    value.try_unquote(),
+                    Ok("foo bar foo=\"bar\"".into()),
+                );
+            }
+
+            #[test]
+            fn error_for_invalid_value() {
+                let value = EntryValue {
+                    raw: "\\x00".into(),
+                    unquoted: String::new(),
+                };
+
+                assert_eq!(
+                    value.try_unquote(),
+                    Err(Error::Unquoting("\\0 character not allowed in escape sequence".into())),
+                );
+            }
+        }
+
+        mod unquote {
+            use crate::systemd_unit::EntryValue;
+
+            #[test]
+            #[should_panic]
+            fn panics_on_parse_error() {
+                let value = EntryValue {
+                    raw: "\\x00".into(),
+                    unquoted: String::new(),
+                };
+
+                value.unquote();
             }
         }
     }
@@ -131,7 +185,7 @@ mod tests {
             let value: EntryValue = input.into();
 
             assert_eq!(
-                value.unquoted(),
+                value.unquote(),
                 input
             );
             assert_eq!(
@@ -154,7 +208,7 @@ mod tests {
                 input
             );
             assert_eq!(
-                value.unquoted(),
+                value.unquote(),
                 "foo bar"
             );
         }
@@ -169,8 +223,8 @@ mod tests {
             let value: EntryValue = input.clone().into();
 
             assert_eq!(
-                value.unquoted(),
-                &input
+                value.unquote(),
+                input
             );
             assert_eq!(
                 value.raw(),
