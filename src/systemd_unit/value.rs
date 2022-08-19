@@ -48,7 +48,12 @@ impl EntryValue {
     }
 
     pub fn to_bool(&self) -> Result<bool, super::Error> {
-        parse_bool(self.raw.as_str())
+        let trimmed = self.raw.trim();
+        if trimmed.is_empty() {
+            return Ok(false);
+        }
+
+        parse_bool(trimmed)
     }
 
     pub fn try_from_raw<S: Into<String>>(raw: S) -> Result<Self, super::Error> {
@@ -92,7 +97,7 @@ pub(crate) type SectionKey = String;
 mod tests {
     mod entry_value {
         mod from_unquoted {
-            use super::super::super::EntryValue;
+            use crate::systemd_unit::EntryValue;
 
             #[test]
             fn value_gets_quoted() {
@@ -110,8 +115,73 @@ mod tests {
             }
         }
 
+        mod to_bool {
+            use std::str::FromStr;
+            use crate::systemd_unit::{EntryValue, Error};
+
+            #[test]
+            fn known_true_values_are_true() {
+                for input in ["1", "yes", "true", "on"] {
+                    let value = EntryValue::from_str(input).unwrap();
+
+                    assert_eq!(
+                        value.to_bool(),
+                        Ok(true),
+                    )
+                }
+            }
+
+            #[test]
+            fn known_false_values_are_false() {
+                for input in ["0", "no", "false", "off"] {
+                    let value = EntryValue::from_str(input).unwrap();
+
+                    assert_eq!(
+                        value.to_bool(),
+                        Ok(false),
+                    )
+                }
+            }
+
+            #[test]
+            fn error_for_empty_value() {
+                let input = "";
+
+                let value = EntryValue::from_str(input).unwrap();
+
+                assert_eq!(
+                    value.to_bool(),
+                    Ok(false),
+                )
+            }
+
+            #[test]
+            fn error_for_whitespace_value() {
+                let input = " ";
+
+                let value = EntryValue::from_str(input).unwrap();
+
+                assert_eq!(
+                    value.to_bool(),
+                    Ok(false),
+                )
+            }
+
+            #[test]
+            fn error_for_non_bool_value() {
+                let input = "foo";
+
+                let value = EntryValue::from_str(input).unwrap();
+
+                assert_eq!(
+                    value.to_bool(),
+                    Err(Error::ParseBool),
+                )
+            }
+        }
+
         mod try_from_raw {
-            use super::super::super::EntryValue;
+            use crate::systemd_unit::EntryValue;
 
             #[test]
             fn value_gets_unquoted() {
@@ -176,7 +246,7 @@ mod tests {
     }
 
     mod from_ref_str_for_entry_value {
-        use super::super::{EntryValue, quote_value};
+        use crate::systemd_unit::EntryValue;
 
         #[test]
         fn value_gets_quoted() {
@@ -195,7 +265,7 @@ mod tests {
     }
 
     mod from_str_for_entry_value {
-        use super::super::EntryValue;
+        use crate::systemd_unit::EntryValue;
 
         #[test]
         fn value_gets_unquoted() {
@@ -214,7 +284,7 @@ mod tests {
     }
 
     mod from_string_for_entry_value {
-        use super::super::{EntryValue, quote_value};
+        use crate::systemd_unit::EntryValue;
 
         #[test]
         fn value_gets_quoted() {
