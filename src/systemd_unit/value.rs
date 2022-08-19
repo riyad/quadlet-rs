@@ -64,7 +64,6 @@ impl EntryValue {
     }
 }
 
-
 /// experimental: not sure if this is the right way
 impl From<&str> for EntryValue {
     fn from(unquoted: &str) -> Self {
