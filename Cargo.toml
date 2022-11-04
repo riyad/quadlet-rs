@@ -17,3 +17,6 @@ simplelog = "0.12.0"
 [profile.release]
 lto = "fat"  # reduces binary size from 4.2M to 2.1M
 #lto = "thin"  # reduces binary size from 4.2M to 2.3M
+
+[profile.dev]
+split-debuginfo = "unpacked"
