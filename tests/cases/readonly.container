@@ -1,7 +1,0 @@
-## assert-podman-args "--read-only"
-## !assert-podman-args "--tmpfs"
-## !assert-podman-args "--read-only-tmpfs=false"
-
-[Container]
-Image=imagename
-ReadOnly=yes
