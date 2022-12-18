@@ -179,7 +179,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     let image = if let Some(image) = container.lookup_last(CONTAINER_SECTION, "Image") {
         image.to_string()
     } else {
-        return Err(ConversionError::ImageMissing("No Image key specified"))
+        return Err(ConversionError::ImageMissing("no Image key specified"))
     };
 
     let podman_container_name = container
@@ -261,11 +261,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     podman.add("-d");
 
     // But we still want output to the journal, so use the log driver.
-    // TODO: Once available we want to use the passthrough log-driver instead.
-    podman.add_slice(&["--log-driver", "journald"]);
-
-    // Never try to pull the image during service start
-    podman.add("--pull=never");
+    podman.add_slice(&["--log-driver", "passthrough"]);
 
     // We use crun as the runtime and delegated groups to it
     service.append_entry(
@@ -283,8 +279,8 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
 
     // Run with a pid1 init to reap zombies by default (as most apps don't do that)
     let run_init = container.lookup_last(CONTAINER_SECTION, "RunInit")
-        .map(|s| parse_bool(s).unwrap_or(true))  // key found: parse or default
-        .unwrap_or(true);  // key not found: use default
+        .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
+        .unwrap_or(false);  // key not found: use default
     if run_init {
         podman.add("--init");
     }
@@ -319,8 +315,8 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
 
     // Default to no higher level privileges or caps
     let no_new_privileges = container.lookup_last(CONTAINER_SECTION, "NoNewPrivileges")
-        .map(|s| parse_bool(s).unwrap_or(true))  // key found: parse or default
-        .unwrap_or(true);  // key not found: use default
+        .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
+        .unwrap_or(false);  // key not found: use default
     if no_new_privileges {
         podman.add("--security-opt=no-new-privileges");
     }
@@ -334,8 +330,9 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
 
     // But allow overrides with AddCapability
     let mut  add_caps: Vec<String> = container
-        .lookup_all(CONTAINER_SECTION, "AddCapability")
-        .map(|v| format!("--cap-add={}", v.to_string().to_ascii_lowercase()))
+        .lookup_all_values(CONTAINER_SECTION, "AddCapability")
+        .flat_map(|v| SplitStrv::new(v.raw()))
+        .map(|caps| format!("--cap-add={}", caps.to_ascii_lowercase()))
         .collect();
     podman.add_vec(&mut add_caps);
 
