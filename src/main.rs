@@ -343,10 +343,9 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         podman.add("--read-only");
     }
 
-    // We want /tmp to be a tmpfs, like on rhel host
     let volatile_tmp = container.lookup_last(CONTAINER_SECTION, "VolatileTmp")
-        .map(|s| parse_bool(s).unwrap_or(true))  // key found: parse or default
-        .unwrap_or(true);  // key not found: use default
+        .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
+        .unwrap_or(false);  // key not found: use default
     if volatile_tmp {
         // Read only mode already has a tmpfs by default
         if !read_only {
