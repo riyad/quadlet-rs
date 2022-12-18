@@ -421,8 +421,8 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
 
     let mut remap_users = container
         .lookup_last(CONTAINER_SECTION, "RemapUsers")
-        .map(|s| parse_bool(s).unwrap_or(true))  // key found: parse or default
-        .unwrap_or(true);
+        .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
+        .unwrap_or(false);
 
     if *RUN_AS_USER {
         remap_users = false;
