@@ -2,6 +2,7 @@
 
 import sys
 import os
+import re
 import tempfile
 import subprocess
 import shlex
@@ -117,6 +118,23 @@ class QuadletTestCase(unittest.TestCase):
             real_values = testcase.lookup(group, key)
             return real_values == values
 
+        def assert_key_is_regex(args, testcase):
+            if len(args) < 3:
+                return False
+            group = args[0]
+            key = args[1]
+            values = args[2:]
+
+            real_values = testcase.lookup(group, key)
+            if len(real_values) != len(values):
+                return False
+
+            for (needle, haystack) in zip(values, real_values):
+                if re.search(needle, haystack) is None:
+                    return False
+
+            return True
+
         def assert_key_contains(args, testcase):
             if len(args) != 3:
                 return False
@@ -148,6 +166,7 @@ class QuadletTestCase(unittest.TestCase):
             "assert-failed": assert_failed,
             "assert-stderr-contains": assert_stderr_contains,
             "assert-key-is": assert_key_is,
+            "assert-key-is-regex": assert_key_is_regex,
             "assert-key-contains": assert_key_contains,
             "assert-podman-args": assert_podman_args,
             "assert-podman-final-args": assert_podman_final_args,
