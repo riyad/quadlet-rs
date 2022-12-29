@@ -220,15 +220,6 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         "%t/containers",
     );
 
-    // Remove any leftover cid file before starting, just to be sure.
-    // We remove any actual pre-existing container by name with --replace=true.
-    // But --cidfile will fail if the target exists.
-    service.append_entry(
-        SERVICE_SECTION,
-        "ExecStartPre",
-        "-rm -f %t/%N.cid",
-    );
-
     // If the conman exited uncleanly it may not have removed the container, so force it,
     // -i makes it ignore non-existing files.
     service.append_entry(
@@ -256,9 +247,6 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
 
     // On clean shutdown, remove container
     podman.add("--rm");
-
-    // Detach from container, we don't need the podman process to hang around
-    podman.add("-d");
 
     // But we still want output to the journal, so use the log driver.
     podman.add_slice(&["--log-driver", "passthrough"]);
