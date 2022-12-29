@@ -53,15 +53,23 @@ struct Config {
 
 #[derive(Debug)]
 #[non_exhaustive]
-enum ConversionError<'a> {
-    ImageMissing(&'a str),
+enum ConversionError {
+    ImageMissing(String),
+    InvalidKillMode(String),
+    InvalidPortFormat(String),
+    InvalidPublishedPort(String),
+    InvalidServiceType(String),
     Parsing(Error),
 }
 
-impl Display for ConversionError<'_> {
+impl Display for ConversionError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            ConversionError::ImageMissing(msg) => {
+            ConversionError::ImageMissing(msg) |
+            ConversionError::InvalidKillMode(msg) |
+            ConversionError::InvalidPortFormat(msg) |
+            ConversionError::InvalidPublishedPort(msg) |
+            ConversionError::InvalidServiceType(msg) => {
                 write!(f, "{msg}")
             },
             ConversionError::Parsing(e) => {
@@ -71,7 +79,7 @@ impl Display for ConversionError<'_> {
     }
 }
 
-impl From<Error> for ConversionError<'_> {
+impl From<Error> for ConversionError {
     fn from(e: Error) -> Self {
         ConversionError::Parsing(e)
     }
@@ -165,6 +173,9 @@ fn quad_replace_extension(file: &PathBuf, new_extension: &str, extra_prefix: &st
     file.with_file_name(format!("{extra_prefix}{base_name}{extra_suffix}{new_extension}"))
 }
 
+// Convert a quadlet container file (unit file with a Container group) to a systemd
+// service file (unit file with Service group) based on the options in the Container group.
+// The original Container group is kept around as X-Container.
 fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionError> {
     let mut service = SystemdUnit::new();
 
@@ -179,7 +190,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     let image = if let Some(image) = container.lookup_last(CONTAINER_SECTION, "Image") {
         image.to_string()
     } else {
-        return Err(ConversionError::ImageMissing("no Image key specified"))
+        return Err(ConversionError::ImageMissing("no Image key specified".into()))
     };
 
     let podman_container_name = container
@@ -197,13 +208,14 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
 
     // Only allow mixed or control-group, as nothing else works well
     let kill_mode = service.lookup_last(SERVICE_SECTION, "KillMode");
-    if kill_mode.is_none() || !["mixed", "control-group"].contains(&kill_mode.unwrap().to_string().as_str()) {
-        if kill_mode.is_some() {
-            warn!("Invalid KillMode {:?}, ignoring", kill_mode.unwrap());
+    match kill_mode {
+        None | Some("mixed") | Some("control-group") => {
+            // We default to mixed instead of control-group, because it lets conmon do its thing
+            service.set_entry(SERVICE_SECTION, "KillMode", "mixed");
+        },
+        Some(kill_mode) => {
+            return Err(ConversionError::InvalidKillMode(format!("invalid KillMode '{kill_mode}'")));
         }
-
-        // We default to mixed instead of control-group, because it lets conmon do its thing
-        service.set_entry(SERVICE_SECTION, "KillMode", "mixed");
     }
 
     // Read env early so we can override it below
@@ -259,7 +271,8 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     );
     podman.add_slice(&[ "--runtime", "/usr/bin/crun", "--cgroups=split"]);
 
-    if let Some(timezone) = container.lookup_last(CONTAINER_SECTION, "Timezone") {
+    let timezone = container.lookup_last(CONTAINER_SECTION, "Timezone");
+    if let Some(timezone) = timezone {
         if !timezone.is_empty() {
             podman.add(format!("--tz={}", timezone));
         }
@@ -273,25 +286,39 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         podman.add("--init");
     }
 
-    // By default we handle startup notification with conmon, but allow passing it to the container with Notify=yes
-    let notify = container.lookup_last(CONTAINER_SECTION, "Notify")
-        .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
-        .unwrap_or(false);  // key not found: use default
-    if notify {
-        podman.add("--sdnotify=container");
-    } else {
-        podman.add("--sdnotify=conmon");
+    let service_type = container.lookup_last(SERVICE_SECTION, "Type");
+    match service_type {
+        Some("oneshot") => {},
+        Some("notify") | None => {
+            // If we're not in oneshot mode always use some form of sd-notify, normally via conmon,
+            // but we also allow passing it to the container by setting Notify=yes
+
+            let notify = container.lookup_last(CONTAINER_SECTION, "Notify")
+                .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
+                .unwrap_or(false);  // key not found: use default
+            if notify {
+                podman.add("--sdnotify=container");
+            } else {
+                podman.add("--sdnotify=conmon");
+            }
+            service.set_entry(
+                SERVICE_SECTION,
+                "Type",
+                "notify",
+            );
+            service.set_entry(
+                SERVICE_SECTION,
+                "NotifyAccess",
+                "all",
+            );
+
+            // Detach from container, we don't need the podman process to hang around
+            podman.add("-d");
+        },
+        Some(service_type) => {
+            return Err(ConversionError::InvalidServiceType(format!("invalid service Type '{service_type}'")));
+        },
     }
-    service.set_entry(
-        SERVICE_SECTION,
-        "Type",
-        "notify",
-    );
-    service.set_entry(
-        SERVICE_SECTION,
-        "NotifyAccess",
-        "all",
-    );
 
     if let None = container.lookup_last(SERVICE_SECTION, "SyslogIdentifier") {
         service.set_entry(
@@ -309,27 +336,43 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         podman.add("--security-opt=no-new-privileges");
     }
 
-    let mut drop_caps: Vec<String> = container
+    let devices: Vec<String> = container.lookup_all_values(CONTAINER_SECTION, "AddDevice")
+        .flat_map(|v| SplitStrv::new(v.raw()))
+        .collect();
+    for device in devices {
+        podman.add(format!("--device={device}"))
+    }
+
+    // Default to no higher level privileges or caps
+    let seccomp_profile = container.lookup_last(CONTAINER_SECTION, "SeccompProfile");
+    if let Some(seccomp_profile) = seccomp_profile {
+        podman.add_slice(&["--security-opt", &format!("seccomp={seccomp_profile}")])
+    }
+
+    let drop_caps: Vec<String> = container
         .lookup_all_values(CONTAINER_SECTION, "DropCapability")
         .flat_map(|v| SplitStrv::new(v.raw()))
-        .map(|caps| format!("--cap-drop={}", caps.to_ascii_lowercase()))
         .collect();
-    podman.add_vec(&mut drop_caps);
+    for caps in drop_caps {
+        podman.add(format!("--cap-drop={}", caps.to_ascii_lowercase()))
+    }
 
     // But allow overrides with AddCapability
-    let mut  add_caps: Vec<String> = container
+    let  add_caps: Vec<String> = container
         .lookup_all_values(CONTAINER_SECTION, "AddCapability")
         .flat_map(|v| SplitStrv::new(v.raw()))
-        .map(|caps| format!("--cap-add={}", caps.to_ascii_lowercase()))
         .collect();
-    podman.add_vec(&mut add_caps);
+    for caps in add_caps {
+        podman.add(format!("--cap-add={}", caps.to_ascii_lowercase()))
+    }
+
 
     let read_only = container.lookup_last(CONTAINER_SECTION, "ReadOnly")
-        .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
-        .unwrap_or(false);  // key not found: use default
-    if read_only {
-        podman.add("--read-only");
+        .map(|s| parse_bool(s).unwrap_or(false));  // key found: parse or default
+    if let Some(read_only) = read_only {
+        podman.add_bool("--read-only", read_only);
     }
+    let read_only = read_only.unwrap_or(false);  // key not found: use default
 
     let volatile_tmp = container.lookup_last(CONTAINER_SECTION, "VolatileTmp")
         .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
@@ -344,158 +387,116 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         podman.add("--read-only-tmpfs=false")
     }
 
-    let socket_activated = container.lookup_last(CONTAINER_SECTION, "SocketActivated")
-        .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
-        .unwrap_or(false);  // key not found: use default
-    if socket_activated {
-        // TODO: This will not be needed with later podman versions that support activation directly:
-        // https://github.com/containers/podman/pull/11316
-        podman.add("--preserve-fds=1");
-        env_args.insert("LISTEN_FDS".into(), "1".into());
+    let has_user = container.has_key(CONTAINER_SECTION, "User");
+    let has_group = container.has_key(CONTAINER_SECTION, "Group");
+    if has_user || has_group {
+        let uid = container.lookup_last(CONTAINER_SECTION, "User")
+            .map(|s| s.parse::<u32>().unwrap_or(0))  // key found: parse or default
+            .unwrap_or(0);  // key not found: use default
+        let gid = container.lookup_last(CONTAINER_SECTION, "Group")
+            .map(|s| s.parse::<u32>().unwrap_or(0))  // key found: parse or default
+            .unwrap_or(0);  // key not found: use default
 
-        // TODO: This will not be 2 when catatonit forwards fds:
-        //  https://github.com/openSUSE/catatonit/pull/15
-        env_args.insert("LISTEN_PID".into(), "2".into());
-    }
-
-    let mut default_container_uid = Uid::from_raw(0);
-    let mut default_container_gid = Gid::from_raw(0);
-
-    let mut keep_id = container
-        .lookup_last(CONTAINER_SECTION, "KeepId")
-        .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
-        .unwrap_or(false);  // key not found: use default
-    if keep_id {
-        if *RUN_AS_USER {
-            default_container_uid = Uid::current();
-            default_container_gid = Gid::current();
-            podman.add_slice(&[ "--userns", "keep-id"]);
-        } else {
-            keep_id = false;
-            warn!("Key 'KeepId' in {:?} unsupported for system units, ignoring", container.path());
-        }
-    }
-    let uid = Uid::from_raw(
-        0.max(
-            container.lookup_last(CONTAINER_SECTION, "User")
-                .map(|s| s.parse::<u32>().unwrap_or(0))  // key found: parse or default
-                .unwrap_or(0)  // key not found: use default
-        )
-    );
-    let gid = Gid::from_raw(
-        0.max(
-            container.lookup_last(CONTAINER_SECTION, "Group")
-                .map(|s| s.parse::<u32>().unwrap_or(0))  // key found: parse or default
-                .unwrap_or(0)  // key not found: use default
-        )
-    );
-
-    let host_uid = container.lookup_last(CONTAINER_SECTION, "HostUser")
-        .map(|s| parse_uid(s))
-        .unwrap_or(Ok(uid))  // key not found: use default
-        .map_err(|e| ConversionError::Parsing(e))?;  // key found, but parsing caused error: propagate error
-
-
-    let host_gid = container.lookup_last(CONTAINER_SECTION, "HostGroup")
-        .map(|s| parse_gid(s))
-        .unwrap_or(Ok(gid))  // key not found: use default
-        .map_err(|e| ConversionError::Parsing(e))?;  // key found, but parsing caused error: propagate error
-
-    if uid != default_container_uid || gid != default_container_gid {
         podman.add("--user");
-        if gid == default_container_gid {
-            podman.add(uid.to_string())
+        if has_group {
+            podman.add(format!("{uid}:{gid}"));
         } else {
-            podman.add(format!("{uid}:{gid}"))
+            podman.add(uid.to_string());
         }
     }
 
-    let mut remap_users = container
-        .lookup_last(CONTAINER_SECTION, "RemapUsers")
-        .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
-        .unwrap_or(false);
+    // let mut remap_users = container
+    //     .lookup_last(CONTAINER_SECTION, "RemapUsers")
+    //     .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
+    //     .unwrap_or(false);
 
-    if *RUN_AS_USER {
-        remap_users = false;
-    }
+    // if *RUN_AS_USER {
+    //     remap_users = false;
+    // }
 
-    if !remap_users {
-        // No remapping of users, although we still need maps if the
-        // main user/group is remapped, even if most ids map one-to-one.
-        if uid != host_uid {
-            podman.add_id_maps(
-                "--uidmap",
-                uid.as_raw(),
-                host_uid.as_raw(),
-                u32::MAX,
-                None,
-            )
+    // if !remap_users {
+    //     // No remapping of users, although we still need maps if the
+    //     // main user/group is remapped, even if most ids map one-to-one.
+    //     if uid != host_uid {
+    //         podman.add_id_maps(
+    //             "--uidmap",
+    //             uid.as_raw(),
+    //             host_uid.as_raw(),
+    //             u32::MAX,
+    //             None,
+    //         )
+    //     }
+    //     if gid != host_gid {
+    //         podman.add_id_maps(
+    //             "--gidmap",
+    //             gid.as_raw(),
+    //             host_gid.as_raw(),
+    //             u32::MAX,
+    //             None,
+    //         );
+    //     }
+    // } else {
+    //     let uid_remap_ids = container.lookup_last(CONTAINER_SECTION, "RemapUidRanges")
+    //         .map(|s| parse_ranges(s, quad_lookup_host_subuid))
+    //         .unwrap_or(DEFAULT_REMAP_UIDS.clone());
+    //     let gid_remap_ids = container.lookup_last(CONTAINER_SECTION, "RemapGidRanges")
+    //         .map(|s| parse_ranges(s, quad_lookup_host_subgid))
+    //         .unwrap_or(DEFAULT_REMAP_GIDS.clone());
+
+    //     let remap_uid_start = Uid::from_raw(
+    //         0.max(
+    //             container.lookup_last(CONTAINER_SECTION, "RemapUidStart")
+    //                 .map(|s| s.parse::<u32>().unwrap_or(1))  // key found: parse or default
+    //                 .unwrap_or(1)  // key not found: use default
+    //         )
+    //     );
+    //     let remap_gid_start = Gid::from_raw(
+    //         0.max(
+    //             container.lookup_last(CONTAINER_SECTION, "RemapGidStart")
+    //                 .map(|s| s.parse::<u32>().unwrap_or(1))  // key found: parse or default
+    //                 .unwrap_or(1)  // key not found: use default
+    //         )
+    //     );
+
+    //     podman.add_id_maps(
+    //         "--uidmap",
+    //         uid.as_raw(),
+    //         host_uid.as_raw(),
+    //         remap_uid_start.as_raw(),
+    //         Some(uid_remap_ids),
+    //     );
+    //     podman.add_id_maps(
+    //         "--gidmap",
+    //         gid.as_raw(),
+    //         host_gid.as_raw(),
+    //         remap_gid_start.as_raw(),
+    //         Some(gid_remap_ids),
+    //     );
+    // }
+
+    let volumes: Vec<&str> = container
+        .lookup_all(CONTAINER_SECTION, "Volume")
+        .collect();
+    for volume in volumes {
+        let parts: Vec<&str> = volume.split(":").collect();
+
+        let mut source = "";
+        let dest;
+        let mut options = String::new();
+
+        if parts.len() >= 2 {
+            source = parts[0];
+            dest = parts[1];
+        } else {
+            dest = parts[0];
         }
-        if gid != host_gid {
-            podman.add_id_maps(
-                "--gidmap",
-                gid.as_raw(),
-                host_gid.as_raw(),
-                u32::MAX,
-                None,
-            );
+        if parts.len() >= 3 {
+            options = format!(":{}", parts[2]);
         }
-    } else {
-        let uid_remap_ids = container.lookup_last(CONTAINER_SECTION, "RemapUidRanges")
-            .map(|s| parse_ranges(s, quad_lookup_host_subuid))
-            .unwrap_or(DEFAULT_REMAP_UIDS.clone());
-        let gid_remap_ids = container.lookup_last(CONTAINER_SECTION, "RemapGidRanges")
-            .map(|s| parse_ranges(s, quad_lookup_host_subgid))
-            .unwrap_or(DEFAULT_REMAP_GIDS.clone());
 
-        let remap_uid_start = Uid::from_raw(
-            0.max(
-                container.lookup_last(CONTAINER_SECTION, "RemapUidStart")
-                    .map(|s| s.parse::<u32>().unwrap_or(1))  // key found: parse or default
-                    .unwrap_or(1)  // key not found: use default
-            )
-        );
-        let remap_gid_start = Gid::from_raw(
-            0.max(
-                container.lookup_last(CONTAINER_SECTION, "RemapGidStart")
-                    .map(|s| s.parse::<u32>().unwrap_or(1))  // key found: parse or default
-                    .unwrap_or(1)  // key not found: use default
-            )
-        );
+        let podman_volume_name: PathBuf;
 
-        podman.add_id_maps(
-            "--uidmap",
-            uid.as_raw(),
-            host_uid.as_raw(),
-            remap_uid_start.as_raw(),
-            Some(uid_remap_ids),
-        );
-        podman.add_id_maps(
-            "--gidmap",
-            gid.as_raw(),
-            host_gid.as_raw(),
-            remap_gid_start.as_raw(),
-            Some(gid_remap_ids),
-        );
-    }
-
-    let mut volume_args: Vec<String> = container.lookup_all(CONTAINER_SECTION, "Volume")
-        .map(|v| {
-            let volume = v.to_string();
-            let parts: Vec<&str> = volume.split(":").collect();
-            if parts.len() < 2 {
-                warn!("Ignoring invalid volume '{volume}'");
-                return None
-            }
-            let mut source = parts[0];
-            let dest = parts[1];
-            let options = if parts.len() >= 3 {
-                parts[2]
-            } else {
-                ""
-            };
-            let podman_volume_name: PathBuf;
-
+        if !source.is_empty() {
             if source.starts_with("/") {
                 // Absolute path
                 service.append_entry(
@@ -503,74 +504,62 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
                     "RequiresMountsFor",
                     source,
                 );
-            } else {
-                // unit name (with .volume suffix) or named podman volume
+            } else if source.ends_with(".volume") {
+                // the podman volume name is systemd-$name
+                podman_volume_name = quad_replace_extension(
+                    &PathBuf::from(source),
+                    "",
+                    "systemd-",
+                    "",
+                );
 
-                if source.ends_with(".volume") {
-                    // the podman volume name is systemd-$name
-                    podman_volume_name = quad_replace_extension(
-                        &PathBuf::from(source),
-                        "",
-                        "systemd-",
-                        "",
-                    );
+                // the systemd unit name is $name-volume.service
+                let volume_service_name = quad_replace_extension(
+                    &PathBuf::from(source),
+                    ".service",
+                    "",
+                    "-volume",
+                );
 
-                    // the systemd unit name is $name-volume.service
-                    let volume_service_name = quad_replace_extension(
-                        &PathBuf::from(source),
-                        ".service",
-                        "",
-                        "-volume",
-                    );
+                source = podman_volume_name.to_str().unwrap();
 
-                    source = podman_volume_name.to_str().unwrap();
-
-                    service.append_entry(
-                        UNIT_SECTION,
-                        "Requires",
-                        volume_service_name.to_str().unwrap(),
-                    );
-                    service.append_entry(
-                        UNIT_SECTION,
-                        "After",
-                        volume_service_name.to_str().unwrap(),
-                    );
-                }
+                service.append_entry(
+                    UNIT_SECTION,
+                    "Requires",
+                    volume_service_name.to_str().unwrap(),
+                );
+                service.append_entry(
+                    UNIT_SECTION,
+                    "After",
+                    volume_service_name.to_str().unwrap(),
+                );
             }
+        }
 
-            if options.is_empty() {
-                Some(format!("-v={source}:{dest}"))
-            } else {
-                Some(format!("-v={source}:{dest}:{options}"))
-            }
-        })
-        .filter(|o| o.is_some())
-        .map(|o| o.unwrap())
-        .collect();
-    podman.add_vec(&mut volume_args);
+        if source.is_empty() {
+            podman.add(format!("-v={dest}"))
+        } else {
+            podman.add(format!("-v={source}:{dest}{options}"))
+        }
+    }
 
-    let mut exposed_port_args: Vec<String> = container
-        .lookup_all(CONTAINER_SECTION, "ExposeHostPort")
-        .map(|v| {
-            let exposed_port = v.to_string().trim_end().to_owned();  // Allow whitespace after
+    let exposed_ports = container.lookup_all(CONTAINER_SECTION, "ExposeHostPort");
+    for exposed_port in exposed_ports {
+        let exposed_port = exposed_port.trim();  // Allow whitespaces before and after
 
-            if !quad_is_port_range(exposed_port.as_str()) {
-                warn!("Ignoring invalid exposed port: '{exposed_port}'");
-                return None
-            }
+        if !quad_is_port_range(exposed_port) {
+            return Err(ConversionError::InvalidPortFormat(format!("invalid port format '{exposed_port}'")));
+        }
 
-            Some(format!("--expose={exposed_port}"))
-        })
-        .filter(|o| o.is_some())
-        .map(|o| o.unwrap())
-        .collect();
-    podman.add_vec(&mut exposed_port_args);
+        podman.add(format!("--expose={exposed_port}"))
+    }
 
     let publish_ports: Vec<&str> = container
         .lookup_all(CONTAINER_SECTION, "PublishPort")
         .collect();
     for publish_port in publish_ports {
-        let publish_port = publish_port.trim(); // Allow whitespaces before and after
+        let publish_port = publish_port.trim();  // Allow whitespaces before and after
+
         //  IP address could have colons in it. For example: "[::]:8080:80/tcp, so use custom splitter
         let mut parts = quad_split_ports(publish_port);
 
@@ -598,8 +587,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
                 ip = parts.pop().unwrap();
             },
             _ => {
-                warn!("Ignoring invalid published port '{publish_port}'");
-                continue;
+                return Err(ConversionError::InvalidPublishedPort(format!("invalid published port '{publish_port}'")));
             },
         }
 
@@ -608,17 +596,17 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         }
 
         if !host_port.is_empty() && !quad_is_port_range(host_port.as_str()) {
-            warn!("Invalid port format '{host_port}'");
-            continue;
+            return Err(ConversionError::InvalidPortFormat(format!("invalid port format '{host_port}'")));
         }
 
         if !container_port.is_empty() && !quad_is_port_range(container_port.as_str()) {
-            warn!("Invalid port format '{container_port}'");
-            continue;
+            return Err(ConversionError::InvalidPortFormat(format!("invalid port format '{container_port}'")));
         }
 
-        if !ip.is_empty() {
+        if !ip.is_empty() && !host_port.is_empty() {
             podman.add(format!("-p={ip}:{host_port}:{container_port}"));
+        } else if !ip.is_empty() {
+            podman.add(format!("-p={ip}::{container_port}"));
         } else if !host_port.is_empty() {
             podman.add(format!("-p={host_port}:{container_port}"));
         } else {
@@ -640,10 +628,10 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     let annotation_args: HashMap<String, String> = quad_parse_kvs(&annotations);
     podman.add_annotations(&annotation_args);
 
-    let mut podman_args_args: Vec<String> = container.lookup_all_values(CONTAINER_SECTION, "PodmanArgs")
+    let mut podman_args: Vec<String> = container.lookup_all_values(CONTAINER_SECTION, "PodmanArgs")
         .flat_map(|v| SplitWord::new(v.raw()) )
         .collect();
-    podman.add_vec(&mut podman_args_args);
+    podman.add_vec(&mut podman_args);
 
     podman.add(image);
 
@@ -661,17 +649,22 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     Ok(service)
 }
 
-fn convert_volume<'a>(volume: &SystemdUnit, volume_name: &str) -> Result<SystemdUnit, ConversionError<'a>> {
+// Convert a quadlet volume file (unit file with a Volume group) to a systemd
+// service file (unit file with Service group) based on the options in the Volume group.
+// The original Volume group is kept around as X-Volume.
+fn convert_volume(volume: &SystemdUnit, volume_name: &str) -> Result<SystemdUnit, ConversionError> {
     let mut service = SystemdUnit::new();
-
     service.merge_from(volume);
-    let podman_volume_name = quad_replace_extension(&PathBuf::from(volume_name), "", "systemd-", "");
-    let podman_volume_name = podman_volume_name.to_str().unwrap();
+    service.path = Some(quad_replace_extension(&PathBuf::from(volume_name), ".service", "", "-volume"));
 
     warn_for_unknown_keys(&volume, VOLUME_SECTION, &*SUPPORTED_VOLUME_KEYS);
 
     // Rename old Volume group to x-Volume so that systemd ignores it
     service.rename_section(VOLUME_SECTION, X_VOLUME_SECTION);
+
+
+    let podman_volume_name = quad_replace_extension(&PathBuf::from(volume_name), "", "systemd-", "");
+    let podman_volume_name = podman_volume_name.to_str().unwrap();
 
     // Need the containers filesystem mounted to start podman
     service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
@@ -684,26 +677,22 @@ fn convert_volume<'a>(volume: &SystemdUnit, volume_name: &str) -> Result<Systemd
     let label_args: HashMap<String, String> = quad_parse_kvs(&labels);
 
     let mut podman = PodmanCommand::new_command("volume");
-    podman.add("create");
+    podman.add_slice(&["create", "--ignore"]);
 
     let mut opts_arg = String::from("o=");
     if volume.has_key(VOLUME_SECTION, "User") {
-        let uid = 0.max(
-            volume.lookup_last(VOLUME_SECTION, "User")
+        let uid = volume.lookup_last(VOLUME_SECTION, "User")
                 .map(|s| s.parse::<u32>().unwrap_or(0))  // key found: parse or default
-                .unwrap_or(0)  // key not found: use default
-        );
+                .unwrap_or(0);  // key not found: use default
         if opts_arg.len() > 2 {
             opts_arg.push(',');
         }
         opts_arg.push_str(format!("uid={uid}").as_str());
     }
     if volume.has_key(VOLUME_SECTION, "Group") {
-        let gid = 0.max(
-            volume.lookup_last(VOLUME_SECTION, "Group")
+        let gid = volume.lookup_last(VOLUME_SECTION, "Group")
                 .map(|s| s.parse::<u32>().unwrap_or(0))  // key found: parse or default
-                .unwrap_or(0)  // key not found: use default
-        );
+                .unwrap_or(0);  // key not found: use default
         if opts_arg.len() > 2 {
             opts_arg.push(',');
         }
@@ -717,18 +706,16 @@ fn convert_volume<'a>(volume: &SystemdUnit, volume_name: &str) -> Result<Systemd
     podman.add_labels(&label_args);
     podman.add(podman_volume_name);
 
-    service.append_entry(SERVICE_SECTION,"Type", "oneshot");
-    service.append_entry(SERVICE_SECTION,"RemainAfterExit", "yes");
-    service.append_entry_value(
-        SERVICE_SECTION,
-        "ExecCondition",
-        EntryValue::try_from_raw(&exec_cond_arg)?,
-    );
     service.append_entry_value(
         SERVICE_SECTION,
         "ExecStart",
         EntryValue::try_from_raw(podman.to_escaped_string().as_str())?,
     );
+
+    service.append_entry(SERVICE_SECTION,"Type", "oneshot");
+    service.append_entry(SERVICE_SECTION,"RemainAfterExit", "yes");
+
+    // The default syslog identifier is the exec basename (podman) which isn't very useful here
     service.append_entry(SERVICE_SECTION,"SyslogIdentifier", "%N");
 
     Ok(service)

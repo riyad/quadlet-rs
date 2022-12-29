@@ -22,6 +22,14 @@ impl PodmanCommand {
         self.add_keys("--annotation", annotations);
     }
 
+    pub(crate) fn add_bool<S>(&mut self, arg: S, val: bool) where S: Into<String> {
+        if val {
+            self.add(arg);
+        } else {
+            self.add(format!("{}=false", arg.into()));
+        }
+    }
+
     pub(crate) fn add_env(&mut self, env: &HashMap<String, String>) {
         self.add_keys("--env", env);
     }
