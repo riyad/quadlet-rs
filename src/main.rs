@@ -326,15 +326,9 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     }
 
     let mut drop_caps: Vec<String> = container
-        .lookup_all(CONTAINER_SECTION, "DropCapability")
-        .map(|s| s.to_ascii_lowercase())
-        .collect();
-    if drop_caps.is_empty() {
-        drop_caps = DEFAULT_DROP_CAPS.iter().map(|s| s.to_string()).collect();
-    }
-    drop_caps = drop_caps.iter()
-        .filter(|s| !s.is_empty())  // explicitly filter empty values
-        .map(|caps| format!("--cap-drop={caps}"))
+        .lookup_all_values(CONTAINER_SECTION, "DropCapability")
+        .flat_map(|v| SplitStrv::new(v.raw()))
+        .map(|caps| format!("--cap-drop={}", caps.to_ascii_lowercase()))
         .collect();
     podman.add_vec(&mut drop_caps);
 
@@ -345,12 +339,25 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         .collect();
     podman.add_vec(&mut add_caps);
 
+    let read_only = container.lookup_last(CONTAINER_SECTION, "ReadOnly")
+        .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
+        .unwrap_or(false);  // key not found: use default
+    if read_only {
+        podman.add("--read-only");
+    }
+
     // We want /tmp to be a tmpfs, like on rhel host
     let volatile_tmp = container.lookup_last(CONTAINER_SECTION, "VolatileTmp")
         .map(|s| parse_bool(s).unwrap_or(true))  // key found: parse or default
         .unwrap_or(true);  // key not found: use default
     if volatile_tmp {
-        podman.add_slice(&["--mount", "type=tmpfs,tmpfs-size=512M,destination=/tmp"]);
+        // Read only mode already has a tmpfs by default
+        if !read_only {
+            podman.add_slice(&["--tmpfs", "/tmp:rw,size=512M,mode=1777"]);
+        }
+    } else if read_only {
+        // !volatile_tmp, disable the default tmpfs from --read-only
+        podman.add("--read-only-tmpfs=false")
     }
 
     let socket_activated = container.lookup_last(CONTAINER_SECTION, "SocketActivated")
