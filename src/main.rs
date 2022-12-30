@@ -61,6 +61,7 @@ enum ConversionError {
     InvalidRemapUsers(String),
     InvalidServiceType(String),
     Parsing(Error),
+    UnknownKey(String),
 }
 
 impl Display for ConversionError {
@@ -71,7 +72,8 @@ impl Display for ConversionError {
             ConversionError::InvalidPortFormat(msg) |
             ConversionError::InvalidPublishedPort(msg) |
             ConversionError::InvalidRemapUsers(msg) |
-            ConversionError::InvalidServiceType(msg) => {
+            ConversionError::InvalidServiceType(msg) |
+            ConversionError::UnknownKey(msg) => {
                 write!(f, "{msg}")
             },
             ConversionError::Parsing(e) => {
@@ -185,8 +187,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
 
     service.rename_section(CONTAINER_SECTION, X_CONTAINER_SECTION);
 
-    // FIXME: move to top
-    warn_for_unknown_keys(&container, CONTAINER_SECTION, &*SUPPORTED_CONTAINER_KEYS);
+    check_for_unknown_keys(&container, CONTAINER_SECTION, &*SUPPORTED_CONTAINER_KEYS)?;
 
     // FIXME: move to top
     let image = if let Some(image) = container.lookup_last(CONTAINER_SECTION, "Image") {
@@ -699,7 +700,7 @@ fn convert_volume(volume: &SystemdUnit, volume_name: &str) -> Result<SystemdUnit
     service.merge_from(volume);
     service.path = Some(quad_replace_extension(&PathBuf::from(volume_name), ".service", "", "-volume"));
 
-    warn_for_unknown_keys(&volume, VOLUME_SECTION, &*SUPPORTED_VOLUME_KEYS);
+    check_for_unknown_keys(&volume, VOLUME_SECTION, &*SUPPORTED_VOLUME_KEYS)?;
 
     // Rename old Volume group to x-Volume so that systemd ignores it
     service.rename_section(VOLUME_SECTION, X_VOLUME_SECTION);

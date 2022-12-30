@@ -2,6 +2,7 @@ mod constants;
 mod podman_command;
 mod ranges;
 
+use crate::ConversionError;
 use crate::systemd_unit::SplitWord;
 use crate::systemd_unit::SystemdUnit;
 
@@ -192,13 +193,14 @@ pub(crate) fn quad_split_ports(ports: &str) -> Vec<String> {
     parts
 }
 
-pub(crate) fn warn_for_unknown_keys(unit: &SystemdUnit, group_name: &str, supported_keys: &HashSet<&'static str>) {
-
+pub(crate) fn check_for_unknown_keys(unit: &SystemdUnit, group_name: &str, supported_keys: &HashSet<&'static str>) -> Result<(), ConversionError> {
     for (key,_) in unit.section_entries(group_name) {
         if !supported_keys.contains(key) {
-            warn!("Unsupported key '{key}' in group '{group_name}' in {:?}", unit.path());
+            return Err(ConversionError::UnknownKey(format!("unsupported key '{key}' in group '{group_name}' in {:?}", unit.path())));
         }
     }
+
+    Ok(())
 }
 
 #[cfg(test)]
