@@ -197,8 +197,8 @@ impl SystemdUnit {
         }
     }
 
-    pub(crate) fn path(&self) -> &Option<PathBuf> {
-        &self.path
+    pub(crate) fn path(&self) -> Option<&PathBuf> {
+        self.path.as_ref()
     }
 
     pub(crate) fn rename_section<S: Into<String>>(&mut self, from: S, to: S) {
