@@ -58,7 +58,7 @@ pub static SUPPORTED_CONTAINER_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| 
         "Timezone",
         "SeccompProfile",
         "AddDevice",
-        // "Network",
+        "Network",
     ];
 
     let mut set = HashSet::with_capacity(keys.len());
