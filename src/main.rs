@@ -183,12 +183,12 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     let mut service = SystemdUnit::new();
 
     service.merge_from(container);
-
-    service.rename_section(CONTAINER_SECTION, X_CONTAINER_SECTION);
+    service.path = Some(quad_replace_extension(container.path().unwrap(), ".service", "", ""));
 
     check_for_unknown_keys(&container, CONTAINER_SECTION, &*SUPPORTED_CONTAINER_KEYS)?;
 
-    // FIXME: move to top
+    service.rename_section(CONTAINER_SECTION, X_CONTAINER_SECTION);
+
     let image = if let Some(image) = container.lookup_last(CONTAINER_SECTION, "Image") {
         image.to_string()
     } else {
@@ -909,7 +909,10 @@ fn main() {
 
         let mut service = if name.ends_with(".container") {
             match convert_container(&unit) {
-                Ok(service_unit) => service_unit,
+                Ok(service_unit) => {
+                    warn_if_ambiguous_image_name(&service_unit);
+                    service_unit
+                },
                 Err(e) => {
                     warn!("Error converting {name:?}, ignoring: {e}");
                     continue;

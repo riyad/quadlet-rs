@@ -153,6 +153,65 @@ pub(crate) fn check_for_unknown_keys(unit: &SystemdUnit, group_name: &str, suppo
     Ok(())
 }
 
+fn is_image_id(image_name: &str) -> bool {
+    // All sha25:... names are assumed by podman to be fully specified
+    if image_name.starts_with("sha256:") {
+        return true
+    }
+
+    // However, podman also accepts image ids as pure hex strings,
+    // but only those of length 64 are unambiguous image ids
+    if image_name.len() != 64 {
+        return false
+    }
+    if image_name.chars().any(|c| !c.is_ascii_hexdigit()) {
+        return false
+    }
+
+    return true
+}
+
+fn is_unambiguous_name(image_name: &str) -> bool {
+    // Fully specified image ids are unambiguous
+    if is_image_id(image_name) {
+        return true
+    }
+
+    // Otherwise we require a fully qualified name
+
+    // What is before the first slash can be a domain or a path
+    if let Some((domain, _)) = image_name.split_once("/") {
+        // If its a domain (has dot or port or is "localhost") it is considered fq
+        if domain.contains(['.', ':']) || domain == "localhost" {
+            return true
+        }
+    } else {
+        // No domain or path, not fully qualified
+        return false
+    }
+
+    return false
+}
+
+// warns if input is an ambiguous name, i.e. a partial image id or a short
+// name (i.e. is missing a registry)
+//
+// Examples:
+//   - short names: "image:tag", "library/fedora"
+//   - fully qualified names: "quay.io/image", "localhost/image:tag",
+//     "server.org:5000/lib/image", "sha256:..."
+//
+// We implement a simple version of this from scratch here to avoid
+// a huge dependency in the generator just for a warning.
+pub(crate) fn warn_if_ambiguous_image_name(container: &SystemdUnit) {
+    if let Some(image_name) = container.lookup_last(X_CONTAINER_SECTION, "Image") {
+        if !is_unambiguous_name(image_name) {
+            let file_name = container.path().unwrap().file_name().unwrap();
+            warn!("Warning: {file_name:?} specifies the image {image_name:?} which not a fully qualified image name. This is not ideal for performance and security reasons. See the podman-pull manpage discussion of short-name-aliases.conf for details.");
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -218,6 +277,49 @@ mod tests {
                 quad_split_ports(input),
                 vec!["[1:2:3:4::]", "", "567/tcp"],
             );
+        }
+    }
+
+    mod is_unambiguous_name {
+        use super::*;
+
+        #[test]
+        fn with_ambiguous_names() {
+            let inputs = vec![
+                "fedora",
+                "fedora:latest",
+                "library/fedora",
+                "library/fedora:latest",
+                "busybox@sha256:d366a4665ab44f0648d7a00ae3fae139d55e32f9712c67accd604bb55df9d05a",
+                "busybox:latest@sha256:d366a4665ab44f0648d7a00ae3fae139d55e32f9712c67accd604bb55df9d05a",
+                "d366a4665ab44f0648d7a00ae3fae139d55e32f9712c67accd604bb55df9d05",
+                "d366a4665ab44f0648d7a00ae3fae139d55e32f9712c67accd604bb55df9d05aa",
+            ];
+
+            for input in inputs {
+                assert!(!is_unambiguous_name(input), "{input}");
+            }
+        }
+
+        #[test]
+        fn with_unambiguous_names() {
+            let inputs = vec![
+                "quay.io/fedora",
+                "docker.io/fedora",
+                "docker.io/library/fedora:latest",
+                "localhost/fedora",
+                "localhost:5000/fedora:latest",
+                "example.foo.this.may.be.garbage.but.maybe.not:1234/fedora:latest",
+                "docker.io/library/busybox@sha256:d366a4665ab44f0648d7a00ae3fae139d55e32f9712c67accd604bb55df9d05a",
+                "docker.io/library/busybox:latest@sha256:d366a4665ab44f0648d7a00ae3fae139d55e32f9712c67accd604bb55df9d05a",
+                "docker.io/fedora@sha256:d366a4665ab44f0648d7a00ae3fae139d55e32f9712c67accd604bb55df9d05a",
+                "sha256:d366a4665ab44f0648d7a00ae3fae139d55e32f9712c67accd604bb55df9d05a",
+                "d366a4665ab44f0648d7a00ae3fae139d55e32f9712c67accd604bb55df9d05a",
+            ];
+
+            for input in inputs {
+                assert!(is_unambiguous_name(input), "{input}");
+            }
         }
     }
 }
