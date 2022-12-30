@@ -280,39 +280,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         }
     }
 
-    let networks = container.lookup_all(CONTAINER_SECTION, "Network");
-    for network in networks {
-        if !network.is_empty() {
-            let mut network_name = network;
-            let mut options: Option<&str> = None;
-            if let Some((_network_name, _options)) = network.split_once(':') {
-                network_name = _network_name;
-                options = Some(_options);
-            } else {
-                podman.add(format!("--network={network}"));
-            }
-
-            let podman_network_name;
-            if network_name.ends_with(".network") {
-                // the podman network name is systemd-$name
-                podman_network_name = quad_replace_extension(&PathBuf::from(network_name), "", "systemd-", "");
-
-                // the systemd unit name is $name-network.service
-                let network_service_name = quad_replace_extension(&podman_network_name, ".service", "", "-network");
-
-                service.append_entry(UNIT_SECTION, "Requires", network_service_name.to_str().unwrap());
-                service.append_entry(UNIT_SECTION, "After", network_service_name.to_str().unwrap());
-
-                network_name = podman_network_name.to_str().unwrap();
-            }
-
-            if options.is_some() {
-                podman.add(format!("--network={network_name}:{}", options.unwrap()));
-            } else {
-                podman.add(format!("--network={network_name}"));
-            }
-        }
-    }
+    add_networks(container, CONTAINER_SECTION, &mut service, &mut podman)?;
 
     // Run with a pid1 init to reap zombies by default (as most apps don't do that)
     let run_init = container.lookup_last(CONTAINER_SECTION, "RunInit")
@@ -680,6 +648,44 @@ fn handle_user_remap(unit_file: &SystemdUnit, section: &str, podman: &mut Podman
         Some(remap_users) => {
             return Err(ConversionError::InvalidRemapUsers(format!("unsupported RemapUsers option '{remap_users}'")));
         },
+    }
+
+    Ok(())
+}
+
+fn add_networks(quadlet_unit_file: &SystemdUnit, section: &str, service_unit_file: &mut SystemdUnit, podman: &mut PodmanCommand) -> Result<(), ConversionError> {
+    let networks = quadlet_unit_file.lookup_all(section, "Network");
+    for network in networks {
+        if !network.is_empty() {
+            let mut network_name = network;
+            let mut options: Option<&str> = None;
+            if let Some((_network_name, _options)) = network.split_once(':') {
+                network_name = _network_name;
+                options = Some(_options);
+            } else {
+                podman.add(format!("--network={network}"));
+            }
+
+            let podman_network_name;
+            if network_name.ends_with(".network") {
+                // the podman network name is systemd-$name
+                podman_network_name = quad_replace_extension(&PathBuf::from(network_name), "", "systemd-", "");
+
+                // the systemd unit name is $name-network.service
+                let network_service_name = quad_replace_extension(&podman_network_name, ".service", "", "-network");
+
+                service_unit_file.append_entry(UNIT_SECTION, "Requires", network_service_name.to_str().unwrap());
+                service_unit_file.append_entry(UNIT_SECTION, "After", network_service_name.to_str().unwrap());
+
+                network_name = podman_network_name.to_str().unwrap();
+            }
+
+            if options.is_some() {
+                podman.add(format!("--network={network_name}:{}", options.unwrap()));
+            } else {
+                podman.add(format!("--network={network_name}"));
+            }
+        }
     }
 
     Ok(())
