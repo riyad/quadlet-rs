@@ -1,6 +1,5 @@
 mod constants;
 mod podman_command;
-mod ranges;
 
 use crate::ConversionError;
 use crate::systemd_unit::SplitWord;
@@ -8,14 +7,10 @@ use crate::systemd_unit::SystemdUnit;
 
 pub(crate) use self::constants::*;
 pub(crate) use self::podman_command::*;
-pub(crate) use self::ranges::*;
 
 use log::warn;
-use once_cell::unsync::Lazy;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::fs;
-use std::path::PathBuf;
 
 pub(crate) fn quad_is_port_range(port: &str) -> bool {
     // NOTE: We chose to implement a parser ouselves, because pulling in the regex crate just for this
@@ -107,51 +102,6 @@ pub(crate) fn quad_parse_kvs<'a>(key_vals: &'a Vec<&str>) -> HashMap<String, Str
     }
 
     res
-}
-
-pub(crate) fn quad_lookup_host_subgid(user: &str) -> Option<IdRanges> {
-    let file_contents = Lazy::new(|| {
-        fs::read_to_string(PathBuf::from("/etc/subgid"))
-            .expect("failed to read /etc/subgid")
-    });
-
-    quad_lookup_host_subid(&*file_contents, user)
-}
-
-pub(crate) fn quad_lookup_host_subuid(user: &str) -> Option<IdRanges> {
-    let file_contents = Lazy::new(|| {
-        fs::read_to_string(PathBuf::from("/etc/subgid"))
-            .expect("failed to read /etc/subgid")
-    });
-
-    quad_lookup_host_subid(&*file_contents, user)
-}
-
-fn quad_lookup_host_subid(file_contents: &String, prefix: &str) -> Option<IdRanges>  {
-    let mut ranges = IdRanges::empty();
-
-    for line in file_contents.lines() {
-        if line.starts_with(prefix) {
-            let mut parts = line.splitn(3, ":");
-
-            if let Some(name) = parts.next() {
-                if name == prefix {
-                    let start: u32 = parts.next().unwrap_or("").parse().unwrap_or(0);
-                    let length: u32 = parts.next().unwrap_or("").parse().unwrap_or(0);
-
-                    if start != 0 && length != 0 {
-                        ranges.add(start, length);
-                    }
-                }
-            }
-        }
-    }
-
-    if !ranges.is_empty() {
-        return Some(ranges)
-    }
-
-    None
 }
 
 /// Parses arguments to podman-run's `--publish` option.

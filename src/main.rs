@@ -5,7 +5,6 @@ use self::quadlet::*;
 use self::systemd_unit::*;
 
 use log::{debug, info, warn};
-use nix::unistd::{Gid, Uid};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::env;

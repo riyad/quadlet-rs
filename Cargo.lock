@@ -93,17 +93,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nix"
-version = "0.24.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa52e972a9a719cecb6864fb88568781eb706bac2cd1d4f04a648542dbf78069"
-dependencies = [
- "bitflags",
- "cfg-if",
- "libc",
-]
-
-[[package]]
 name = "num_threads"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -143,7 +132,6 @@ version = "0.1.0"
 dependencies = [
  "dirs",
  "log",
- "nix",
  "once_cell",
  "ordered-multimap",
  "rangemap",
