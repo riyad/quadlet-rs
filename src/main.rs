@@ -58,6 +58,7 @@ enum ConversionError {
     InvalidKillMode(String),
     InvalidPortFormat(String),
     InvalidPublishedPort(String),
+    InvalidRemapUsers(String),
     InvalidServiceType(String),
     Parsing(Error),
 }
@@ -69,6 +70,7 @@ impl Display for ConversionError {
             ConversionError::InvalidKillMode(msg) |
             ConversionError::InvalidPortFormat(msg) |
             ConversionError::InvalidPublishedPort(msg) |
+            ConversionError::InvalidRemapUsers(msg) |
             ConversionError::InvalidServiceType(msg) => {
                 write!(f, "{msg}")
             },
@@ -439,74 +441,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         }
     }
 
-    // let mut remap_users = container
-    //     .lookup_last(CONTAINER_SECTION, "RemapUsers")
-    //     .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
-    //     .unwrap_or(false);
-
-    // if *RUN_AS_USER {
-    //     remap_users = false;
-    // }
-
-    // if !remap_users {
-    //     // No remapping of users, although we still need maps if the
-    //     // main user/group is remapped, even if most ids map one-to-one.
-    //     if uid != host_uid {
-    //         podman.add_id_maps(
-    //             "--uidmap",
-    //             uid.as_raw(),
-    //             host_uid.as_raw(),
-    //             u32::MAX,
-    //             None,
-    //         )
-    //     }
-    //     if gid != host_gid {
-    //         podman.add_id_maps(
-    //             "--gidmap",
-    //             gid.as_raw(),
-    //             host_gid.as_raw(),
-    //             u32::MAX,
-    //             None,
-    //         );
-    //     }
-    // } else {
-    //     let uid_remap_ids = container.lookup_last(CONTAINER_SECTION, "RemapUidRanges")
-    //         .map(|s| parse_ranges(s, quad_lookup_host_subuid))
-    //         .unwrap_or(DEFAULT_REMAP_UIDS.clone());
-    //     let gid_remap_ids = container.lookup_last(CONTAINER_SECTION, "RemapGidRanges")
-    //         .map(|s| parse_ranges(s, quad_lookup_host_subgid))
-    //         .unwrap_or(DEFAULT_REMAP_GIDS.clone());
-
-    //     let remap_uid_start = Uid::from_raw(
-    //         0.max(
-    //             container.lookup_last(CONTAINER_SECTION, "RemapUidStart")
-    //                 .map(|s| s.parse::<u32>().unwrap_or(1))  // key found: parse or default
-    //                 .unwrap_or(1)  // key not found: use default
-    //         )
-    //     );
-    //     let remap_gid_start = Gid::from_raw(
-    //         0.max(
-    //             container.lookup_last(CONTAINER_SECTION, "RemapGidStart")
-    //                 .map(|s| s.parse::<u32>().unwrap_or(1))  // key found: parse or default
-    //                 .unwrap_or(1)  // key not found: use default
-    //         )
-    //     );
-
-    //     podman.add_id_maps(
-    //         "--uidmap",
-    //         uid.as_raw(),
-    //         host_uid.as_raw(),
-    //         remap_uid_start.as_raw(),
-    //         Some(uid_remap_ids),
-    //     );
-    //     podman.add_id_maps(
-    //         "--gidmap",
-    //         gid.as_raw(),
-    //         host_gid.as_raw(),
-    //         remap_gid_start.as_raw(),
-    //         Some(gid_remap_ids),
-    //     );
-    // }
+    handle_user_remap(&container, CONTAINER_SECTION, &mut podman, true)?;
 
     let volumes: Vec<&str> = container
         .lookup_all(CONTAINER_SECTION, "Volume")
@@ -681,6 +616,73 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     );
 
     Ok(service)
+}
+
+fn handle_user_remap(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand, support_manual: bool) -> Result<(), ConversionError> {
+    let uid_maps: Vec<String> = unit_file.
+        lookup_all_values(section, "RemapUid")
+        .flat_map(|v| SplitStrv::new(v.raw()))
+        .collect();
+    let gid_maps: Vec<String> = unit_file.
+        lookup_all_values(section, "RemapGid")
+        .flat_map(|v| SplitStrv::new(v.raw()))
+        .collect();
+    let remap_users = unit_file.lookup_last(section, "RemapUsers");
+    match remap_users {
+        None => {
+            if !uid_maps.is_empty() {
+                return Err(ConversionError::InvalidRemapUsers("RemapUid set without RemapUsers".into()));
+            }
+            if !gid_maps.is_empty() {
+                return Err(ConversionError::InvalidRemapUsers("RemapGid set without RemapUsers".into()));
+            }
+        },
+        Some("manual") => {
+            if support_manual {
+                for uid_map in uid_maps {
+                    podman.add(format!("--uidmap={uid_map}"));
+                }
+                for gid_map in gid_maps {
+                    podman.add(format!("--gidmap={gid_map}"));
+                }
+            } else {
+                return Err(ConversionError::InvalidRemapUsers("RemapUsers=manual is not supported".into()));
+            }
+        },
+        Some("auto") => {
+            let mut auto_opts: Vec<String> = Vec::with_capacity(uid_maps.len() + gid_maps.len() + 1);
+            for uid_map in uid_maps {
+                auto_opts.push(format!("uidmapping={uid_map}"));
+            }
+            for gid_map in gid_maps {
+                auto_opts.push(format!("gidmapping={gid_map}"));
+            }
+            let uid_size = unit_file
+                .lookup_last(section, "RemapUidSize")
+                .map(|s| s.parse::<u32>().unwrap_or(0))  // key found: parse or default
+                .unwrap_or(0);  // key not found: use default
+            if uid_size > 0 {
+                auto_opts.push(format!("size={uid_size}"));
+            }
+
+            if auto_opts.is_empty() {
+                podman.add("--userns=auto");
+            } else {
+                podman.add(format!("--userns=auto:{}", auto_opts.join(",")))
+            }
+        },
+        Some("keep-id") => {
+            if !*RUN_AS_USER {
+                return Err(ConversionError::InvalidRemapUsers("RemapUsers=keep-id is unsupported for system units".into()));
+            }
+            podman.add("--userns=keep-id");
+        },
+        Some(remap_users) => {
+            return Err(ConversionError::InvalidRemapUsers(format!("unsupported RemapUsers option '{remap_users}'")));
+        },
+    }
+
+    Ok(())
 }
 
 // Convert a quadlet volume file (unit file with a Volume group) to a systemd
