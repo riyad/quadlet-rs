@@ -880,9 +880,11 @@ fn main() {
         },
     };
 
-    let _ = simplelog::SimpleLogger::init(
+    let _ = simplelog::TermLogger::init(
         if cfg.verbose { log::LevelFilter::Debug } else { log::LevelFilter::Info },
         simplelog::Config::default(),
+        simplelog::TerminalMode::Stderr,
+        simplelog::ColorChoice::Never,
     );
 
     // short circuit
