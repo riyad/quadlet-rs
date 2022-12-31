@@ -17,9 +17,6 @@ use std::io::{self, BufWriter, Write};
 use std::os;
 use std::path::{Path, PathBuf};
 
-static RUN_AS_USER: Lazy<bool> = Lazy::new(|| {
-    env::args().nth(0).unwrap().contains("user")
-});
 static SUPPORTED_EXTENSIONS: Lazy<Vec<&OsStr>> = Lazy::new(|| {
     vec![
         OsStr::new("container"),
@@ -34,6 +31,7 @@ const UNIT_DIR_DISTRO: &str  = "/usr/share/containers/systemd";
 
 #[derive(Debug, Default, PartialEq)]
 struct Config {
+    is_user: bool,
     output_path: PathBuf,
     verbose: bool,
     version: bool,
@@ -82,15 +80,23 @@ impl From<Error> for ConversionError {
 fn help() {
     println!("Usage:
 quadlet-rs --version
-quadlet-rs [-v|-verbose] OUTPUT_DIR [OUTPUT_DIR] [OUTPUT_DIR]");
+quadlet-rs [--user] [-v|-verbose] OUTPUT_DIR [OUTPUT_DIR] [OUTPUT_DIR]
+
+Options:
+    --user         Run as systemd user
+    -v,--verbose   Print debug information");
+
 }
 
 fn parse_args(args: Vec<String>) -> Result<Config, String> {
     let mut cfg = Config {
+        is_user: false,
         output_path: PathBuf::new(),
         verbose: false,
         version: false,
     };
+
+    cfg.is_user = env::args().nth(0).unwrap().contains("user");
 
     if args.len() < 2 {
         return Err("missing output dir".into())
@@ -100,6 +106,7 @@ fn parse_args(args: Vec<String>) -> Result<Config, String> {
         iter.next();
         loop {
             match iter.next().map(String::as_str) {
+                Some("--user") => cfg.is_user = true,
                 Some("--verbose" | "-v") => cfg.verbose = true,
                 Some("--version") => {
                     cfg.version = true;
@@ -194,7 +201,7 @@ fn quad_replace_extension(file: &PathBuf, new_extension: &str, extra_prefix: &st
 // Convert a quadlet container file (unit file with a Container group) to a systemd
 // service file (unit file with Service group) based on the options in the Container group.
 // The original Container group is kept around as X-Container.
-fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionError> {
+fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUnit, ConversionError> {
     let mut service = SystemdUnit::new();
 
     service.merge_from(container);
@@ -424,7 +431,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
         }
     }
 
-    handle_user_remap(&container, CONTAINER_SECTION, &mut podman, true)?;
+    handle_user_remap(&container, CONTAINER_SECTION, &mut podman, is_user, true)?;
 
     let volumes: Vec<&str> = container
         .lookup_all(CONTAINER_SECTION, "Volume")
@@ -601,7 +608,7 @@ fn convert_container(container: &SystemdUnit) -> Result<SystemdUnit, ConversionE
     Ok(service)
 }
 
-fn handle_user_remap(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand, support_manual: bool) -> Result<(), ConversionError> {
+fn handle_user_remap(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand, is_user: bool, support_manual: bool) -> Result<(), ConversionError> {
     let uid_maps: Vec<String> = unit_file.
         lookup_all_values(section, "RemapUid")
         .flat_map(|v| SplitStrv::new(v.raw()))
@@ -655,7 +662,7 @@ fn handle_user_remap(unit_file: &SystemdUnit, section: &str, podman: &mut Podman
             }
         },
         Some("keep-id") => {
-            if !*RUN_AS_USER {
+            if !is_user {
                 return Err(ConversionError::InvalidRemapUsers("RemapUsers=keep-id is unsupported for system units".into()));
             }
             podman.add("--userns=keep-id");
@@ -1036,7 +1043,7 @@ fn main() {
 
 
     let mut units: HashMap<OsString, SystemdUnit> = HashMap::default();
-    for source_path in unit_search_dirs(*RUN_AS_USER) {
+    for source_path in unit_search_dirs(cfg.is_user) {
         if let Err(e) = load_units_from_dir(&source_path, &mut units) {
             warn!("Can't read {source_path:?}: {e}");
         }
@@ -1047,7 +1054,7 @@ fn main() {
 
         let service_result = if name.ends_with(".container") {
             warn_if_ambiguous_image_name(&unit);
-            convert_container(&unit)
+            convert_container(&unit, cfg.is_user)
         } else if name.ends_with(".network") {
             convert_network(&unit, name.as_str())
         } else if name.ends_with(".volume") {
