@@ -872,28 +872,22 @@ fn convert_volume(volume: &SystemdUnit, volume_name: &str) -> Result<SystemdUnit
     let mut podman = PodmanCommand::new_command("volume");
     podman.add_slice(&["create", "--ignore"]);
 
-    let mut opts_arg = String::from("o=");
+    let mut opts: Vec<String> = Vec::with_capacity(2);
     if volume.has_key(VOLUME_SECTION, "User") {
         let uid = volume.lookup_last(VOLUME_SECTION, "User")
                 .map(|s| s.parse::<u32>().unwrap_or(0))  // key found: parse or default
                 .unwrap_or(0);  // key not found: use default
-        if opts_arg.len() > 2 {
-            opts_arg.push(',');
-        }
-        opts_arg.push_str(format!("uid={uid}").as_str());
+        opts.push(format!("uid={uid}"));
     }
     if volume.has_key(VOLUME_SECTION, "Group") {
         let gid = volume.lookup_last(VOLUME_SECTION, "Group")
                 .map(|s| s.parse::<u32>().unwrap_or(0))  // key found: parse or default
                 .unwrap_or(0);  // key not found: use default
-        if opts_arg.len() > 2 {
-            opts_arg.push(',');
-        }
-        opts_arg.push_str(format!("gid={gid}").as_str());
+        opts.push(format!("gid={gid}"));
     }
-    if opts_arg.len() > 2 {
+    if !opts.is_empty() {
         podman.add("--opt");
-        podman.add(opts_arg);
+        podman.add(format!("o={}", opts.join(",")));
     }
 
     podman.add_labels(&label_args);
