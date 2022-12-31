@@ -1,12 +1,13 @@
 mod constants;
 mod podman_command;
+pub(crate) mod logger;
 
 use crate::systemd_unit::{Error, SystemdUnit, SplitWord};
+use self::logger::*;
 
 pub(crate) use self::constants::*;
 pub(crate) use self::podman_command::*;
 
-use log::warn;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
@@ -135,7 +136,7 @@ pub(crate) fn quad_parse_kvs<'a>(key_vals: &'a Vec<&str>) -> HashMap<String, Str
                 let v = splits.next().unwrap();
                 res.insert(k.to_string(), v.to_string());
             } else {
-                warn!("Invalid key=value assignment {assign_s:?}");
+                log!("Invalid key=value assignment {assign_s:?}");
             }
         }
     }
@@ -246,7 +247,7 @@ pub(crate) fn warn_if_ambiguous_image_name(container: &SystemdUnit) {
     if let Some(image_name) = container.lookup_last(CONTAINER_SECTION, "Image") {
         if !is_unambiguous_name(image_name) {
             let file_name = container.path().unwrap().file_name().unwrap();
-            warn!("Warning: {file_name:?} specifies the image {image_name:?} which not a fully qualified image name. This is not ideal for performance and security reasons. See the podman-pull manpage discussion of short-name-aliases.conf for details.");
+            log!("Warning: {file_name:?} specifies the image {image_name:?} which not a fully qualified image name. This is not ideal for performance and security reasons. See the podman-pull manpage discussion of short-name-aliases.conf for details.");
         }
     }
 }

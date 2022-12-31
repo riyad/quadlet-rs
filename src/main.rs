@@ -2,9 +2,10 @@ mod quadlet;
 mod systemd_unit;
 
 use self::quadlet::*;
+use self::quadlet::logger::*;
+
 use self::systemd_unit::*;
 
-use log::{debug, warn};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::env;
@@ -31,6 +32,7 @@ const UNIT_DIR_DISTRO: &str  = "/usr/share/containers/systemd";
 #[derive(Debug, Default, PartialEq)]
 struct Config {
     is_user: bool,
+    no_kmsg: bool,
     output_path: PathBuf,
     verbose: bool,
     version: bool,
@@ -40,17 +42,18 @@ struct Config {
 fn help() {
     println!("Usage:
 quadlet-rs --version
-quadlet-rs [--user] [-v|-verbose] OUTPUT_DIR [OUTPUT_DIR] [OUTPUT_DIR]
+quadlet-rs [--no-kmsg-log] [--user] [-v|-verbose] OUTPUT_DIR [OUTPUT_DIR] [OUTPUT_DIR]
 
 Options:
+    --no-kmsg-log  Don't log to kmsg
     --user         Run as systemd user
     -v,--verbose   Print debug information");
-
 }
 
 fn parse_args(args: Vec<String>) -> Result<Config, String> {
     let mut cfg = Config {
         is_user: false,
+        no_kmsg: false,
         output_path: PathBuf::new(),
         verbose: false,
         version: false,
@@ -66,6 +69,7 @@ fn parse_args(args: Vec<String>) -> Result<Config, String> {
         iter.next();
         loop {
             match iter.next().map(String::as_str) {
+                Some("--no-kmsg-log") => cfg.no_kmsg = true,
                 Some("--user") => cfg.is_user = true,
                 Some("--verbose" | "-v") => cfg.verbose = true,
                 Some("--version") => {
@@ -130,7 +134,7 @@ fn load_units_from_dir(source_path: &PathBuf, units: &mut HashMap<OsString, Syst
         let buf = match fs::read_to_string(&path) {
             Ok(buf) => buf,
             Err(e) => {
-                warn!("Error loading {path:?}, ignoring: {e}");
+                log!("Error loading {path:?}, ignoring: {e}");
                 continue;
            },
         };
@@ -141,7 +145,7 @@ fn load_units_from_dir(source_path: &PathBuf, units: &mut HashMap<OsString, Syst
                 unit
             },
             Err(e) => {
-                warn!("Error loading {path:?}, ignoring: {e}");
+                log!("Error loading {path:?}, ignoring: {e}");
                 continue;
            },
         };
@@ -966,14 +970,14 @@ fn enable_service_file(output_path: &Path, service: &SystemdUnit) -> io::Result<
         let symlink_path = output_path.join(symlink_rel);
         let symlink_dir = symlink_path.parent().unwrap();
         if let Err(e) = fs::create_dir_all(&symlink_dir) {
-            warn!("Can't create dir {:?}: {e}", symlink_dir.to_str().unwrap());
+            log!("Can't create dir {:?}: {e}", symlink_dir.to_str().unwrap());
             continue;
         }
 
         debug!("Creating symlink {symlink_path:?} -> {target:?}");
         fs::remove_file(&symlink_path);  // overwrite existing symlinks
         if let Err(e) = os::unix::fs::symlink(target, &symlink_path) {
-            warn!("Failed creating symlink {:?}: {e}", symlink_path.to_str().unwrap());
+            log!("Failed creating symlink {:?}: {e}", symlink_path.to_str().unwrap());
             continue;
         }
     }
@@ -993,12 +997,12 @@ fn main() {
         },
     };
 
-    let _ = simplelog::TermLogger::init(
-        if cfg.verbose { log::LevelFilter::Debug } else { log::LevelFilter::Info },
-        simplelog::Config::default(),
-        simplelog::TerminalMode::Stderr,
-        simplelog::ColorChoice::Never,
-    );
+    if cfg.verbose {
+        logger::enable_debug();
+    }
+    if cfg.no_kmsg {
+        logger::disable_kmsg();
+    }
 
     // short circuit
     if cfg.version {
@@ -1012,7 +1016,7 @@ fn main() {
     let mut units: HashMap<OsString, SystemdUnit> = HashMap::default();
     for source_path in unit_search_dirs(cfg.is_user) {
         if let Err(e) = load_units_from_dir(&source_path, &mut units) {
-            warn!("Can't read {source_path:?}: {e}");
+            log!("Can't read {source_path:?}: {e}");
         }
     }
 
@@ -1027,13 +1031,13 @@ fn main() {
         } else if name.ends_with(".volume") {
             convert_volume(&unit, name.as_str())
         } else {
-            warn!("Unsupported file type {name:?}");
+            log!("Unsupported file type {name:?}");
             continue;
         };
         let mut service = match service_result {
             Ok(service_unit) => service_unit,
             Err(e) => {
-                warn!("Error converting {name:?}, ignoring: {e}");
+                log!("Error converting {name:?}, ignoring: {e}");
                 continue;
             },
         };
@@ -1042,11 +1046,11 @@ fn main() {
         service_output_path.push(service.path().unwrap().file_name().unwrap());
         service.path = Some(service_output_path);
         if let Err(e) = generate_service_file(&mut service) {
-            warn!("Error writing {:?}, ignoring: {e}", service.path().unwrap());
+            log!("Error writing {:?}, ignoring: {e}", service.path().unwrap());
             continue;
         }
         if let Err(e) = enable_service_file(&cfg.output_path, &service) {
-            warn!("Failed to enable generated unit for {:?}, ignoring: {e}", service.path().unwrap());
+            log!("Failed to enable generated unit for {:?}, ignoring: {e}", service.path().unwrap());
             continue;
         }
     }
