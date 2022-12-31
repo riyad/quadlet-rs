@@ -4,7 +4,7 @@
 ## assert-podman-args "--rm"
 ## assert-podman-args "--replace"
 ## assert-podman-args "-d"
-## assert-podman-args "--log-driver" "passthrough"
+## assert-podman-args "--log-driver" "journald"
 ## assert-podman-args "--runtime" "/usr/bin/crun"
 ## assert-podman-args "--cgroups=split"
 ## assert-podman-args "--sdnotify=conmon"

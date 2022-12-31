@@ -257,7 +257,10 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
     podman.add("--rm");
 
     // But we still want output to the journal, so use the log driver.
-    podman.add_slice(&["--log-driver", "passthrough"]);
+    // FIXME: change to `passthrough` once we can rely on Podman v4.0.0 or newer being present
+    // Podman support added in: https://github.com/containers/podman/pull/11390
+    // Quadlet default changed in: https://github.com/containers/podman/pull/16237
+    podman.add_slice(&["--log-driver", "journald"]);
 
     // We use crun as the runtime and delegated groups to it
     service.append_entry(
