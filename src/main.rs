@@ -4,10 +4,12 @@ mod systemd_unit;
 use self::quadlet::*;
 use self::systemd_unit::*;
 
-use log::{debug, info, warn};
+use log::{debug, warn};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::env;
+use std::ffi::OsStr;
+use std::ffi::OsString;
 use std::fmt::Display;
 use std::fs;
 use std::fs::File;
@@ -18,30 +20,17 @@ use std::path::{Path, PathBuf};
 static RUN_AS_USER: Lazy<bool> = Lazy::new(|| {
     env::args().nth(0).unwrap().contains("user")
 });
-static UNIT_DIRS: Lazy<Vec<PathBuf>> = Lazy::new(|| {
-    let mut unit_dirs: Vec<PathBuf> = vec![];
-
-    if let Ok(unit_dirs_env) = std::env::var("QUADLET_UNIT_DIRS") {
-        let mut pathes_from_env: Vec<PathBuf> = unit_dirs_env
-            .split(":")
-            .map(|s| PathBuf::from(s))
-            .collect();
-        unit_dirs.append(pathes_from_env.as_mut());
-    } else {
-        if *RUN_AS_USER {
-            unit_dirs.push(dirs::config_dir().unwrap().join("containers/systemd"))
-        } else {
-            unit_dirs.push(PathBuf::from(QUADLET_ADMIN_UNIT_SEARCH_PATH));
-            unit_dirs.push(PathBuf::from(QUADLET_DISTRO_UNIT_SEARCH_PATH));
-        }
-    }
-
-    unit_dirs
+static SUPPORTED_EXTENSIONS: Lazy<Vec<&OsStr>> = Lazy::new(|| {
+    vec![
+        OsStr::new("container"),
+        OsStr::new("network"),
+        OsStr::new("volume"),
+    ]
 });
 
 const QUADLET_VERSION: &str = "0.1.0";
-const QUADLET_ADMIN_UNIT_SEARCH_PATH: &str  = "/etc/containers/systemd";
-const QUADLET_DISTRO_UNIT_SEARCH_PATH: &str  = "/usr/share/containers/systemd";
+const UNIT_DIR_ADMIN: &str  = "/etc/containers/systemd";
+const UNIT_DIR_DISTRO: &str  = "/usr/share/containers/systemd";
 
 #[derive(Debug, Default, PartialEq)]
 struct Config {
@@ -130,20 +119,44 @@ fn parse_args(args: Vec<String>) -> Result<Config, String> {
     Ok(cfg)
 }
 
-fn load_units_from_dir(source_path: &PathBuf, units: &mut HashMap<String, SystemdUnit>) -> io::Result<()> {
+// This returns the directories where we read quadlet-supported unit files from
+// For system generators these are in /usr/share/containers/systemd (for distro files)
+// and /etc/containers/systemd (for sysadmin files).
+// For user generators these live in $XDG_CONFIG_HOME/containers/systemd
+fn unit_search_dirs(is_user: bool) -> Vec<PathBuf> {
+    // Allow overdiding source dir, this is mainly for the CI tests
+    if let Ok(unit_dirs_env) = std::env::var("QUADLET_UNIT_DIRS") {
+        let unit_dirs_env: Vec<PathBuf> = unit_dirs_env
+            .split(":")
+            .map(|s| PathBuf::from(s))
+            .collect();
+        return unit_dirs_env
+    }
+
+    let mut dirs: Vec<PathBuf> = vec![];
+    if is_user {
+        dirs.push(dirs::config_dir().unwrap().join("containers/systemd"))
+    } else {
+        dirs.push(PathBuf::from(UNIT_DIR_ADMIN));
+        dirs.push(PathBuf::from(UNIT_DIR_DISTRO));
+    }
+
+    dirs
+}
+
+fn load_units_from_dir(source_path: &PathBuf, units: &mut HashMap<OsString, SystemdUnit>) -> io::Result<()> {
     for entry in source_path.read_dir()? {
         let entry = entry?;
+        let path = entry.path();
         let name = entry.file_name();
 
-        if !name.to_string_lossy().ends_with(".container") && !name.to_string_lossy().ends_with(".volume") {
+        let extension = path.extension().unwrap_or(OsStr::new(""));
+        if !SUPPORTED_EXTENSIONS.contains(&extension) {
             continue;
         }
-
-        if units.contains_key(name.to_string_lossy().as_ref()) {
+        if units.contains_key(&name) {
             continue;
         }
-
-        let path = entry.path();
 
         debug!("Loading source unit file {path:?}");
 
@@ -166,7 +179,7 @@ fn load_units_from_dir(source_path: &PathBuf, units: &mut HashMap<String, System
            },
         };
 
-        units.insert(name.to_string_lossy().to_string(), unit);
+        units.insert(name, unit);
     }
 
     Ok(())
@@ -815,7 +828,7 @@ fn convert_network(network: &SystemdUnit, name: &str) -> Result<SystemdUnit, Con
 fn convert_volume(volume: &SystemdUnit, volume_name: &str) -> Result<SystemdUnit, ConversionError> {
     let mut service = SystemdUnit::new();
     service.merge_from(volume);
-    service.path = Some(quad_replace_extension(&PathBuf::from(volume_name), ".service", "", "-volume"));
+    service.path = Some(quad_replace_extension(volume.path().unwrap(), ".service", "", "-volume"));
 
     check_for_unknown_keys(&volume, VOLUME_SECTION, &*SUPPORTED_VOLUME_KEYS)?;
 
@@ -881,24 +894,16 @@ fn convert_volume(volume: &SystemdUnit, volume_name: &str) -> Result<SystemdUnit
     Ok(service)
 }
 
-fn generate_service_file(output_path: &Path, service_name: &PathBuf, service: &mut SystemdUnit, orig_unit: &SystemdUnit) -> io::Result<()> {
-    let orig_path = &orig_unit.path();
-    let out_filename = output_path.join(service_name);
+fn generate_service_file(service: &mut SystemdUnit) -> io::Result<()> {
+    let out_filename = service.path().unwrap();
+
+    debug!("writing {out_filename:?}");
 
     let out_file = File::create(&out_filename)?;
     let mut writer = BufWriter::new(out_file);
 
-    write!(writer, "# Automatically generated by quadlet-rs-generator\n")?;
-
-    if let Some(orig_path) = orig_path {
-        service.append_entry(
-            UNIT_SECTION,
-            "SourcePath",
-            orig_path.to_str().unwrap(),
-        );
-    }
-
-    debug!("writing {out_filename:?}");
+    let args_0 = env::args().nth(0).unwrap();
+    write!(writer, "# Automatically generated by {args_0}\n")?;
 
     service.write_to(&mut writer)?;
 
@@ -911,7 +916,7 @@ fn generate_service_file(output_path: &Path, service_name: &PathBuf, service: &m
 /// handled in any way.
 /// TODO: we could use std::path::absolute() here, but it's nightly-only ATM
 /// see https://doc.rust-lang.org/std/path/fn.absolute.html
-fn canonicalize_relative_path(path: PathBuf) -> PathBuf {
+fn clean_path(path: PathBuf) -> PathBuf {
     assert!(path.is_relative());
 
     // normalized path could be shorter, but never longer
@@ -932,23 +937,29 @@ fn canonicalize_relative_path(path: PathBuf) -> PathBuf {
     normalized
 }
 
-fn enable_service_file(output_path: &Path, service_name: &PathBuf, service: &SystemdUnit) -> io::Result<()> {
+// This parses the `Install` section of the unit file and creates the required
+// symlinks to get systemd to start the newly generated file as needed.
+// In a traditional setup this is done by "systemctl enable", but that doesn't
+// work for auto-generated files like these.
+fn enable_service_file(output_path: &Path, service: &SystemdUnit) -> io::Result<()> {
     let mut symlinks: Vec<PathBuf> = Vec::new();
+    let service_name = service.path().unwrap().file_name().unwrap();
 
     let mut alias: Vec<PathBuf> = service
         .lookup_all_values(INSTALL_SECTION, "Alias")
         .flat_map(|v| SplitStrv::new(v.raw()))
-        .map(|s| canonicalize_relative_path(PathBuf::from(s)))
+        .map(|s| clean_path(PathBuf::from(s)))
         .collect();
     symlinks.append(&mut alias);
 
     let mut wanted_by: Vec<PathBuf> = service
         .lookup_all_values(INSTALL_SECTION, "WantedBy")
         .flat_map(|v| SplitStrv::new(v.raw()))
-        .filter(|s| !s.contains('/'))
-        .map(|s| {
-            let wanted_by_unit = s;
-            PathBuf::from(format!("{wanted_by_unit}.wants/{}", service_name.to_str().unwrap()))
+        .filter(|s| !s.contains('/'))  // Only allow filenames, not paths
+        .map(|wanted_by_unit| {
+            let mut path = PathBuf::from(format!("{wanted_by_unit}.wants/"));
+            path.push(service_name);
+            path
         })
         .collect();
     symlinks.append(&mut wanted_by);
@@ -956,20 +967,23 @@ fn enable_service_file(output_path: &Path, service_name: &PathBuf, service: &Sys
     let mut required_by: Vec<PathBuf> = service
         .lookup_all_values(INSTALL_SECTION, "RequiredBy")
         .flat_map(|v| SplitStrv::new(v.raw()))
-        .filter(|s| !s.contains('/'))
-        .map(|s| {
-            let required_by_unit = s;
-            PathBuf::from(format!("{required_by_unit}.requires/{}", service_name.to_str().unwrap()))
+        .filter(|s| !s.contains('/'))  // Only allow filenames, not paths
+        .map(|required_by_unit| {
+            let mut path = PathBuf::from(format!("{required_by_unit}.requires/"));
+            path.push(service_name);
+            path
         })
         .collect();
     symlinks.append(&mut required_by);
 
+    // construct relative symlink targets so that <output_path>/<symlink_rel (aka. foo/<service_name>)>
+    // links to <output_path>/<service_name>
     for symlink_rel in symlinks {
         let mut target = PathBuf::new();
 
         // At this point the symlinks are all relative, canonicalized
-        // paths, so number of slashes is the depth
-        // number of slashes == components - 1
+        // paths, so the number of slashes corresponds to its path depth
+        // i.e. number of slashes == components - 1
         for _ in 1..symlink_rel.components().count() {
             target.push("..");
         }
@@ -977,10 +991,17 @@ fn enable_service_file(output_path: &Path, service_name: &PathBuf, service: &Sys
 
         let symlink_path = output_path.join(symlink_rel);
         let symlink_dir = symlink_path.parent().unwrap();
-        fs::create_dir_all(&symlink_dir)?;
+        if let Err(e) = fs::create_dir_all(&symlink_dir) {
+            warn!("Can't create dir {:?}: {e}", symlink_dir.to_str().unwrap());
+            continue;
+        }
 
-        info!("Creating symlink {symlink_path:?} -> {target:?}");
-        os::unix::fs::symlink(target, symlink_path)?
+        debug!("Creating symlink {symlink_path:?} -> {target:?}");
+        fs::remove_file(&symlink_path);  // overwrite existing symlinks
+        if let Err(e) = os::unix::fs::symlink(target, &symlink_path) {
+            warn!("Failed creating symlink {:?}: {e}", symlink_path.to_str().unwrap());
+            continue;
+        }
     }
 
     Ok(())
@@ -1013,61 +1034,46 @@ fn main() {
 
     debug!("Starting quadlet-rs-generator, output to: {:?}", &cfg.output_path);
 
-    let unit_search_dirs = &*UNIT_DIRS;
 
-    let mut units: HashMap<String, SystemdUnit> = HashMap::default();
-    for source_path in unit_search_dirs {
+    let mut units: HashMap<OsString, SystemdUnit> = HashMap::default();
+    for source_path in unit_search_dirs(*RUN_AS_USER) {
         if let Err(e) = load_units_from_dir(&source_path, &mut units) {
             warn!("Can't read {source_path:?}: {e}");
         }
     }
 
     for (name, unit) in units {
-        let mut extra_suffix = "";
+        let name = name.into_string().unwrap();
 
-        let mut service = if name.ends_with(".container") {
-            match convert_container(&unit) {
-                Ok(service_unit) => {
-                    warn_if_ambiguous_image_name(&service_unit);
-                    service_unit
-                },
-                Err(e) => {
-                    warn!("Error converting {name:?}, ignoring: {e}");
-                    continue;
-                },
-            }
+        let service_result = if name.ends_with(".container") {
+            warn_if_ambiguous_image_name(&unit);
+            convert_container(&unit)
+        } else if name.ends_with(".network") {
+            convert_network(&unit, name.as_str())
         } else if name.ends_with(".volume") {
-            extra_suffix = "-volume";
-            match convert_volume(&unit, name.as_str()) {
-                Ok(service_unit) => service_unit,
-                Err(e) => {
-                    warn!("Error converting {name:?}, ignoring: {e}");
-                    continue;
-                },
-            }
+            convert_volume(&unit, name.as_str())
         } else {
-            debug!("Unsupported type {name:?}");
+            warn!("Unsupported file type {name:?}");
             continue;
         };
-
-        let service_name = quad_replace_extension(
-            &PathBuf::from(name),
-            ".service",
-            "",
-            extra_suffix,
-        );
-
-        match generate_service_file(&cfg.output_path, &service_name, &mut service, &unit){
-            Ok(_) => {},
+        let mut service = match service_result {
+            Ok(service_unit) => service_unit,
             Err(e) => {
-                warn!("Error writing {service_name:?}, ignoring: {e}")
+                warn!("Error converting {name:?}, ignoring: {e}");
+                continue;
             },
         };
-        match enable_service_file(&cfg.output_path, &service_name, &service) {
-            Ok(_) => {},
-            Err(e) => {
-                warn!("Failed to enable generated unit for {service_name:?}, ignoring: {e}")
-            },
+
+        let mut service_output_path = cfg.output_path.clone();
+        service_output_path.push(service.path().unwrap().file_name().unwrap());
+        service.path = Some(service_output_path);
+        if let Err(e) = generate_service_file(&mut service) {
+            warn!("Error writing {:?}, ignoring: {e}", service.path().unwrap());
+            continue;
+        }
+        if let Err(e) = enable_service_file(&cfg.output_path, &service) {
+            warn!("Failed to enable generated unit for {:?}, ignoring: {e}", service.path().unwrap());
+            continue;
         }
     }
 }

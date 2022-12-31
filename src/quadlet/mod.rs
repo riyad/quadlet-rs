@@ -204,7 +204,7 @@ fn is_unambiguous_name(image_name: &str) -> bool {
 // We implement a simple version of this from scratch here to avoid
 // a huge dependency in the generator just for a warning.
 pub(crate) fn warn_if_ambiguous_image_name(container: &SystemdUnit) {
-    if let Some(image_name) = container.lookup_last(X_CONTAINER_SECTION, "Image") {
+    if let Some(image_name) = container.lookup_last(CONTAINER_SECTION, "Image") {
         if !is_unambiguous_name(image_name) {
             let file_name = container.path().unwrap().file_name().unwrap();
             warn!("Warning: {file_name:?} specifies the image {image_name:?} which not a fully qualified image name. This is not ideal for performance and security reasons. See the podman-pull manpage discussion of short-name-aliases.conf for details.");
