@@ -73,7 +73,7 @@ pub(crate) fn quad_is_port_range(port: &str) -> bool {
         cur = chars.next();
         match cur {
             Some(c) if c.is_ascii_digit() => digits += 1,
-            // continue parsing next part
+            // start of next part
             Some('-' | '/') => break,
             // illegal character
             Some(_) => return false,
@@ -89,7 +89,7 @@ pub(crate) fn quad_is_port_range(port: &str) -> bool {
             cur = chars.next();
             match cur {
                 Some(c) if c.is_ascii_digit() => digits += 1,
-                // continue parsing next part
+                // start of next part
                 Some('/') => break,
                 // illegal character
                 Some(_) => return false,
@@ -253,6 +253,16 @@ mod tests {
 
     mod quad_split_ports {
         use super::*;
+
+        #[test]
+        fn with_empty() {
+            let input = "";
+
+            assert_eq!(
+                quad_split_ports(input),
+                vec![""],
+            );
+        }
 
         #[test]
         fn with_only_port() {

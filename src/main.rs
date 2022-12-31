@@ -278,10 +278,9 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
 
     // Run with a pid1 init to reap zombies by default (as most apps don't do that)
     let run_init = container.lookup_last(CONTAINER_SECTION, "RunInit")
-        .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
-        .unwrap_or(false);  // key not found: use default
-    if run_init {
-        podman.add("--init");
+        .map(|s| parse_bool(s).unwrap_or(false));  // key found: parse or default
+    if let Some(run_init) = run_init {
+        podman.add_bool("--init", run_init);
     }
 
     let service_type = container.lookup_last(SERVICE_SECTION, "Type");
@@ -875,7 +874,7 @@ fn convert_volume(volume: &SystemdUnit, volume_name: &str) -> Result<SystemdUnit
 fn generate_service_file(service: &mut SystemdUnit) -> io::Result<()> {
     let out_filename = service.path().unwrap();
 
-    debug!("writing {out_filename:?}");
+    debug!("Writing {out_filename:?}");
 
     let out_file = File::create(&out_filename)?;
     let mut writer = BufWriter::new(out_file);
