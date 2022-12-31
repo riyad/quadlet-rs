@@ -919,7 +919,7 @@ fn clean_path(path: PathBuf) -> PathBuf {
 // symlinks to get systemd to start the newly generated file as needed.
 // In a traditional setup this is done by "systemctl enable", but that doesn't
 // work for auto-generated files like these.
-fn enable_service_file(output_path: &Path, service: &SystemdUnit) -> io::Result<()> {
+fn enable_service_file(output_path: &Path, service: &SystemdUnit) {
     let mut symlinks: Vec<PathBuf> = Vec::new();
     let service_name = service.path().unwrap().file_name().unwrap();
 
@@ -975,14 +975,12 @@ fn enable_service_file(output_path: &Path, service: &SystemdUnit) -> io::Result<
         }
 
         debug!("Creating symlink {symlink_path:?} -> {target:?}");
-        fs::remove_file(&symlink_path);  // overwrite existing symlinks
+        fs::remove_file(&symlink_path).unwrap_or_default();  // overwrite existing symlinks
         if let Err(e) = os::unix::fs::symlink(target, &symlink_path) {
             log!("Failed creating symlink {:?}: {e}", symlink_path.to_str().unwrap());
             continue;
         }
     }
-
-    Ok(())
 }
 
 fn main() {
@@ -1049,10 +1047,7 @@ fn main() {
             log!("Error writing {:?}, ignoring: {e}", service.path().unwrap());
             continue;
         }
-        if let Err(e) = enable_service_file(&cfg.output_path, &service) {
-            log!("Failed to enable generated unit for {:?}, ignoring: {e}", service.path().unwrap());
-            continue;
-        }
+        enable_service_file(&cfg.output_path, &service);
     }
 }
 
