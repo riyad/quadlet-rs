@@ -1,9 +1,7 @@
 mod constants;
 mod podman_command;
 
-use crate::ConversionError;
-use crate::systemd_unit::SplitWord;
-use crate::systemd_unit::SystemdUnit;
+use crate::systemd_unit::{Error, SystemdUnit, SplitWord};
 
 pub(crate) use self::constants::*;
 pub(crate) use self::podman_command::*;
@@ -11,6 +9,47 @@ pub(crate) use self::podman_command::*;
 use log::warn;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fmt::Display;
+
+#[derive(Debug)]
+#[non_exhaustive]
+pub(crate) enum ConversionError {
+    ImageMissing(String),
+    InvalidKillMode(String),
+    InvalidPortFormat(String),
+    InvalidPublishedPort(String),
+    InvalidRemapUsers(String),
+    InvalidServiceType(String),
+    InvalidSubnet(String),
+    Parsing(Error),
+    UnknownKey(String),
+}
+
+impl Display for ConversionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            ConversionError::ImageMissing(msg) |
+            ConversionError::InvalidKillMode(msg) |
+            ConversionError::InvalidPortFormat(msg) |
+            ConversionError::InvalidPublishedPort(msg) |
+            ConversionError::InvalidRemapUsers(msg) |
+            ConversionError::InvalidServiceType(msg) |
+            ConversionError::InvalidSubnet(msg) |
+            ConversionError::UnknownKey(msg) => {
+                write!(f, "{msg}")
+            },
+            ConversionError::Parsing(e) => {
+                write!(f, "Failed parsing unit file: {e}")
+            },
+        }
+    }
+}
+
+impl From<Error> for ConversionError {
+    fn from(e: Error) -> Self {
+        ConversionError::Parsing(e)
+    }
+}
 
 pub(crate) fn quad_is_port_range(port: &str) -> bool {
     // NOTE: We chose to implement a parser ouselves, because pulling in the regex crate just for this

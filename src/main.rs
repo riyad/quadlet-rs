@@ -10,7 +10,6 @@ use std::collections::HashMap;
 use std::env;
 use std::ffi::OsStr;
 use std::ffi::OsString;
-use std::fmt::Display;
 use std::fs;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
@@ -37,45 +36,6 @@ struct Config {
     version: bool,
 }
 
-#[derive(Debug)]
-#[non_exhaustive]
-enum ConversionError {
-    ImageMissing(String),
-    InvalidKillMode(String),
-    InvalidPortFormat(String),
-    InvalidPublishedPort(String),
-    InvalidRemapUsers(String),
-    InvalidServiceType(String),
-    InvalidSubnet(String),
-    Parsing(Error),
-    UnknownKey(String),
-}
-
-impl Display for ConversionError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            ConversionError::ImageMissing(msg) |
-            ConversionError::InvalidKillMode(msg) |
-            ConversionError::InvalidPortFormat(msg) |
-            ConversionError::InvalidPublishedPort(msg) |
-            ConversionError::InvalidRemapUsers(msg) |
-            ConversionError::InvalidServiceType(msg) |
-            ConversionError::InvalidSubnet(msg) |
-            ConversionError::UnknownKey(msg) => {
-                write!(f, "{msg}")
-            },
-            ConversionError::Parsing(e) => {
-                write!(f, "Failed parsing unit file: {e}")
-            },
-        }
-    }
-}
-
-impl From<Error> for ConversionError {
-    fn from(e: Error) -> Self {
-        ConversionError::Parsing(e)
-    }
-}
 
 fn help() {
     println!("Usage:
