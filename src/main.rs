@@ -59,10 +59,10 @@ fn parse_args(args: Vec<String>) -> Result<Config, String> {
         version: false,
     };
 
-    cfg.is_user = env::args().nth(0).unwrap().contains("user");
+    cfg.is_user = args[0].contains("user");
 
     if args.len() < 2 {
-        return Err("missing output dir".into())
+        return Err("Missing output directory argument".into())
     } else {
         let mut iter = args.iter();
         // skip $0
@@ -82,7 +82,7 @@ fn parse_args(args: Vec<String>) -> Result<Config, String> {
                     // we only need the first path
                     break;
                 },
-                None => return Err("missing output dir".into()),
+                None => return Err("Missing output directory argument".into()),
             }
         }
     }
@@ -1071,7 +1071,7 @@ mod tests {
 
             assert_eq!(
                 parse_args(args),
-                Err("missing output dir".into())
+                Err("Missing output directory argument".into())
             );
         }
 
@@ -1088,6 +1088,59 @@ mod tests {
                 parse_args(args),
                 Ok(Config {
                     version: true,
+                    ..Default::default()
+                })
+            );
+        }
+
+        #[test]
+        fn parses_user_invocation_from_arg_0() {
+            let args: Vec<String> = vec![
+                "./quadlet-rs-user-generator".into(),
+                "./output_dir".into(),
+            ];
+
+            assert_eq!(
+                parse_args(args),
+                Ok(Config {
+                    is_user: true,
+                    output_path: "./output_dir".into(),
+                    ..Default::default()
+                })
+            );
+        }
+
+        #[test]
+        fn accepts_no_kmsg_log() {
+            let args: Vec<String> = vec![
+                "./quadlet-rs".into(),
+                "--no-kmsg-log".into(),
+                "./output_dir".into(),
+            ];
+
+            assert_eq!(
+                parse_args(args),
+                Ok(Config {
+                    no_kmsg: true,
+                    output_path: "./output_dir".into(),
+                    ..Default::default()
+                })
+            );
+        }
+
+        #[test]
+        fn accepts_user() {
+            let args: Vec<String> = vec![
+                "./quadlet-rs".into(),
+                "--user".into(),
+                "./output_dir".into(),
+            ];
+
+            assert_eq!(
+                parse_args(args),
+                Ok(Config {
+                    is_user: true,
+                    output_path: "./output_dir".into(),
                     ..Default::default()
                 })
             );
@@ -1154,7 +1207,7 @@ mod tests {
 
             assert_eq!(
                 parse_args(args),
-                Err("missing output dir".into())
+                Err("Missing output directory argument".into())
             );
         }
 
@@ -1165,6 +1218,7 @@ mod tests {
                 "./output_dir1".into(),
                 "./output_dir2".into(),
                 "./output_dir3".into(),
+                "./output_dir4".into(),  // systemd actually only specifies 3 output dirs
             ];
 
             assert_eq!(
