@@ -59,6 +59,7 @@ enum ConversionError {
     InvalidPublishedPort(String),
     InvalidRemapUsers(String),
     InvalidServiceType(String),
+    InvalidSubnet(String),
     Parsing(Error),
     UnknownKey(String),
 }
@@ -72,6 +73,7 @@ impl Display for ConversionError {
             ConversionError::InvalidPublishedPort(msg) |
             ConversionError::InvalidRemapUsers(msg) |
             ConversionError::InvalidServiceType(msg) |
+            ConversionError::InvalidSubnet(msg) |
             ConversionError::UnknownKey(msg) => {
                 write!(f, "{msg}")
             },
@@ -689,6 +691,122 @@ fn add_networks(quadlet_unit_file: &SystemdUnit, section: &str, service_unit_fil
     }
 
     Ok(())
+}
+
+// Convert a quadlet network file (unit file with a Network group) to a systemd
+// service file (unit file with Service group) based on the options in the Network group.
+// The original Network group is kept around as X-Network.
+fn convert_network(network: &SystemdUnit, name: &str) -> Result<SystemdUnit, ConversionError> {
+    let mut service = SystemdUnit::new();
+    service.merge_from(network);
+    service.path = Some(quad_replace_extension(&PathBuf::from(name), ".service", "", "-network"));
+
+    if network.path().is_some() {
+        service.append_entry(
+            UNIT_SECTION,
+            "SourcePath",
+            network.path().unwrap().to_str().unwrap(),
+        );
+    }
+
+    check_for_unknown_keys(&network, NETWORK_SECTION, &*SUPPORTED_NETWORK_KEYS)?;
+
+    // Rename old Network group to x-Network so that systemd ignores it
+    service.rename_section(NETWORK_SECTION, X_NETWORK_SECTION);
+
+    let network_name: String = quad_replace_extension(&PathBuf::from(name),  "", "systemd-", "").file_name().unwrap().to_str().unwrap().into();
+
+    // Need the containers filesystem mounted to start podman
+    service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
+
+    let mut podman = PodmanCommand::new_command("network");
+    podman.add_slice(&["create", "--ignore"]);
+
+    let disable_dns = network.lookup_last(NETWORK_SECTION, "DisableDNS")
+        .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
+        .unwrap_or(false);  // key not found: use default
+    if disable_dns {
+        podman.add("--disable-dns")
+    }
+
+    let driver = network.lookup_last(NETWORK_SECTION, "Driver");
+    if let Some(driver) = driver {
+        if !driver.is_empty() {
+            podman.add(format!("--driver={driver}"));
+        }
+    }
+
+    let subnets: Vec<&str> = network.lookup_all(NETWORK_SECTION, "Subnet").collect();
+    let gateways: Vec<&str> = network.lookup_all(NETWORK_SECTION, "Gateway").collect();
+    let ip_ranges: Vec<&str> = network.lookup_all(NETWORK_SECTION, "IPRange").collect();
+    if !subnets.is_empty() {
+        if gateways.len() > subnets.len() {
+            return Err(ConversionError::InvalidSubnet("cannot set more gateways than subnets".into()));
+        }
+        if ip_ranges.len() > subnets.len() {
+            return Err(ConversionError::InvalidSubnet("cannot set more ranges than subnets".into()));
+        }
+        for (i, subnet) in subnets.iter().enumerate() {
+            podman.add(format!("--subnet={subnet}"));
+            if i < gateways.len() {
+                podman.add(format!("--gateway={}", gateways[i]));
+            }
+            if i < ip_ranges.len() {
+                podman.add(format!("--ip-range={}", ip_ranges[i]));
+            }
+        }
+    } else if !gateways.is_empty() || !ip_ranges.is_empty() {
+		return Err(ConversionError::InvalidSubnet("cannot set Gateway or IPRange without Subnet".into()));
+    }
+
+    let internal = network.lookup_last(NETWORK_SECTION, "Internal")
+        .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
+        .unwrap_or(false);  // key not found: use default
+    if internal {
+        podman.add("--internal")
+    }
+
+    let ipam_driver = network.lookup_last(NETWORK_SECTION, "IPAMDriver");
+    if let Some(ipam_driver) = ipam_driver {
+        podman.add(format!("--ipam-driver={ipam_driver}"));
+    }
+
+    let ipv6 = network.lookup_last(NETWORK_SECTION, "IPv6")
+        .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
+        .unwrap_or(false);  // key not found: use default
+    if ipv6 {
+        podman.add("--ipv6")
+    }
+
+    let network_options: Vec<&str> = network.lookup_all_values(NETWORK_SECTION, "Options")
+        .map(|v| v.raw().as_str())
+        .collect();
+    let network_options: HashMap<String, String> = quad_parse_kvs(&network_options);
+    if !network_options.is_empty() {
+        podman.add_keys("--opt", &network_options);
+    }
+
+    let labels: Vec<&str> = network.lookup_all_values(NETWORK_SECTION, "Label")
+        .map(|v| v.raw().as_str())
+        .collect();
+    let label_args: HashMap<String, String> = quad_parse_kvs(&labels);
+    podman.add_labels(&label_args);
+
+    podman.add(network_name);
+
+    service.append_entry_value(
+        SERVICE_SECTION,
+        "ExecStart",
+        EntryValue::try_from_raw(podman.to_escaped_string().as_str())?,
+    );
+
+    service.append_entry(SERVICE_SECTION,"Type", "oneshot");
+    service.append_entry(SERVICE_SECTION,"RemainAfterExit", "yes");
+
+    // The default syslog identifier is the exec basename (podman) which isn't very useful here
+    service.append_entry(SERVICE_SECTION,"SyslogIdentifier", "%N");
+
+    Ok(service)
 }
 
 // Convert a quadlet volume file (unit file with a Volume group) to a systemd

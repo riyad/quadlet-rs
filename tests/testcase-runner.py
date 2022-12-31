@@ -29,7 +29,9 @@ def find_sublist(full_list, sublist):
 
 def to_service(filename):
     (base, ext) = os.path.splitext(filename)
-    if ext == ".volume":
+    if ext == ".network":
+        base = base + "-network"
+    elif ext == ".volume":
         base = base + "-volume"
     return base + ".service"
 
@@ -290,7 +292,9 @@ def load_test_suite():
     test_suite = unittest.TestSuite()
     for de in os.scandir(testcases_dir):
         name = de.name
-        if (name.endswith(".container") or name.endswith(".volume")) and not name.startswith("."):
+        if (name.endswith(".container") or
+            name.endswith(".network") or
+            name.endswith(".volume")) and not name.startswith("."):
             test_suite.addTest(QuadletTestCase(name))
 
     return test_suite
