@@ -207,6 +207,14 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
     service.merge_from(container);
     service.path = Some(quad_replace_extension(container.path().unwrap(), ".service", "", ""));
 
+    if container.path().is_some() {
+        service.append_entry(
+            UNIT_SECTION,
+            "SourcePath",
+            container.path().unwrap().to_str().unwrap(),
+        );
+    }
+
     check_for_unknown_keys(&container, CONTAINER_SECTION, &*SUPPORTED_CONTAINER_KEYS)?;
 
     service.rename_section(CONTAINER_SECTION, X_CONTAINER_SECTION);
@@ -836,6 +844,14 @@ fn convert_volume(volume: &SystemdUnit, volume_name: &str) -> Result<SystemdUnit
     let mut service = SystemdUnit::new();
     service.merge_from(volume);
     service.path = Some(quad_replace_extension(volume.path().unwrap(), ".service", "", "-volume"));
+
+    if volume.path().is_some() {
+        service.append_entry(
+            UNIT_SECTION,
+            "SourcePath",
+            volume.path().unwrap().to_str().unwrap(),
+        );
+    }
 
     check_for_unknown_keys(&volume, VOLUME_SECTION, &*SUPPORTED_VOLUME_KEYS)?;
 
