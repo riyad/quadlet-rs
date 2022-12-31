@@ -1010,12 +1010,16 @@ fn main() {
 
     debug!("Starting quadlet-rs-generator, output to: {:?}", &cfg.output_path);
 
-
     let mut units: HashMap<OsString, SystemdUnit> = HashMap::default();
     for source_path in unit_search_dirs(cfg.is_user) {
         if let Err(e) = load_units_from_dir(&source_path, &mut units) {
             log!("Can't read {source_path:?}: {e}");
         }
+    }
+
+    if let Err(e) = fs::create_dir_all(&cfg.output_path) {
+        log!("Can't create dir {:?}: {e}", cfg.output_path.to_str().unwrap());
+        std::process::exit(1);
     }
 
     for (name, unit) in units {
