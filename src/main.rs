@@ -255,7 +255,7 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
         .lookup_all_values(CONTAINER_SECTION, "Environment")
         .map(|v| v.raw().as_str())
         .collect();
-    let mut env_args: HashMap<String, String> = quad_parse_kvs(&environments);
+    let env_args: HashMap<String, String> = quad_parse_kvs(&environments);
 
     // Need the containers filesystem mounted to start podman
     service.append_entry(
@@ -535,7 +535,7 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
         //
         // ip could be IPv6 with minimum of these chars "[::]"
         // containerPort can have a suffix of "/tcp" or "/udp"
-        let mut container_port = String::new();
+        let container_port;
         let mut ip = String::new();
         let mut host_port = String::new();
         match parts.len() {
@@ -858,14 +858,11 @@ fn convert_volume(volume: &SystemdUnit, volume_name: &str) -> Result<SystemdUnit
     // Rename old Volume group to x-Volume so that systemd ignores it
     service.rename_section(VOLUME_SECTION, X_VOLUME_SECTION);
 
-
     let podman_volume_name = quad_replace_extension(&PathBuf::from(volume_name), "", "systemd-", "");
     let podman_volume_name = podman_volume_name.to_str().unwrap();
 
     // Need the containers filesystem mounted to start podman
     service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
-
-    let exec_cond_arg = format!("/usr/bin/bash -c \"! /usr/bin/podman volume exists {podman_volume_name}\"",);
 
     let labels: Vec<&str> = volume.lookup_all_values(VOLUME_SECTION, "Label")
         .map(|v| v.raw().as_str())
@@ -1101,9 +1098,12 @@ fn main() {
     }
 }
 
+#[cfg(test)]
 mod tests {
+    use super::*;
+
     mod parse_args {
-        use super::super::{Config, parse_args};
+        use super::*;
 
         #[test]
         fn fails_with_no_arguments() {
