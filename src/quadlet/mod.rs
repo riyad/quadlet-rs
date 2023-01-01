@@ -2,7 +2,8 @@ mod constants;
 mod podman_command;
 pub(crate) mod logger;
 
-use crate::systemd_unit::{Error, SystemdUnit, SplitWord};
+use crate::systemd_unit;
+use crate::systemd_unit::{SystemdUnit, SplitWord};
 use self::logger::*;
 
 pub(crate) use self::constants::*;
@@ -11,6 +12,7 @@ pub(crate) use self::podman_command::*;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
+use std::io;
 
 #[derive(Debug)]
 #[non_exhaustive]
@@ -22,8 +24,10 @@ pub(crate) enum ConversionError {
     InvalidRemapUsers(String),
     InvalidServiceType(String),
     InvalidSubnet(String),
-    Parsing(Error),
+    Io(io::Error),
+    Parsing(systemd_unit::Error),
     UnknownKey(String),
+    YamlMissing(String),
 }
 
 impl Display for ConversionError {
@@ -36,8 +40,12 @@ impl Display for ConversionError {
             ConversionError::InvalidRemapUsers(msg) |
             ConversionError::InvalidServiceType(msg) |
             ConversionError::InvalidSubnet(msg) |
-            ConversionError::UnknownKey(msg) => {
+            ConversionError::UnknownKey(msg) |
+            ConversionError::YamlMissing(msg) => {
                 write!(f, "{msg}")
+            },
+            ConversionError::Io(e) => {
+                e.fmt(f)
             },
             ConversionError::Parsing(e) => {
                 write!(f, "Failed parsing unit file: {e}")
@@ -46,8 +54,14 @@ impl Display for ConversionError {
     }
 }
 
-impl From<Error> for ConversionError {
-    fn from(e: Error) -> Self {
+impl From<io::Error> for ConversionError {
+    fn from(e: io::Error) -> Self {
+        ConversionError::Io(e)
+    }
+}
+
+impl From<systemd_unit::Error> for ConversionError {
+    fn from(e: systemd_unit::Error) -> Self {
         ConversionError::Parsing(e)
     }
 }

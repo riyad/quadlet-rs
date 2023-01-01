@@ -17,12 +17,13 @@ use std::io::{self, BufWriter, Write};
 use std::os;
 use std::path::{Path, PathBuf};
 
-static SUPPORTED_EXTENSIONS: Lazy<Vec<&OsStr>> = Lazy::new(|| {
-    vec![
-        OsStr::new("container"),
-        OsStr::new("network"),
-        OsStr::new("volume"),
-    ]
+static SUPPORTED_EXTENSIONS: Lazy<[&OsStr; 4]> = Lazy::new(|| {
+    [
+        "kube",
+        "container",
+        "network",
+        "volume",
+    ].map(|ext| OsStr::new(ext))
 });
 
 const QUADLET_VERSION: &str = "0.1.0";
@@ -687,6 +688,100 @@ fn add_networks(quadlet_unit_file: &SystemdUnit, section: &str, service_unit_fil
     Ok(())
 }
 
+fn convert_kube(kube: &SystemdUnit, is_user: bool) -> Result<SystemdUnit, ConversionError> {
+    let mut service = SystemdUnit::new();
+    service.merge_from(kube);
+    service.path = Some(quad_replace_extension(kube.path().unwrap(), ".service", "", ""));
+
+    if kube.path().is_some() {
+        service.append_entry(
+            UNIT_SECTION,
+            "SourcePath",
+            kube.path().unwrap().to_str().unwrap(),
+        );
+    }
+
+    check_for_unknown_keys(&kube, KUBE_SECTION, &*SUPPORTED_KUBE_KEYS)?;
+
+    // Rename old Kube group to x-Kube so that systemd ignores it
+    service.rename_section(KUBE_SECTION, X_KUBE_SECTION);
+
+    let yaml_path = kube.lookup_last(KUBE_SECTION, "Yaml").unwrap_or("");
+    if yaml_path.is_empty() {
+        return Err(ConversionError::YamlMissing("no Yaml key specified".into()))
+    }
+
+    let mut yaml_path = PathBuf::from(yaml_path);
+    if !yaml_path.is_absolute() {
+        if kube.path().is_some() {
+            let mut path = kube.path().unwrap().parent().unwrap().to_path_buf();
+            path.push(yaml_path);
+            yaml_path = path;
+        } else {
+            yaml_path.canonicalize()?;
+        }
+    }
+
+    // Only allow mixed or control-group, as nothing else works well
+    let kill_mode = kube.lookup_last(KUBE_SECTION, "KillMode");
+    match kill_mode {
+        None | Some("mixed") | Some("control-group") => {
+            // We default to mixed instead of control-group, because it lets conmon do its thing
+            service.set_entry(SERVICE_SECTION, "KillMode", "mixed");
+        },
+        Some(kill_mode) => {
+            return Err(ConversionError::InvalidKillMode(format!("invalid KillMode '{kill_mode}'")));
+        }
+    }
+
+    // Set PODMAN_SYSTEMD_UNIT so that podman auto-update can restart the service.
+    service.append_entry(SERVICE_SECTION, "Environment", "PODMAN_SYSTEMD_UNIT=%n");
+
+    // Need the containers filesystem mounted to start podman
+    service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
+
+    service.append_entry(SERVICE_SECTION, "Type", "notify");
+    service.append_entry(SERVICE_SECTION, "NotifyAccess", "all");
+
+    if !kube.has_key(SERVICE_SECTION, "SyslogIdentifier") {
+        service.set_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
+    }
+
+    let mut podman_start = PodmanCommand::new_command("kube");
+    podman_start.add("play");
+
+    podman_start.add_slice(&[
+        // Replace any previous container with the same name, not fail
+        "--replace",
+
+        // Use a service container
+        "--service-container=true",
+    ]);
+
+    handle_user_remap(&kube, KUBE_SECTION, &mut podman_start, is_user, false)?;
+
+    add_networks(&kube, KUBE_SECTION, &mut service, &mut podman_start)?;
+
+    podman_start.add(yaml_path.to_str().unwrap());
+
+    service.append_entry_value(
+        SERVICE_SECTION,
+        "ExecStart",
+        EntryValue::try_from_raw(podman_start.to_escaped_string().as_str())?,
+    );
+
+    let mut podman_stop = PodmanCommand::new_command("kube");
+    podman_stop.add("down");
+    podman_stop.add(yaml_path.to_str().unwrap());
+    service.append_entry_value(
+        SERVICE_SECTION,
+        "ExecStop",
+        EntryValue::try_from_raw(podman_stop.to_escaped_string().as_str())?,
+    );
+
+    Ok(service)
+}
+
 // Convert a quadlet network file (unit file with a Network group) to a systemd
 // service file (unit file with Service group) based on the options in the Network group.
 // The original Network group is kept around as X-Network.
@@ -1030,6 +1125,8 @@ fn main() {
         let service_result = if name.ends_with(".container") {
             warn_if_ambiguous_image_name(&unit);
             convert_container(&unit, cfg.is_user)
+        } else if name.ends_with(".kube") {
+            convert_kube(&unit, cfg.is_user)
         } else if name.ends_with(".network") {
             convert_network(&unit, name.as_str())
         } else if name.ends_with(".volume") {

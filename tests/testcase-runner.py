@@ -329,6 +329,7 @@ def load_test_suite():
     for de in os.scandir(testcases_dir):
         name = de.name
         if (name.endswith(".container") or
+            name.endswith(".kube") or
             name.endswith(".network") or
             name.endswith(".volume")) and not name.startswith("."):
             test_suite.addTest(QuadletTestCase(name))

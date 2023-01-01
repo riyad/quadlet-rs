@@ -3,6 +3,8 @@ use std::collections::HashSet;
 
 pub const CONTAINER_SECTION: &str = "Container";
 pub const X_CONTAINER_SECTION: &str = "X-Container";
+pub const KUBE_SECTION: &str = "Kube";
+pub const X_KUBE_SECTION: &str = "X-Kube";
 pub const NETWORK_SECTION: &str = "Network";
 pub const X_NETWORK_SECTION: &str = "X-Network";
 pub const VOLUME_SECTION: &str = "Volume";
@@ -12,6 +14,7 @@ pub static SUPPORTED_CONTAINER_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| 
     let keys = [
         "ContainerName",
         "Image",
+        "KillMode",
         "Environment",
         "Exec",
         "NoNewPrivileges",
@@ -36,6 +39,24 @@ pub static SUPPORTED_CONTAINER_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| 
         "Timezone",
         "SeccompProfile",
         "AddDevice",
+        "Network",
+    ];
+
+    let mut set = HashSet::with_capacity(keys.len());
+    for k in keys {
+        set.insert(k);
+    }
+    set
+});
+
+pub static SUPPORTED_KUBE_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+    let keys = [
+        "Yaml",
+        "KillMode",
+        "RemapUsers",
+        "RemapUid",
+        "RemapGid",
+        "RemapUidSize",
         "Network",
     ];
 
