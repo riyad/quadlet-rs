@@ -61,8 +61,9 @@ fn __log_to_kmsg(msg: &str) -> bool {
     if kmsg_file.is_none() {
         *kmsg_file = match OpenOptions::new().write(true).mode(0o644).open("/dev/kmsg") {
             Ok(f) => Some(f),
-            Err(_) => {
+            Err(e) => {
                 unsafe { *NO_KMSG.get_mut() = true };
+                debug!("Deactivated logging to /dev/kmsg: {e}");
                 return false
             }
         };
