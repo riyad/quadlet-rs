@@ -669,7 +669,7 @@ fn add_networks(quadlet_unit_file: &SystemdUnit, section: &str, service_unit_fil
                 podman_network_name = quad_replace_extension(&PathBuf::from(network_name), "", "systemd-", "");
 
                 // the systemd unit name is $name-network.service
-                let network_service_name = quad_replace_extension(&podman_network_name, ".service", "", "-network");
+                let network_service_name = quad_replace_extension(&PathBuf::from(network_name), ".service", "", "-network");
 
                 service_unit_file.append_entry(UNIT_SECTION, "Requires", network_service_name.to_str().unwrap());
                 service_unit_file.append_entry(UNIT_SECTION, "After", network_service_name.to_str().unwrap());
