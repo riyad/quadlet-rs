@@ -659,8 +659,6 @@ fn add_networks(quadlet_unit_file: &SystemdUnit, section: &str, service_unit_fil
             if let Some((_network_name, _options)) = network.split_once(':') {
                 network_name = _network_name;
                 options = Some(_options);
-            } else {
-                podman.add(format!("--network={network}"));
             }
 
             let podman_network_name;
