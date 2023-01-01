@@ -785,10 +785,10 @@ fn convert_kube(kube: &SystemdUnit, is_user: bool) -> Result<SystemdUnit, Conver
 // Convert a quadlet network file (unit file with a Network group) to a systemd
 // service file (unit file with Service group) based on the options in the Network group.
 // The original Network group is kept around as X-Network.
-fn convert_network(network: &SystemdUnit, name: &str) -> Result<SystemdUnit, ConversionError> {
+fn convert_network(network: &SystemdUnit) -> Result<SystemdUnit, ConversionError> {
     let mut service = SystemdUnit::new();
     service.merge_from(network);
-    service.path = Some(quad_replace_extension(&PathBuf::from(name), ".service", "", "-network"));
+    service.path = Some(quad_replace_extension(network.path().unwrap(), ".service", "", "-network"));
 
     if network.path().is_some() {
         service.append_entry(
@@ -803,13 +803,18 @@ fn convert_network(network: &SystemdUnit, name: &str) -> Result<SystemdUnit, Con
     // Rename old Network group to x-Network so that systemd ignores it
     service.rename_section(NETWORK_SECTION, X_NETWORK_SECTION);
 
-    let network_name: String = quad_replace_extension(&PathBuf::from(name),  "", "systemd-", "").file_name().unwrap().to_str().unwrap().into();
+    let podman_network_name = quad_replace_extension(network.path().unwrap(),  "", "systemd-", "")
+        .file_name().unwrap().to_str().unwrap().to_string();
 
     // Need the containers filesystem mounted to start podman
     service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
 
     let mut podman = PodmanCommand::new_command("network");
-    podman.add_slice(&["create", "--ignore"]);
+    podman.add("create");
+    // FIXME: add `--ignore` once we can rely on Podman v4.4.0 or newer being present
+    // Podman support added in: https://github.com/containers/podman/pull/16773
+    // Quadlet support added in: https://github.com/containers/podman/pull/16688
+    //podman.add("--ignore");
 
     let disable_dns = network.lookup_last(NETWORK_SECTION, "DisableDNS")
         .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
@@ -881,7 +886,7 @@ fn convert_network(network: &SystemdUnit, name: &str) -> Result<SystemdUnit, Con
     let label_args: HashMap<String, String> = quad_parse_kvs(&labels);
     podman.add_labels(&label_args);
 
-    podman.add(network_name);
+    podman.add(&podman_network_name);
 
     service.append_entry_value(
         SERVICE_SECTION,
@@ -892,6 +897,12 @@ fn convert_network(network: &SystemdUnit, name: &str) -> Result<SystemdUnit, Con
     service.append_entry(SERVICE_SECTION,"Type", "oneshot");
     service.append_entry(SERVICE_SECTION,"RemainAfterExit", "yes");
 
+    service.append_entry_value(
+        SERVICE_SECTION,
+        "ExecCondition",
+        EntryValue::try_from_raw(format!("/usr/bin/bash -c \"! /usr/bin/podman network exists {podman_network_name}\""))?,
+    );
+
     // The default syslog identifier is the exec basename (podman) which isn't very useful here
     service.append_entry(SERVICE_SECTION,"SyslogIdentifier", "%N");
 
@@ -901,7 +912,7 @@ fn convert_network(network: &SystemdUnit, name: &str) -> Result<SystemdUnit, Con
 // Convert a quadlet volume file (unit file with a Volume group) to a systemd
 // service file (unit file with Service group) based on the options in the Volume group.
 // The original Volume group is kept around as X-Volume.
-fn convert_volume(volume: &SystemdUnit, volume_name: &str) -> Result<SystemdUnit, ConversionError> {
+fn convert_volume(volume: &SystemdUnit) -> Result<SystemdUnit, ConversionError> {
     let mut service = SystemdUnit::new();
     service.merge_from(volume);
     service.path = Some(quad_replace_extension(volume.path().unwrap(), ".service", "", "-volume"));
@@ -919,8 +930,8 @@ fn convert_volume(volume: &SystemdUnit, volume_name: &str) -> Result<SystemdUnit
     // Rename old Volume group to x-Volume so that systemd ignores it
     service.rename_section(VOLUME_SECTION, X_VOLUME_SECTION);
 
-    let podman_volume_name = quad_replace_extension(&PathBuf::from(volume_name), "", "systemd-", "");
-    let podman_volume_name = podman_volume_name.to_str().unwrap();
+    let podman_volume_name = quad_replace_extension(volume.path().unwrap(), "", "systemd-", "")
+        .file_name().unwrap().to_str().unwrap().to_string();
 
     // Need the containers filesystem mounted to start podman
     service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
@@ -931,7 +942,11 @@ fn convert_volume(volume: &SystemdUnit, volume_name: &str) -> Result<SystemdUnit
     let label_args: HashMap<String, String> = quad_parse_kvs(&labels);
 
     let mut podman = PodmanCommand::new_command("volume");
-    podman.add_slice(&["create", "--ignore"]);
+    podman.add("create");
+    // FIXME: add `--ignore` once we can rely on Podman v4.4.0 or newer being present
+    // Podman support added in: https://github.com/containers/podman/pull/16243
+    // Quadlet default changed in: https://github.com/containers/podman/pull/16243
+    //podman.add("--ignore")
 
     let mut opts: Vec<String> = Vec::with_capacity(2);
     if volume.has_key(VOLUME_SECTION, "User") {
@@ -952,7 +967,7 @@ fn convert_volume(volume: &SystemdUnit, volume_name: &str) -> Result<SystemdUnit
     }
 
     podman.add_labels(&label_args);
-    podman.add(podman_volume_name);
+    podman.add(&podman_volume_name);
 
     service.append_entry_value(
         SERVICE_SECTION,
@@ -962,6 +977,12 @@ fn convert_volume(volume: &SystemdUnit, volume_name: &str) -> Result<SystemdUnit
 
     service.append_entry(SERVICE_SECTION,"Type", "oneshot");
     service.append_entry(SERVICE_SECTION,"RemainAfterExit", "yes");
+
+    service.append_entry_value(
+        SERVICE_SECTION,
+        "ExecCondition",
+        EntryValue::try_from_raw(format!("/usr/bin/bash -c \"! /usr/bin/podman volume exists {podman_volume_name}\""))?,
+    );
 
     // The default syslog identifier is the exec basename (podman) which isn't very useful here
     service.append_entry(SERVICE_SECTION,"SyslogIdentifier", "%N");
@@ -1128,9 +1149,9 @@ fn main() {
         } else if name.ends_with(".kube") {
             convert_kube(&unit, cfg.is_user)
         } else if name.ends_with(".network") {
-            convert_network(&unit, name.as_str())
+            convert_network(&unit)
         } else if name.ends_with(".volume") {
-            convert_volume(&unit, name.as_str())
+            convert_volume(&unit)
         } else {
             log!("Unsupported file type {name:?}");
             continue;
