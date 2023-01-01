@@ -12,8 +12,17 @@ def match_sublist_at(full_list, pos, sublist):
     if len(sublist) > len(full_list) - pos:
         return False
 
-    for i in range(0, len(sublist)):
+    for i in range(len(sublist)):
         if sublist[i] != full_list[pos+i]:
+            return False
+    return True
+
+def match_sublist_regex_at(full_list, pos, sublist):
+    if len(sublist) > len(full_list) - pos:
+        return False
+
+    for i in range(len(sublist)):
+        if re.search(sublist[i], full_list[pos+i]) is None:
             return False
     return True
 
@@ -21,10 +30,10 @@ def find_sublist(full_list, sublist):
     if len(sublist) > len(full_list):
         return -1
     if len(sublist) == 0:
-        return -1;
-    for i in range(0, len(full_list) - len(sublist) + 1):
+        return -1
+    for i in range(len(full_list) - len(sublist) + 1):
         if match_sublist_at(full_list, i, sublist):
-            return i;
+            return i
     return -1
 
 def to_service(filename):
@@ -36,10 +45,8 @@ def to_service(filename):
     return base + ".service"
 
 def read_file(dir, filename):
-    data=""
     with open(os.path.join(dir, filename), "r") as f:
-        data = f.read()
-    return data
+        return f.read()
 
 def write_file(indir, filename, data):
     with open(os.path.join(indir, filename), "w") as f:
@@ -71,7 +78,6 @@ class QuadletTestCase(unittest.TestCase):
             self.expect_fail = True
         self.outdata = ""
         self.unit = {}
-        self.podman_args = []
         self.expected_files = set()
 
     def lookup(self, group, key):
@@ -103,12 +109,6 @@ class QuadletTestCase(unittest.TestCase):
 
         def assert_stderr_contains(args, testcase):
             return args[0] in testcase.stdout
-
-        def assert_podman_args(args, testcase):
-            return find_sublist(testcase.podman_args, args) != -1
-
-        def assert_podman_final_args(args, testcase):
-            return match_sublist_at(testcase.podman_args, len(testcase.podman_args) - len(args), args)
 
         def assert_key_is(args, testcase):
             if len(args) < 3:
@@ -145,8 +145,39 @@ class QuadletTestCase(unittest.TestCase):
             value = args[2]
 
             real_values = testcase.lookup(group, key)
-            last_value = real_values[len(real_values)-1]
+            last_value = real_values[-1]
             return value in last_value
+
+        def assert_podman_args(args, testcase, key):
+            return find_sublist(getattr(testcase, key), args) != -1
+
+        def assert_podman_final_args(args, testcase, key):
+            if len(getattr(testcase, key)) < len(args):
+                return False
+            return match_sublist_at(getattr(testcase, key), len(getattr(testcase, key)) - len(args), args)
+
+        def assert_podman_final_args_regex(args, testcase, key):
+            if len(getattr(testcase, key)) < len(args):
+                return False
+            return match_sublist_regex_at(getattr(testcase, key), len(getattr(testcase, key)) - len(args), args)
+
+        def assert_start_podman_args(*args):
+            return assert_podman_args(*args, '_Service_ExecStart')
+
+        def assert_start_podman_final_args(*args):
+            return assert_podman_final_args(*args, '_Service_ExecStart')
+
+        def assert_start_podman_final_args_regex(*args):
+            return assert_podman_final_args_regex(*args, '_Service_ExecStart')
+
+        def assert_stop_podman_args(*args):
+            return assert_podman_args(*args, '_Service_ExecStop')
+
+        def assert_stop_podman_final_args(*args):
+            return assert_podman_final_args(*args, '_Service_ExecStop')
+
+        def assert_stop_podman_final_args_regex(*args):
+            return assert_podman_final_args_regex(*args, '_Service_ExecStop')
 
         def assert_symlink(args, testcase):
             if len(args) != 2:
@@ -170,9 +201,13 @@ class QuadletTestCase(unittest.TestCase):
             "assert-key-is": assert_key_is,
             "assert-key-is-regex": assert_key_is_regex,
             "assert-key-contains": assert_key_contains,
-            "assert-podman-args": assert_podman_args,
-            "assert-podman-final-args": assert_podman_final_args,
+            "assert-podman-args": assert_start_podman_args,
+            "assert-podman-final-args": assert_start_podman_final_args,
+            "assert-podman-final-args-regex": assert_start_podman_final_args_regex,
             "assert-symlink": assert_symlink,
+            "assert-podman-stop-args": assert_stop_podman_args,
+            "assert-podman-stop-final-args": assert_stop_podman_final_args,
+            "assert-podman-stop-final-args-regex": assert_stop_podman_final_args_regex,
         }
 
         servicepath = os.path.join(outdir, self.servicename)
@@ -186,7 +221,8 @@ class QuadletTestCase(unittest.TestCase):
 
         self.outdata = read_file(outdir, self.servicename)
         self.sections = parse_unitfile(canonicalize_unitfile(self.outdata))
-        self.podman_args = shlex.split(self.sections.get("Service", {}).get("ExecStart", ["podman"])[0])
+        self._Service_ExecStart = shlex.split(self.sections.get("Service", {}).get("ExecStart", ["podman"])[0])
+        self._Service_ExecStop = shlex.split(self.sections.get("Service", {}).get("ExecStop", ["podman"])[0])
         self.expect_file(self.servicename)
 
         for check in self.checks:
