@@ -26,7 +26,7 @@ static SUPPORTED_EXTENSIONS: Lazy<[&OsStr; 4]> = Lazy::new(|| {
     ].map(|ext| OsStr::new(ext))
 });
 
-const QUADLET_VERSION: &str = "0.1.0";
+const QUADLET_VERSION: &str = "0.2.0-dev";
 const UNIT_DIR_ADMIN: &str  = "/etc/containers/systemd";
 const UNIT_DIR_DISTRO: &str  = "/usr/share/containers/systemd";
 
