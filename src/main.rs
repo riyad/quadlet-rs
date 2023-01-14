@@ -16,6 +16,7 @@ use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::os;
 use std::path::{Path, PathBuf};
+use std::process;
 
 static SUPPORTED_EXTENSIONS: Lazy<[&OsStr; 4]> = Lazy::new(|| {
     [
@@ -32,6 +33,7 @@ const UNIT_DIR_DISTRO: &str  = "/usr/share/containers/systemd";
 
 #[derive(Debug, Default, PartialEq)]
 struct Config {
+    dry_run: bool,
     is_user: bool,
     no_kmsg: bool,
     output_path: PathBuf,
@@ -43,9 +45,10 @@ struct Config {
 fn help() {
     println!("Usage:
 quadlet-rs --version
-quadlet-rs [--no-kmsg-log] [--user] [-v|-verbose] OUTPUT_DIR [OUTPUT_DIR] [OUTPUT_DIR]
+quadlet-rs [--dry-run] [--no-kmsg-log] [--user] [-v|--verbose] OUTPUT_DIR [OUTPUT_DIR] [OUTPUT_DIR]
 
 Options:
+    --dry-run      Run in dry-run mode printing debug information
     --no-kmsg-log  Don't log to kmsg
     --user         Run as systemd user
     -v,--verbose   Print debug information");
@@ -53,6 +56,7 @@ Options:
 
 fn parse_args(args: Vec<String>) -> Result<Config, String> {
     let mut cfg = Config {
+        dry_run: false,
         is_user: false,
         no_kmsg: false,
         output_path: PathBuf::new(),
@@ -70,6 +74,7 @@ fn parse_args(args: Vec<String>) -> Result<Config, String> {
         iter.next();
         loop {
             match iter.next().map(String::as_str) {
+                Some("--dry-run") => cfg.dry_run = true,
                 Some("--no-kmsg-log") => cfg.no_kmsg = true,
                 Some("--user") => cfg.is_user = true,
                 Some("--verbose" | "-v") => cfg.verbose = true,
@@ -1100,6 +1105,7 @@ fn enable_service_file(output_path: &Path, service: &SystemdUnit) {
 }
 
 fn main() {
+    let exit_code = 0;
     let args: Vec<String> = env::args().collect();
 
     let cfg = match parse_args(args) {
@@ -1107,35 +1113,46 @@ fn main() {
         Err(msg) => {
             println!("Error: {}", msg);
             help();
-            std::process::exit(1)
+            process::exit(1)
         },
     };
 
-    if cfg.verbose {
+    if cfg.verbose || cfg.dry_run {
         logger::enable_debug();
     }
-    if cfg.no_kmsg {
+    if cfg.no_kmsg || cfg.dry_run {
         logger::disable_kmsg();
     }
 
     // short circuit
     if cfg.version {
         println!("quadlet-rs {}", QUADLET_VERSION);
-        std::process::exit(0);
+        process::exit(0);
     }
 
-    debug!("Starting quadlet-rs-generator, output to: {:?}", &cfg.output_path);
+    if !cfg.dry_run {
+        debug!("Starting quadlet-rs-generator, output to: {:?}", &cfg.output_path);
+    }
+
+    let source_paths = unit_search_dirs(cfg.is_user);
 
     let mut units: HashMap<OsString, SystemdUnit> = HashMap::default();
-    for source_path in unit_search_dirs(cfg.is_user) {
-        if let Err(e) = load_units_from_dir(&source_path, &mut units) {
-            log!("Can't read {source_path:?}: {e}");
+    for dir in &source_paths {
+        if let Err(e) = load_units_from_dir(&dir, &mut units) {
+            log!("Can't read {dir:?}: {e}");
         }
     }
 
-    if let Err(e) = fs::create_dir_all(&cfg.output_path) {
-        log!("Can't create dir {:?}: {e}", cfg.output_path.to_str().unwrap());
-        std::process::exit(1);
+    if units.is_empty() {
+        debug!("No files to parse from {source_paths:?}");
+        process::exit(1);
+    }
+
+    if !cfg.dry_run {
+        if let Err(e) = fs::create_dir_all(&cfg.output_path) {
+            log!("Can't create dir {:?}: {e}", cfg.output_path.to_str().unwrap());
+            process::exit(1);
+        }
     }
 
     for (name, unit) in units {
@@ -1163,14 +1180,33 @@ fn main() {
         };
 
         let mut service_output_path = cfg.output_path.clone();
-        service_output_path.push(service.path().unwrap().file_name().unwrap());
+        service_output_path.push(service.path().expect("should have a path").file_name().unwrap());
         service.path = Some(service_output_path);
-        if let Err(e) = generate_service_file(&mut service) {
-            log!("Error writing {:?}, ignoring: {e}", service.path().unwrap());
-            continue;
+
+        if cfg.dry_run {
+            println!("---{:?}---", service.path().expect("should have a path"));
+            io::stdout().write(service.to_string().as_bytes()).expect("should write to STDOUT");
+            // NOTE: currently setting entries can fail, because of (un-)quoting errors, so we can't fail here any more
+            // TODO: revisit this decision, then we could use the following code ...
+            /*match service.to_string() {
+                Ok(data) => {
+                    println!("---{:?}---\n{data}", service.path.expect("should have a path"));
+                },
+                Err(e) => {
+                    debug!("Error parsing {:?}\n---\n", service.path().expect("should have a path"));
+                    exit_code = 1;
+                }
+            }*/
+        } else {
+            if let Err(e) = generate_service_file(&mut service) {
+                log!("Error writing {:?}, ignoring: {e}", service.path().expect("should have a path"));
+                continue;
+            }
+            enable_service_file(&cfg.output_path, &service);
         }
-        enable_service_file(&cfg.output_path, &service);
     }
+
+    process::exit(exit_code);
 }
 
 #[cfg(test)]
@@ -1221,6 +1257,43 @@ mod tests {
                 parse_args(args),
                 Ok(Config {
                     is_user: true,
+                    output_path: "./output_dir".into(),
+                    ..Default::default()
+                })
+            );
+        }
+
+        #[test]
+        fn accepts_dry_run() {
+            let args: Vec<String> = vec![
+                "./quadlet-rs".into(),
+                "--dry-run".into(),
+                "./output_dir".into(),
+            ];
+
+            assert_eq!(
+                parse_args(args),
+                Ok(Config {
+                    dry_run: true,
+                    output_path: "./output_dir".into(),
+                    ..Default::default()
+                })
+            );
+        }
+
+        #[test]
+        #[ignore = "hopefully this doesn't need to make it into a release"]
+        fn accepts_borked_dry_run_for_quadlet_compat() {
+            let args: Vec<String> = vec![
+                "./quadlet-rs".into(),
+                "-dryrun".into(),
+                "./output_dir".into(),
+            ];
+
+            assert_eq!(
+                parse_args(args),
+                Ok(Config {
+                    dry_run: true,
                     output_path: "./output_dir".into(),
                     ..Default::default()
                 })
