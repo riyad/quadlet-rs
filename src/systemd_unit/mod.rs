@@ -258,7 +258,7 @@ impl SystemdUnit {
         self.set_entry_value(
             section,
             key,
-            EntryValue::try_from_raw(value).unwrap(),
+            EntryValue::try_from_raw(value).expect("value should be properly quoted"),
         );
     }
 
@@ -297,6 +297,27 @@ impl SystemdUnit {
         }
 
         Ok(())
+    }
+}
+
+impl ToString for SystemdUnit {
+    fn to_string(&self) -> String {
+        let mut res = String::new();
+
+        for (section, entries) in &self.sections {
+            res.push_str("[");
+            res.push_str(section);
+            res.push_str("]\n");
+            for (k, v) in &entries.data {
+                res.push_str(k);
+                res.push_str("=");
+                res.push_str(v.raw());
+                res.push_str("\n");
+            }
+            res.push_str("\n");
+        }
+
+        res
     }
 }
 
@@ -1323,6 +1344,62 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
                 assert_eq!(
                     std::str::from_utf8(&output).unwrap(),
                     "[Service]\nExecStart=/usr/bin/podman test /some/path \"an arg\" \"a;b\\nc\\td'e\" \"a;b\\nc\\td\" \"a\\\"b\"\n\n",
+                );
+            }
+        }
+
+        mod to_string {
+            use super::*;
+
+            #[test]
+            fn with_empty_unit() {
+                let unit = SystemdUnit::new();
+
+                assert_eq!(
+                    unit.to_string(),
+                    ""
+                );
+            }
+
+            #[test]
+            fn with_basic_entries() {
+                let mut unit = SystemdUnit::new();
+
+                unit.set_entry("Section A", "KeyOne", "value 1");
+                unit.set_entry("Section B", "KeyTwo", "value 2");
+                unit.set_entry("Section B", "KeyThree", "value\n3");
+
+                assert_eq!(
+                    unit.to_string(),
+                    "[Section A]
+KeyOne=value 1
+
+[Section B]
+KeyTwo=value 2
+KeyThree=value\\n3
+
+"
+                );
+            }
+
+            #[test]
+            fn with_raw_entries() {
+                let mut unit = SystemdUnit::new();
+
+                unit.set_entry("Section A", "KeyOne", "value 1");
+                unit.set_entry("Section B", "KeyTwo", "\"value 2\"");
+                unit.set_entry_raw("Section B", "KeyThree", "\"value 3\"");
+
+                assert_eq!(
+                    unit.to_string(),
+                    "[Section A]
+KeyOne=value 1
+
+[Section B]
+KeyTwo=\\\"value 2\\\"
+KeyThree=\"value 3\"
+
+"
                 );
             }
         }
