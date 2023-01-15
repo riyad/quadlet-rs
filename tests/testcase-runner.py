@@ -36,6 +36,16 @@ def find_sublist(full_list, sublist):
             return i
     return -1
 
+def find_sublist_regex(full_list, sublist):
+    if len(sublist) > len(full_list):
+        return -1
+    if len(sublist) == 0:
+        return -1
+    for i in range(len(full_list) - len(sublist) + 1):
+        if match_sublist_regex_at(full_list, i, sublist):
+            return i
+    return -1
+
 def to_service(filename):
     (base, ext) = os.path.splitext(filename)
     if ext == ".network":
@@ -151,6 +161,9 @@ class QuadletTestCase(unittest.TestCase):
         def assert_podman_args(args, testcase, key):
             return find_sublist(getattr(testcase, key), args) != -1
 
+        def assert_podman_args_regex(args, testcase, key):
+            return find_sublist_regex(getattr(testcase, key), args) != -1
+
         def assert_podman_final_args(args, testcase, key):
             if len(getattr(testcase, key)) < len(args):
                 return False
@@ -163,6 +176,9 @@ class QuadletTestCase(unittest.TestCase):
 
         def assert_start_podman_args(*args):
             return assert_podman_args(*args, '_Service_ExecStart')
+
+        def assert_start_podman_args_regex(*args):
+            return assert_podman_args_regex(*args, '_Service_ExecStart')
 
         def assert_start_podman_final_args(*args):
             return assert_podman_final_args(*args, '_Service_ExecStart')
@@ -202,6 +218,7 @@ class QuadletTestCase(unittest.TestCase):
             "assert-key-is-regex": assert_key_is_regex,
             "assert-key-contains": assert_key_contains,
             "assert-podman-args": assert_start_podman_args,
+            "assert-podman-args-regex": assert_start_podman_args_regex,
             "assert-podman-final-args": assert_start_podman_final_args,
             "assert-podman-final-args-regex": assert_start_podman_final_args_regex,
             "assert-symlink": assert_symlink,
