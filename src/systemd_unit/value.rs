@@ -1,7 +1,7 @@
 use once_cell::sync::Lazy;
 use ordered_multimap::ListOrderedMultimap;
 use std::str::FromStr;
-use super::{parse_bool, quote_value, unquote_value};
+use super::{Error, parse_bool, quote_value, unquote_value};
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct Entries {
@@ -47,7 +47,7 @@ impl EntryValue {
         &self.unquoted
     }
 
-    pub fn to_bool(&self) -> Result<bool, super::Error> {
+    pub fn to_bool(&self) -> Result<bool, Error> {
         let trimmed = self.raw.trim();
         if trimmed.is_empty() {
             return Ok(false);
@@ -56,7 +56,7 @@ impl EntryValue {
         parse_bool(trimmed)
     }
 
-    pub fn try_from_raw<S: Into<String>>(raw: S) -> Result<Self, super::Error> {
+    pub fn try_from_raw<S: Into<String>>(raw: S) -> Result<Self, Error> {
         let raw = raw.into();
         Ok(Self {
             unquoted: unquote_value(raw.as_str())?,
@@ -64,7 +64,7 @@ impl EntryValue {
         })
     }
 
-    pub fn try_unquote(&self) -> Result<String, super::Error> {
+    pub fn try_unquote(&self) -> Result<String, Error> {
         unquote_value(self.raw.as_str())
     }
 }
@@ -85,7 +85,7 @@ impl From<String> for EntryValue {
 
 /// experimental: not sure if this is the right way
 impl FromStr for EntryValue {
-    type Err = super::Error;
+    type Err = Error;
 
     fn from_str(raw: &str) -> Result<Self, Self::Err> {
         Self::try_from_raw(raw)
@@ -94,10 +94,15 @@ impl FromStr for EntryValue {
 
 pub(crate) type SectionKey = String;
 
+#[cfg(test)]
 mod tests {
+    use super::*;
+
     mod entry_value {
+        use super::*;
+
         mod from_unquoted {
-            use crate::systemd_unit::EntryValue;
+            use super::*;
 
             #[test]
             fn value_gets_quoted() {
@@ -116,8 +121,7 @@ mod tests {
         }
 
         mod to_bool {
-            use std::str::FromStr;
-            use crate::systemd_unit::{EntryValue, Error};
+            use super::*;
 
             #[test]
             fn known_true_values_are_true() {
@@ -181,7 +185,7 @@ mod tests {
         }
 
         mod try_from_raw {
-            use crate::systemd_unit::EntryValue;
+            use super::*;
 
             #[test]
             fn value_gets_unquoted() {
@@ -200,7 +204,7 @@ mod tests {
         }
 
         mod try_unquote {
-            use crate::systemd_unit::{EntryValue, Error};
+            use super::*;
 
             #[test]
             fn unquotes_value() {
@@ -230,7 +234,7 @@ mod tests {
         }
 
         mod unquote {
-            use crate::systemd_unit::EntryValue;
+            use super::*;
 
             #[test]
             #[should_panic]
@@ -246,7 +250,7 @@ mod tests {
     }
 
     mod from_ref_str_for_entry_value {
-        use crate::systemd_unit::EntryValue;
+        use super::*;
 
         #[test]
         fn value_gets_quoted() {
@@ -265,7 +269,7 @@ mod tests {
     }
 
     mod from_str_for_entry_value {
-        use crate::systemd_unit::EntryValue;
+        use super::*;
 
         #[test]
         fn value_gets_unquoted() {
@@ -284,7 +288,7 @@ mod tests {
     }
 
     mod from_string_for_entry_value {
-        use crate::systemd_unit::EntryValue;
+        use super::*;
 
         #[test]
         fn value_gets_quoted() {
