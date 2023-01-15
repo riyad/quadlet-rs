@@ -569,6 +569,20 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
     let annotation_args: HashMap<String, String> = quad_parse_kvs(&annotations);
     podman.add_annotations(&annotation_args);
 
+    let env_files: Vec<PathBuf> = container.lookup_all_values(CONTAINER_SECTION, "EnvironmentFile")
+        .flat_map(|v| SplitWord::new(v.raw()) )
+        .map(|s| PathBuf::from(s).absolute_from_unit(container))
+        .collect();
+    for env_file in env_files {
+        podman.add("--env-file");
+        podman.add(env_file.to_str().expect("EnvironmentFile path is not a valid UTF-8 string"));
+    }
+
+    if let Some(env_host) = container.lookup_last(CONTAINER_SECTION, "EnvironmentHost") {
+        let env_host = parse_bool(env_host).unwrap_or(false);
+        podman.add_bool("--env-host", env_host);
+    }
+
     let mut podman_args: Vec<String> = container.lookup_all_values(CONTAINER_SECTION, "PodmanArgs")
         .flat_map(|v| SplitWord::new(v.raw()) )
         .collect();

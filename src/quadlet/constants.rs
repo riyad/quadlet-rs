@@ -16,6 +16,8 @@ pub static SUPPORTED_CONTAINER_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| 
         "Image",
         "KillMode",
         "Environment",
+        "EnvironmentFile",
+        "EnvironmentHost",
         "Exec",
         "NoNewPrivileges",
         "DropCapability",
