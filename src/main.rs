@@ -495,65 +495,7 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
         podman.add(format!("--expose={exposed_port}"))
     }
 
-    let publish_ports: Vec<&str> = container
-        .lookup_all(CONTAINER_SECTION, "PublishPort")
-        .collect();
-    for publish_port in publish_ports {
-        let publish_port = publish_port.trim();  // Allow whitespaces before and after
-
-        //  IP address could have colons in it. For example: "[::]:8080:80/tcp, so use custom splitter
-        let mut parts = quad_split_ports(publish_port);
-
-        // format (from podman run):
-        // ip:hostPort:containerPort | ip::containerPort | hostPort:containerPort | containerPort
-        //
-        // ip could be IPv6 with minimum of these chars "[::]"
-        // containerPort can have a suffix of "/tcp" or "/udp"
-        let container_port;
-        let mut ip = String::new();
-        let mut host_port = String::new();
-        match parts.len() {
-            1 => {
-                container_port = parts.pop().unwrap();
-            },
-            2 => {
-                // NOTE: order is inverted because of pop()
-                container_port = parts.pop().unwrap();
-                host_port = parts.pop().unwrap();
-            },
-            3 => {
-                // NOTE: order is inverted because of pop()
-                container_port = parts.pop().unwrap();
-                host_port = parts.pop().unwrap();
-                ip = parts.pop().unwrap();
-            },
-            _ => {
-                return Err(ConversionError::InvalidPublishedPort(format!("invalid published port '{publish_port}'")));
-            },
-        }
-
-        if ip == "0.0.0.0" {
-            ip.clear();
-        }
-
-        if !host_port.is_empty() && !quad_is_port_range(host_port.as_str()) {
-            return Err(ConversionError::InvalidPortFormat(format!("invalid port format '{host_port}'")));
-        }
-
-        if !container_port.is_empty() && !quad_is_port_range(container_port.as_str()) {
-            return Err(ConversionError::InvalidPortFormat(format!("invalid port format '{container_port}'")));
-        }
-
-        if !ip.is_empty() && !host_port.is_empty() {
-            podman.add(format!("-p={ip}:{host_port}:{container_port}"));
-        } else if !ip.is_empty() {
-            podman.add(format!("-p={ip}::{container_port}"));
-        } else if !host_port.is_empty() {
-            podman.add(format!("-p={host_port}:{container_port}"));
-        } else {
-            podman.add(format!("-p={container_port}"));
-        }
-    }
+    handle_publish_ports(container, CONTAINER_SECTION, &mut podman)?;
 
     podman.add_env(&env_args);
 
@@ -707,6 +649,71 @@ fn add_networks(quadlet_unit_file: &SystemdUnit, section: &str, service_unit_fil
     Ok(())
 }
 
+fn handle_publish_ports(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) -> Result<(), ConversionError> {
+    let publish_ports: Vec<&str> = unit_file
+        .lookup_all(section, "PublishPort")
+        .collect();
+    for publish_port in publish_ports {
+        let publish_port = publish_port.trim();  // Allow whitespaces before and after
+
+        //  IP address could have colons in it. For example: "[::]:8080:80/tcp, so use custom splitter
+        let mut parts = quad_split_ports(publish_port);
+
+        // format (from podman run):
+        // ip:hostPort:containerPort | ip::containerPort | hostPort:containerPort | containerPort
+        //
+        // ip could be IPv6 with minimum of these chars "[::]"
+        // containerPort can have a suffix of "/tcp" or "/udp"
+        let container_port;
+        let mut ip = String::new();
+        let mut host_port = String::new();
+        match parts.len() {
+            1 => {
+                container_port = parts.pop().unwrap();
+            },
+            2 => {
+                // NOTE: order is inverted because of pop()
+                container_port = parts.pop().unwrap();
+                host_port = parts.pop().unwrap();
+            },
+            3 => {
+                // NOTE: order is inverted because of pop()
+                container_port = parts.pop().unwrap();
+                host_port = parts.pop().unwrap();
+                ip = parts.pop().unwrap();
+            },
+            _ => {
+                return Err(ConversionError::InvalidPublishedPort(format!("invalid published port '{publish_port}'")));
+            },
+        }
+
+        if ip == "0.0.0.0" {
+            ip.clear();
+        }
+
+        if !host_port.is_empty() && !quad_is_port_range(host_port.as_str()) {
+            return Err(ConversionError::InvalidPortFormat(format!("invalid port format '{host_port}'")));
+        }
+
+        if !container_port.is_empty() && !quad_is_port_range(container_port.as_str()) {
+            return Err(ConversionError::InvalidPortFormat(format!("invalid port format '{container_port}'")));
+        }
+
+        podman.add("--publish");
+        if !ip.is_empty() && !host_port.is_empty() {
+            podman.add(format!("{ip}:{host_port}:{container_port}"));
+        } else if !ip.is_empty() {
+            podman.add(format!("{ip}::{container_port}"));
+        } else if !host_port.is_empty() {
+            podman.add(format!("{host_port}:{container_port}"));
+        } else {
+            podman.add(container_port);
+        }
+    }
+
+    Ok(())
+}
+
 fn convert_kube(kube: &SystemdUnit, is_user: bool) -> Result<SystemdUnit, ConversionError> {
     let mut service = SystemdUnit::new();
     service.merge_from(kube);
@@ -782,6 +789,8 @@ fn convert_kube(kube: &SystemdUnit, is_user: bool) -> Result<SystemdUnit, Conver
         podman_start.add("--configmap");
         podman_start.add(config_map_path.to_str().expect("ConfigMap path is not valid UTF-8 string"));
     }
+
+    handle_publish_ports(kube, KUBE_SECTION, &mut podman_start)?;
 
     podman_start.add(yaml_path.to_str().expect("Yaml path is not valid UTF-8 string"));
 
