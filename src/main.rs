@@ -3,6 +3,7 @@ mod systemd_unit;
 
 use self::quadlet::*;
 use self::quadlet::logger::*;
+use self::quadlet::PathBufExt;
 
 use self::systemd_unit::*;
 
@@ -714,16 +715,7 @@ fn convert_kube(kube: &SystemdUnit, is_user: bool) -> Result<SystemdUnit, Conver
         return Err(ConversionError::YamlMissing("no Yaml key specified".into()))
     }
 
-    let mut yaml_path = PathBuf::from(yaml_path);
-    if !yaml_path.is_absolute() {
-        if kube.path().is_some() {
-            let mut path = kube.path().unwrap().parent().unwrap().to_path_buf();
-            path.push(yaml_path);
-            yaml_path = path;
-        } else {
-            yaml_path.canonicalize()?;
-        }
-    }
+    let yaml_path = PathBuf::from(yaml_path).absolute_from_unit(&kube);
 
     // Only allow mixed or control-group, as nothing else works well
     let kill_mode = kube.lookup_last(KUBE_SECTION, "KillMode");
@@ -1009,33 +1001,6 @@ fn generate_service_file(service: &mut SystemdUnit) -> io::Result<()> {
     Ok(())
 }
 
-/// This function normalizes relative the paths by dropping multiple slashes,
-/// removing "." elements and making ".." drop the parent element as long
-/// as there is not (otherwise the .. is just removed). Symlinks are not
-/// handled in any way.
-/// TODO: we could use std::path::absolute() here, but it's nightly-only ATM
-/// see https://doc.rust-lang.org/std/path/fn.absolute.html
-fn clean_path(path: PathBuf) -> PathBuf {
-    assert!(path.is_relative());
-
-    // normalized path could be shorter, but never longer
-    let mut normalized = PathBuf::with_capacity(path.as_os_str().len());
-
-    for element in path.components() {
-        if element.as_os_str().is_empty() || element.as_os_str() == "." {
-            continue;
-        } else if element.as_os_str() == ".." {
-            if normalized.components().count() > 0 {
-                normalized.pop();
-            }
-        } else {
-            normalized.push(element);
-        }
-    }
-
-    normalized
-}
-
 // This parses the `Install` section of the unit file and creates the required
 // symlinks to get systemd to start the newly generated file as needed.
 // In a traditional setup this is done by "systemctl enable", but that doesn't
@@ -1047,7 +1012,7 @@ fn enable_service_file(output_path: &Path, service: &SystemdUnit) {
     let mut alias: Vec<PathBuf> = service
         .lookup_all_values(INSTALL_SECTION, "Alias")
         .flat_map(|v| SplitStrv::new(v.raw()))
-        .map(|s| clean_path(PathBuf::from(s)))
+        .map(|s| PathBuf::from(s).cleaned())
         .collect();
     symlinks.append(&mut alias);
 
