@@ -476,10 +476,11 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
             }
         }
 
+        podman.add("-v");
         if source.is_empty() {
-            podman.add(format!("-v={dest}"))
+            podman.add(dest)
         } else {
-            podman.add(format!("-v={source}:{dest}{options}"))
+            podman.add(format!("{source}:{dest}{options}"))
         }
     }
 

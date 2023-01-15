@@ -266,8 +266,8 @@ class QuadletTestCase(unittest.TestCase):
     def runTest(self):
         res = None
         outdata = {}
-        with tempfile.TemporaryDirectory(prefix="quadlet-test-") as basedir:
-            indir = os.path.join(basedir, "in")
+        with tempfile.TemporaryDirectory(prefix="podman_test") as basedir:
+            indir = os.path.join(basedir, "quadlet")
             os.mkdir(indir)
             outdir = os.path.join(basedir, "out")
             os.mkdir(outdir)
