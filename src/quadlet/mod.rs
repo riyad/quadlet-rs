@@ -1,5 +1,6 @@
 mod constants;
 mod podman_command;
+mod path_buf_ext;
 pub(crate) mod logger;
 
 use crate::systemd_unit;
@@ -7,6 +8,7 @@ use crate::systemd_unit::{SystemdUnit, SplitWord};
 use self::logger::*;
 
 pub(crate) use self::constants::*;
+pub(crate) use self::path_buf_ext::*;
 pub(crate) use self::podman_command::*;
 
 use std::collections::HashMap;
