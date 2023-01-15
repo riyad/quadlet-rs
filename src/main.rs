@@ -758,7 +758,18 @@ fn convert_kube(kube: &SystemdUnit, is_user: bool) -> Result<SystemdUnit, Conver
 
     add_networks(&kube, KUBE_SECTION, &mut service, &mut podman_start)?;
 
-    podman_start.add(yaml_path.to_str().unwrap());
+    let config_maps: Vec<PathBuf> = kube.
+        lookup_all_values(KUBE_SECTION, "ConfigMap")
+        .flat_map(|v| SplitStrv::new(v.raw()))
+        .map(|s| PathBuf::from(s))
+        .collect();
+    for config_map in config_maps {
+        let config_map_path = config_map.absolute_from_unit(&kube);
+        podman_start.add("--configmap");
+        podman_start.add(config_map_path.to_str().expect("ConfigMap path is not valid UTF-8 string"));
+    }
+
+    podman_start.add(yaml_path.to_str().expect("Yaml path is not valid UTF-8 string"));
 
     service.append_entry_value(
         SERVICE_SECTION,
@@ -768,7 +779,7 @@ fn convert_kube(kube: &SystemdUnit, is_user: bool) -> Result<SystemdUnit, Conver
 
     let mut podman_stop = PodmanCommand::new_command("kube");
     podman_stop.add("down");
-    podman_stop.add(yaml_path.to_str().unwrap());
+    podman_stop.add(yaml_path.to_str().expect("Yaml path is not valid UTF-8 string"));
     service.append_entry_value(
         SERVICE_SECTION,
         "ExecStop",

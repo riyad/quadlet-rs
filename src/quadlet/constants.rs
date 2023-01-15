@@ -58,6 +58,7 @@ pub static SUPPORTED_KUBE_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
         "RemapGid",
         "RemapUidSize",
         "Network",
+        "ConfigMap",
     ];
 
     let mut set = HashSet::with_capacity(keys.len());
