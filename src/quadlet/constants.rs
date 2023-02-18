@@ -96,6 +96,10 @@ pub static SUPPORTED_VOLUME_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     let keys = [
         "User",
         "Group",
+        "Device",
+        "Type",
+        "Options",
+        "Copy",
         "Label",
     ];
 

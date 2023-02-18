@@ -20,6 +20,8 @@ use std::io;
 #[non_exhaustive]
 pub(crate) enum ConversionError {
     ImageMissing(String),
+    InvalidDeviceOptions(String),
+    InvalidDeviceType(String),
     InvalidKillMode(String),
     InvalidPortFormat(String),
     InvalidPublishedPort(String),
@@ -36,6 +38,8 @@ impl Display for ConversionError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             ConversionError::ImageMissing(msg) |
+            ConversionError::InvalidDeviceOptions(msg) |
+            ConversionError::InvalidDeviceType(msg) |
             ConversionError::InvalidKillMode(msg) |
             ConversionError::InvalidPortFormat(msg) |
             ConversionError::InvalidPublishedPort(msg) |

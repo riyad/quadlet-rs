@@ -993,6 +993,47 @@ fn convert_volume(volume: &SystemdUnit) -> Result<SystemdUnit, ConversionError> 
                 .unwrap_or(0);  // key not found: use default
         opts.push(format!("gid={gid}"));
     }
+
+    if let Some(copy) = volume.lookup_last(VOLUME_SECTION, "Copy")
+            .map(|s| parse_bool(s).unwrap_or(false)) {  // key found: parse or default
+        if copy {
+            podman.add_slice(&["--opt", "copy"]);
+        } else {
+            podman.add_slice(&["--opt", "nocopy"]);
+        }
+    }
+
+    let mut dev_valid = false;
+
+    if let Some(dev) = volume.lookup_last(VOLUME_SECTION, "Device") {
+        if !dev.is_empty() {
+            podman.add("--opt");
+            podman.add(format!("device={dev}"));
+            dev_valid = true;
+        }
+    }
+
+    if let Some(dev_type) = volume.lookup_last(VOLUME_SECTION, "Type") {
+        if !dev_type.is_empty() {
+            if dev_valid {
+                podman.add("--opt");
+                podman.add(format!("type={dev_type}"));
+            } else {
+                return Err(ConversionError::InvalidDeviceType("key Type can't be used without Device".into()))
+            }
+        }
+    }
+
+    if let Some(mount_opts) = volume.lookup_last(VOLUME_SECTION, "Options") {
+        if !mount_opts.is_empty() {
+            if dev_valid {
+                opts.push(mount_opts.into());
+            } else {
+                return Err(ConversionError::InvalidDeviceOptions("key Options can't be used without Device".into()))
+            }
+        }
+    }
+
     if !opts.is_empty() {
         podman.add("--opt");
         podman.add(format!("o={}", opts.join(",")));
