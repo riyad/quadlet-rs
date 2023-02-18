@@ -19,9 +19,9 @@ use std::io;
 #[derive(Debug)]
 #[non_exhaustive]
 pub(crate) enum ConversionError {
-    ImageMissing(String),
     InvalidDeviceOptions(String),
     InvalidDeviceType(String),
+    InvalidImageOrRootfs(String),
     InvalidKillMode(String),
     InvalidPortFormat(String),
     InvalidPublishedPort(String),
@@ -37,9 +37,9 @@ pub(crate) enum ConversionError {
 impl Display for ConversionError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            ConversionError::ImageMissing(msg) |
             ConversionError::InvalidDeviceOptions(msg) |
             ConversionError::InvalidDeviceType(msg) |
+            ConversionError::InvalidImageOrRootfs(msg) |
             ConversionError::InvalidKillMode(msg) |
             ConversionError::InvalidPortFormat(msg) |
             ConversionError::InvalidPublishedPort(msg) |

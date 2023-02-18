@@ -190,11 +190,17 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
 
     service.rename_section(CONTAINER_SECTION, X_CONTAINER_SECTION);
 
-    let image = if let Some(image) = container.lookup_last(CONTAINER_SECTION, "Image") {
-        image.to_string()
-    } else {
-        return Err(ConversionError::ImageMissing("no Image key specified".into()))
-    };
+    // One image or rootfs must be specified for the container
+    let image = container.lookup_last(CONTAINER_SECTION, "Image")
+        .map_or(String::new(), |s| s.to_string());
+    let rootfs = container.lookup_last(CONTAINER_SECTION, "Rootfs")
+        .map_or(String::new(), |s| s.to_string());
+    if image.is_empty() && rootfs.is_empty() {
+        return Err(ConversionError::InvalidImageOrRootfs("no Image or Rootfs key specified".into()))
+    }
+    if !image.is_empty() && !rootfs.is_empty() {
+        return Err(ConversionError::InvalidImageOrRootfs("the Image And Rootfs keys conflict can not be specified together".into()))
+    }
 
     let podman_container_name = container
         .lookup_last(CONTAINER_SECTION, "ContainerName")
@@ -343,6 +349,31 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
         .unwrap_or(false);  // key not found: use default
     if no_new_privileges {
         podman.add("--security-opt=no-new-privileges");
+    }
+
+    let security_label_disable = container.lookup_last(CONTAINER_SECTION, "SecurityLabelDisable")
+        .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
+        .unwrap_or(false);  // key not found: use default
+    if security_label_disable {
+        podman.add_slice(&["--security-opt", "label:disable"]);
+    }
+
+    let security_label_type = container.lookup_last(CONTAINER_SECTION, "SecurityLabelType").unwrap_or_default();
+    if !security_label_type.is_empty() {
+        podman.add("--security-opt");
+        podman.add(format!("label=type:{security_label_type}"));
+    }
+
+    let security_label_file_type = container.lookup_last(CONTAINER_SECTION, "SecurityLabelFileType").unwrap_or_default();
+    if !security_label_file_type.is_empty() {
+        podman.add("--security-opt");
+        podman.add(format!("label=filetype:{security_label_file_type}"));
+    }
+
+    let security_label_level = container.lookup_last(CONTAINER_SECTION, "SecurityLabelLevel").unwrap_or_default();
+    if !security_label_level.is_empty() {
+        podman.add("--security-opt");
+        podman.add(format!("label=level:{security_label_level}"));
     }
 
     let devices: Vec<String> = container.lookup_all_values(CONTAINER_SECTION, "AddDevice")
@@ -532,7 +563,12 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
         .collect();
     podman.add_vec(&mut podman_args);
 
-    podman.add(image);
+    if !image.is_empty() {
+        podman.add(image);
+    } else {
+        podman.add("--rootfs");
+        podman.add(rootfs);
+    }
 
     let mut exec_args = container.lookup_last_value(CONTAINER_SECTION, "Exec")
         .map(|v| SplitWord::new(&v.raw()).collect())

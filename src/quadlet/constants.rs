@@ -27,6 +27,7 @@ pub static SUPPORTED_CONTAINER_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| 
         "RemapUid",
         "RemapGid",
         "RemapUidSize",
+        "Rootfs",
         "Notify",
         "ExposeHostPort",
         "PublishPort",
@@ -40,6 +41,10 @@ pub static SUPPORTED_CONTAINER_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| 
         "VolatileTmp",
         "Timezone",
         "SeccompProfile",
+        "SecurityLabelDisable",
+        "SecurityLabelFileType",
+        "SecurityLabelType",
+        "SecurityLabelLevel",
         "AddDevice",
         "Network",
     ];
