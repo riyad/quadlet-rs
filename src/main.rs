@@ -275,7 +275,7 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
         "Delegate",
         "yes",
     );
-    podman.add_slice(&[ "--runtime", "/usr/bin/crun", "--cgroups=split"]);
+    podman.add_slice(&[ "--runtime", "crun", "--cgroups=split"]);
 
     let timezone = container.lookup_last(CONTAINER_SECTION, "Timezone");
     if let Some(timezone) = timezone {
