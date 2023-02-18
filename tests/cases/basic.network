@@ -1,8 +1,10 @@
 ## assert-key-is Unit RequiresMountsFor "%t/containers"
 ## assert-key-is Service Type oneshot
 ## assert-key-is Service RemainAfterExit yes
+# FIXME: add `--ignore` once we can rely on Podman v4.4.0 or newer being present
 ## assert-key-is-regex Service ExecCondition '/usr/bin/bash -c "! .*/podman network exists systemd-basic"'
 ## assert-key-is-regex Service ExecStart ".*/podman network create systemd-basic"
+# assert-key-is-regex Service ExecStart ".*/podman volume create --ignore systemd-basic"
 ## assert-key-is Service SyslogIdentifier "%N"
 
 [Network]
