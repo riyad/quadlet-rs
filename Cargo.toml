@@ -10,9 +10,13 @@ dirs = "4.0"
 once_cell = "1.17.0"
 ordered-multimap = "0.5"
 
+# optimize with tipps from https://github.com/johnthagen/min-sized-rust
 [profile.release]
 lto = "fat"  # reduces binary size from 4.2M to 2.1M
 #lto = "thin"  # reduces binary size from 4.2M to 2.3M
+strip = true  # reduces binary size from ~2.0M to ~500K
+opt-level = "z"  # reduces binary size from ~500K to ~400K
+#codegen-units = 1  # reduces binary size by ~10K
 
 [profile.dev]
 split-debuginfo = "unpacked"
