@@ -558,6 +558,12 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
         podman.add_bool("--env-host", env_host);
     }
 
+    let secrets = container.lookup_all(CONTAINER_SECTION, "Secret");
+    for secret in secrets {
+        podman.add("--secret");
+        podman.add(secret);
+    }
+
     let mut podman_args: Vec<String> = container.lookup_all_values(CONTAINER_SECTION, "PodmanArgs")
         .flat_map(|v| SplitWord::new(v.raw()) )
         .collect();
