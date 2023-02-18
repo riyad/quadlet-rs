@@ -817,6 +817,10 @@ fn convert_kube(kube: &SystemdUnit, is_user: bool) -> Result<SystemdUnit, Conver
 
         // Use a service container
         "--service-container=true",
+
+        // We want output to the journal, so use the log driver.
+        // FIXME: change to `passthrough` once we can rely on Podman v4.0.0 or newer being present
+		"--log-driver", "journald",
     ]);
 
     handle_user_remap(&kube, KUBE_SECTION, &mut podman_start, is_user, false)?;
