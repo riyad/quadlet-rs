@@ -1223,8 +1223,10 @@ fn main() {
     }
 
     if units.is_empty() {
+        // containers/podman/issues/17374: exit cleanly but log that we
+        // had nothing to do
         debug!("No files to parse from {source_paths:?}");
-        process::exit(1);
+        process::exit(0);
     }
 
     if !cfg.dry_run {
