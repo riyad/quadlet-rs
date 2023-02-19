@@ -7,8 +7,8 @@ edition = "2021"
 
 [dependencies]
 dirs = "4.0"
-once_cell = "1.17.0"
-ordered-multimap = "0.5"
+once_cell = "1.17.1"
+ordered-multimap = "0.6"
 
 # optimize with tipps from https://github.com/johnthagen/min-sized-rust
 [profile.release]
