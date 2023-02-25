@@ -258,6 +258,11 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
         "-/usr/bin/podman rm -f -i --cidfile=%t/%N.cid",
     );
 
+    // FIXME: (COMPAT) remove once we can rely on Podman v4.4.0 or newer being present
+    // Podman change in: https://github.com/containers/podman/pull/16394
+    // Quadlet change in: https://github.com/containers/podman/pull/17487
+    service.append_entry(SERVICE_SECTION, "ExecStopPost", "-rm -f %t/%N.cid");
+
     let mut podman = PodmanCommand::new_command("run");
 
     podman.add(format!("--name={podman_container_name}"));
@@ -272,7 +277,7 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
     podman.add("--rm");
 
     // But we still want output to the journal, so use the log driver.
-    // FIXME: change to `passthrough` once we can rely on Podman v4.0.0 or newer being present
+    // FIXME: (COMPAT) change to `passthrough` once we can rely on Podman v4.0.0 or newer being present
     // Podman support added in: https://github.com/containers/podman/pull/11390
     // Quadlet default changed in: https://github.com/containers/podman/pull/16237
     podman.add_slice(&["--log-driver", "journald"]);
@@ -819,7 +824,7 @@ fn convert_kube(kube: &SystemdUnit, is_user: bool) -> Result<SystemdUnit, Conver
         "--service-container=true",
 
         // We want output to the journal, so use the log driver.
-        // FIXME: change to `passthrough` once we can rely on Podman v4.0.0 or newer being present
+        // FIXME: (COMPAT) change to `passthrough` once we can rely on Podman v4.0.0 or newer being present
 		"--log-driver", "journald",
     ]);
 
@@ -889,7 +894,7 @@ fn convert_network(network: &SystemdUnit) -> Result<SystemdUnit, ConversionError
 
     let mut podman = PodmanCommand::new_command("network");
     podman.add("create");
-    // FIXME: add `--ignore` once we can rely on Podman v4.4.0 or newer being present
+    // FIXME:  (COMPAT) add `--ignore` once we can rely on Podman v4.4.0 or newer being present
     // Podman support added in: https://github.com/containers/podman/pull/16773
     // Quadlet support added in: https://github.com/containers/podman/pull/16688
     //podman.add("--ignore");
@@ -1021,7 +1026,7 @@ fn convert_volume(volume: &SystemdUnit) -> Result<SystemdUnit, ConversionError> 
 
     let mut podman = PodmanCommand::new_command("volume");
     podman.add("create");
-    // FIXME: add `--ignore` once we can rely on Podman v4.4.0 or newer being present
+    // FIXME:  (COMPAT) add `--ignore` once we can rely on Podman v4.4.0 or newer being present
     // Podman support added in: https://github.com/containers/podman/pull/16243
     // Quadlet default changed in: https://github.com/containers/podman/pull/16243
     //podman.add("--ignore")
