@@ -276,11 +276,7 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
     // On clean shutdown, remove container
     podman.add("--rm");
 
-    // But we still want output to the journal, so use the log driver.
-    // FIXME: (COMPAT) change to `passthrough` once we can rely on Podman v4.0.0 or newer being present
-    // Podman support added in: https://github.com/containers/podman/pull/11390
-    // Quadlet default changed in: https://github.com/containers/podman/pull/16237
-    podman.add_slice(&["--log-driver", "journald"]);
+    handle_log_driver(container, CONTAINER_SECTION, &mut podman);
 
     // We delegate groups to the runtime
     service.append_entry(
@@ -763,6 +759,13 @@ fn handle_publish_ports(unit_file: &SystemdUnit, section: &str, podman: &mut Pod
     Ok(())
 }
 
+fn handle_log_driver(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {
+    let log_driver = unit_file.lookup_last(section, "LogDriver")
+        .unwrap_or(DEFAULT_LOG_DRIVER);
+
+    podman.add_slice(&["--log-driver", log_driver]);
+}
+
 fn convert_kube(kube: &SystemdUnit, is_user: bool) -> Result<SystemdUnit, ConversionError> {
     let mut service = SystemdUnit::new();
     service.merge_from(kube);
@@ -822,11 +825,9 @@ fn convert_kube(kube: &SystemdUnit, is_user: bool) -> Result<SystemdUnit, Conver
 
         // Use a service container
         "--service-container=true",
-
-        // We want output to the journal, so use the log driver.
-        // FIXME: (COMPAT) change to `passthrough` once we can rely on Podman v4.0.0 or newer being present
-		"--log-driver", "journald",
     ]);
+
+    handle_log_driver(kube, KUBE_SECTION, &mut podman_start);
 
     handle_user_remap(&kube, KUBE_SECTION, &mut podman_start, is_user, false)?;
 
