@@ -1,6 +1,6 @@
 # FIXME: use `passthrough` once we can rely on Podman v4.0.0 or newer being present
-## assert-podman-final-args run --name=systemd-%N --cidfile=%t/%N.cid --replace --rm --log-driver journald --runtime crun --cgroups=split --sdnotify=conmon  -d localhost/imagename
-# assert-podman-final-args run --name=systemd-%N --cidfile=%t/%N.cid --replace --rm --log-driver passthrough --runtime crun --cgroups=split --sdnotify=conmon  -d localhost/imagename
+## assert-podman-final-args run --name=systemd-%N --cidfile=%t/%N.cid --replace --rm --log-driver journald --cgroups=split --sdnotify=conmon  -d localhost/imagename
+# assert-podman-final-args run --name=systemd-%N --cidfile=%t/%N.cid --replace --rm --log-driver passthrough --cgroups=split --sdnotify=conmon  -d localhost/imagename
 
 [Container]
 Image=localhost/imagename

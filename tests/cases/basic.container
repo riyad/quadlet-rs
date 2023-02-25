@@ -7,7 +7,6 @@
 # FIXME: use `passthrough` once we can rely on Podman v4.0.0 or newer being present
 ## assert-podman-args "--log-driver" "journald"
 # assert-podman-args "--log-driver" "passthrough"
-## assert-podman-args "--runtime" "crun"
 ## assert-podman-args "--cgroups=split"
 ## assert-podman-args "--sdnotify=conmon"
 ## assert-key-is "Unit" "RequiresMountsFor" "%t/containers"

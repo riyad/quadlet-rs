@@ -282,13 +282,13 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
     // Quadlet default changed in: https://github.com/containers/podman/pull/16237
     podman.add_slice(&["--log-driver", "journald"]);
 
-    // We use crun as the runtime and delegated groups to it
+    // We delegate groups to the runtime
     service.append_entry(
         SERVICE_SECTION,
         "Delegate",
         "yes",
     );
-    podman.add_slice(&[ "--runtime", "crun", "--cgroups=split"]);
+    podman.add_slice(&["--cgroups=split"]);
 
     let timezone = container.lookup_last(CONTAINER_SECTION, "Timezone");
     if let Some(timezone) = timezone {
