@@ -164,6 +164,42 @@ class QuadletTestCase(unittest.TestCase):
         def assert_podman_args_regex(args, testcase, key):
             return find_sublist_regex(getattr(testcase, key), args) != -1
 
+        def key_value_string_to_map(key_value_string, separator):
+            key_val_map = dict()
+            key_var_list = key_value_string.split(separator)
+            for param in key_var_list:
+                kv = param.split('=')
+                key_val_map[kv[0]] = kv[1]
+
+            return key_val_map
+
+        def assert_podman_args_key_val(args, testcase, key):
+            if len(args) != 3:
+                return False
+            opt = args[0]
+            separator = args[1]
+            values = args[2]
+            podman_args = getattr(testcase, key)
+
+            expected_key_val_map = key_value_string_to_map(values, separator)
+            arg_key_location = 0
+            while True:
+                sub_list_location = find_sublist(podman_args[arg_key_location:], [opt])
+                if sub_list_location == -1:
+                    break
+
+                arg_key_location += sub_list_location
+                actual_key_val_map = key_value_string_to_map(podman_args[arg_key_location+1], separator)
+                if expected_key_val_map == actual_key_val_map:
+                    return True
+
+                arg_key_location += 2
+
+                if arg_key_location > len(podman_args):
+                    break
+
+            return False
+
         def assert_podman_final_args(args, testcase, key):
             if len(getattr(testcase, key)) < len(args):
                 return False
@@ -179,6 +215,9 @@ class QuadletTestCase(unittest.TestCase):
 
         def assert_start_podman_args_regex(*args):
             return assert_podman_args_regex(*args, '_Service_ExecStart')
+
+        def assert_start_podman_args_key_val(*args):
+            return assert_podman_args_key_val(*args, '_Service_ExecStart')
 
         def assert_start_podman_final_args(*args):
             return assert_podman_final_args(*args, '_Service_ExecStart')
@@ -219,6 +258,7 @@ class QuadletTestCase(unittest.TestCase):
             "assert-key-contains": assert_key_contains,
             "assert-podman-args": assert_start_podman_args,
             "assert-podman-args-regex": assert_start_podman_args_regex,
+            "assert-podman-args-key-val": assert_start_podman_args_key_val,
             "assert-podman-final-args": assert_start_podman_final_args,
             "assert-podman-final-args-regex": assert_start_podman_final_args_regex,
             "assert-symlink": assert_symlink,

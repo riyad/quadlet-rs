@@ -454,12 +454,12 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
     for volume in volumes {
         let parts: Vec<&str> = volume.split(":").collect();
 
-        let mut source = "";
+        let mut source = String::new();
         let dest;
         let mut options = String::new();
 
         if parts.len() >= 2 {
-            source = parts[0];
+            source = parts[0].to_string();
             dest = parts[1];
         } else {
             dest = parts[0];
@@ -468,46 +468,8 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
             options = format!(":{}", parts[2]);
         }
 
-        let podman_volume_name: PathBuf;
-
         if !source.is_empty() {
-            if source.starts_with("/") {
-                // Absolute path
-                service.append_entry(
-                    UNIT_SECTION,
-                    "RequiresMountsFor",
-                    source,
-                );
-            } else if source.ends_with(".volume") {
-                // the podman volume name is systemd-$name
-                podman_volume_name = quad_replace_extension(
-                    &PathBuf::from(source),
-                    "",
-                    "systemd-",
-                    "",
-                );
-
-                // the systemd unit name is $name-volume.service
-                let volume_service_name = quad_replace_extension(
-                    &PathBuf::from(source),
-                    ".service",
-                    "",
-                    "-volume",
-                );
-
-                source = podman_volume_name.to_str().unwrap();
-
-                service.append_entry(
-                    UNIT_SECTION,
-                    "Requires",
-                    volume_service_name.to_str().unwrap(),
-                );
-                service.append_entry(
-                    UNIT_SECTION,
-                    "After",
-                    volume_service_name.to_str().unwrap(),
-                );
-            }
+            source = handle_storage_source(&mut service, &source);
         }
 
         podman.add("-v");
@@ -563,6 +525,35 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
     for secret in secrets {
         podman.add("--secret");
         podman.add(secret);
+    }
+
+    let mounts = container.lookup_all(CONTAINER_SECTION, "Mount");
+    for mount in mounts {
+        let params: Vec<&str> = mount.split(",").collect();
+        let mut params_map: HashMap<&str, String> = HashMap::with_capacity(params.len());
+        for param in &params {
+            let kv: Vec<&str> = param.split("=").collect();
+            params_map.insert(kv[0], kv[1].to_string());
+        }
+        if let Some(param_type) = params_map.get("type") {
+            if param_type == "volume" || param_type == "bind" {
+                if let Some(param_source) = params_map.get("source") {
+                    params_map.insert("source", handle_storage_source(&mut service, param_source));
+                } else if let Some(param_source) = params_map.get("src") {
+                    params_map.insert("src", handle_storage_source(&mut service, param_source));
+                }
+            }
+        }
+        let mut params_array = Vec::with_capacity(params.len());
+        params_array.push(format!("type={}", params_map["type"]));
+        for (k,v) in params_map {
+            if k == "type" {
+                continue
+            }
+            params_array.push(format!("{k}={v}"));
+        }
+        podman.add("--mount");
+        podman.add(params_array.join(","));
     }
 
     let mut podman_args: Vec<String> = container.lookup_all_values(CONTAINER_SECTION, "PodmanArgs")
@@ -764,6 +755,37 @@ fn handle_log_driver(unit_file: &SystemdUnit, section: &str, podman: &mut Podman
         .unwrap_or(DEFAULT_LOG_DRIVER);
 
     podman.add_slice(&["--log-driver", log_driver]);
+}
+
+fn handle_storage_source(unit_file: &mut SystemdUnit, source: &str) -> String {
+    let mut source = source.to_owned();
+    if source.starts_with("/") {
+        // Absolute path
+        unit_file.append_entry(UNIT_SECTION, "RequiresMountsFor", &source);
+    } else if source.ends_with(".volume") {
+        // the podman volume name is systemd-$name
+        let volume_name = quad_replace_extension(
+            &PathBuf::from(&source), "", "systemd-", "");
+
+        // the systemd unit name is $name-volume.service
+        let volume_service_name = quad_replace_extension(
+            &PathBuf::from(&source), ".service", "", "-volume");
+
+        source = volume_name.to_str().expect("volume name ist not valid UTF-8 string").to_string();
+
+        unit_file.append_entry(
+            UNIT_SECTION,
+            "Requires",
+            volume_service_name.to_str().unwrap(),
+        );
+        unit_file.append_entry(
+            UNIT_SECTION,
+            "After",
+            volume_service_name.to_str().unwrap(),
+        );
+    }
+
+    source
 }
 
 fn convert_kube(kube: &SystemdUnit, is_user: bool) -> Result<SystemdUnit, ConversionError> {

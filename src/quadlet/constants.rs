@@ -31,6 +31,7 @@ pub static SUPPORTED_CONTAINER_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| 
         "Image",
         "Label",
         "LogDriver",
+        "Mount",
         "Network",
         "NoNewPrivileges",
         "Notify",
