@@ -495,6 +495,20 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
 
     podman.add_env(&env_args);
 
+    if let Some(ip) = container.lookup_last(CONTAINER_SECTION, "IP") {
+        if !ip.is_empty() {
+            podman.add("--ip");
+            podman.add(ip);
+        }
+    }
+
+    if let Some(ip6) = container.lookup_last(CONTAINER_SECTION, "IP6") {
+        if !ip6.is_empty() {
+            podman.add("--ip6");
+            podman.add(ip6);
+        }
+    }
+
     let labels: Vec<&str> = container.lookup_all_values(CONTAINER_SECTION, "Label")
         .map(|v| v.raw().as_str())
         .collect();

@@ -29,6 +29,8 @@ pub static SUPPORTED_CONTAINER_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| 
         "ExposeHostPort",
         "Group",
         "Image",
+        "IP",
+        "IP6",
         "Label",
         "LogDriver",
         "Mount",
