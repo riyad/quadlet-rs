@@ -58,7 +58,7 @@ impl<'a> Parser<'a> {
             line: self.line,
             col: self.column,
             msg: msg,
-         }
+        }
     }
 
     pub(crate) fn parse(&mut self) -> ParseResult<SystemdUnit> {
@@ -98,10 +98,14 @@ impl<'a> Parser<'a> {
 
     // KEY            = [A-Za-z0-9-]
     fn parse_key(&mut self) -> ParseResult<EntryKey> {
-        let key: String = self.parse_until_any_of(&['=', /*+ WHITESAPCE*/' ', '\t', '\n', '\r'] );
+        let key: String =
+            self.parse_until_any_of(&['=', /*+ WHITESAPCE*/ ' ', '\t', '\n', '\r']);
 
         if !key.chars().all(|c| c.is_alphanumeric() || c == '-') {
-            return Err(self.error(format!("Invalid key {:?}. Allowed characters are A-Za-z0-9-", key)))
+            return Err(self.error(format!(
+                "Invalid key {:?}. Allowed characters are A-Za-z0-9-",
+                key
+            )));
         }
 
         Ok(key)
@@ -112,18 +116,17 @@ impl<'a> Parser<'a> {
         let name = self.parse_section_header()?;
         let mut entries: Vec<(EntryKey, EntryRawValue)> = Vec::new();
 
-
         while let Some(c) = self.cur {
             match c {
                 '#' | ';' => {
                     // ignore comment
                     let _ = self.parse_comment();
-                },
+                }
                 '[' => break,
                 _ if c.is_ascii_whitespace() => self.bump(),
                 _ => {
                     entries.push(self.parse_entry()?);
-                },
+                }
             }
         }
 
@@ -134,16 +137,32 @@ impl<'a> Parser<'a> {
     fn parse_section_header(&mut self) -> ParseResult<String> {
         match self.cur {
             Some('[') => self.bump(),
-            Some(c) => return Err(self.error(format!("expected '[' as start of section header, but found {c:?}"))),
-            None => return Err(self.error(format!("expected '[' as start of section header, but found EOF"))),
+            Some(c) => {
+                return Err(self.error(format!(
+                    "expected '[' as start of section header, but found {c:?}"
+                )))
+            }
+            None => {
+                return Err(self.error(format!(
+                    "expected '[' as start of section header, but found EOF"
+                )))
+            }
         }
 
         let section_name = self.parse_until_any_of(&[']', '\n']);
 
         match self.cur {
             Some(']') => self.bump(),
-            Some(c) => return Err(self.error(format!("expected ']' as end of section header, but found {c:?}"))),
-            None => return Err(self.error(format!("expected ']' as end of section header, but found EOF"))),
+            Some(c) => {
+                return Err(self.error(format!(
+                    "expected ']' as end of section header, but found {c:?}"
+                )))
+            }
+            None => {
+                return Err(self.error(format!(
+                    "expected ']' as end of section header, but found EOF"
+                )))
+            }
         }
 
         if section_name.is_empty() {
@@ -166,11 +185,13 @@ impl<'a> Parser<'a> {
                 '#' | ';' => {
                     // ignore comment
                     let _ = self.parse_comment();
-                },
+                }
                 '[' => {
                     let (section, entries) = self.parse_section()?;
                     // make sure there's a section entry (even if `entries` is empty)
-                    unit.sections.entry(section.clone()).or_insert(Entries::default());
+                    unit.sections
+                        .entry(section.clone())
+                        .or_insert(Entries::default());
                     for (key, value) in entries {
                         unit.append_entry_value(
                             section.as_str(),
@@ -181,7 +202,7 @@ impl<'a> Parser<'a> {
                             },
                         );
                     }
-                },
+                }
                 _ if c.is_ascii_whitespace() => self.bump(),
                 _ => return Err(self.error("Expected comment or section".into())),
             };
@@ -232,12 +253,12 @@ impl<'a> Parser<'a> {
                     '\n' => {
                         value.push_str(LINE_CONTINUATION_REPLACEMENT);
                         line_continuation = true;
-                    },
+                    }
                     // just an escape sequence -> add to value and continue normally
                     _ => {
                         value.push('\\');
                         value.push(c);
-                    },
+                    }
                 }
             } else if line_continuation {
                 line_continuation = false;
@@ -246,7 +267,7 @@ impl<'a> Parser<'a> {
                         // ignore interspersed comments
                         let _ = self.parse_comment();
                         line_continuation = true;
-                    },
+                    }
                     // end of value
                     '\n' => break,
                     // start of section header (although an unexpected one), i.e. end of value
@@ -261,7 +282,7 @@ impl<'a> Parser<'a> {
                         } else {
                             value.push(c);
                         }
-                    },
+                    }
                 }
             } else {
                 match c {
@@ -293,7 +314,7 @@ mod tests {
             let old_line = parser.line;
             let _old_col = parser.column;
             assert_eq!(parser.parse_comment(), Ok("# foo".into()));
-            assert_eq!(parser.line, old_line+1);
+            assert_eq!(parser.line, old_line + 1);
             assert_eq!(parser.column, 0);
         }
 
@@ -302,7 +323,14 @@ mod tests {
             let input = "[\n; bar";
             let mut parser = Parser::new(input);
             let old_pos = parser.column;
-            assert_eq!(parser.parse_comment(), Err(ParseError{ line: 0, col: 1, msg: "expected comment, but found '['".into() }));
+            assert_eq!(
+                parser.parse_comment(),
+                Err(ParseError {
+                    line: 0,
+                    col: 1,
+                    msg: "expected comment, but found '['".into()
+                })
+            );
             assert_eq!(parser.column, old_pos);
         }
     }
@@ -319,17 +347,14 @@ mod tests {
                 parser.parse_entry(),
                 Ok(("KeyOne".into(), "value 1".into()))
             );
-            assert_eq!(parser.column, old_pos+13);
+            assert_eq!(parser.column, old_pos + 13);
         }
 
         #[test]
         fn test_with_no_value_succeeds() {
             let input = "KeyOne=";
             let mut parser = Parser::new(input);
-            assert_eq!(
-                parser.parse_entry(),
-                Ok(("KeyOne".into(), "".into()))
-            );
+            assert_eq!(parser.parse_entry(), Ok(("KeyOne".into(), "".into())));
         }
     }
 
@@ -341,11 +366,8 @@ mod tests {
             let input = "KeyOne";
             let mut parser = Parser::new(input);
             let old_pos = parser.column;
-            assert_eq!(
-                parser.parse_key(),
-                Ok("KeyOne".into())
-            );
-            assert_eq!(parser.column, old_pos+5);
+            assert_eq!(parser.parse_key(), Ok("KeyOne".into()));
+            assert_eq!(parser.column, old_pos + 5);
             assert_eq!(parser.cur, None);
         }
 
@@ -356,9 +378,13 @@ mod tests {
             let old_pos = parser.column;
             assert_eq!(
                 parser.parse_key(),
-                Err(ParseError{ line: 0, col: 7, msg: "Invalid key \"Key_One\". Allowed characters are A-Za-z0-9-".into() })
+                Err(ParseError {
+                    line: 0,
+                    col: 7,
+                    msg: "Invalid key \"Key_One\". Allowed characters are A-Za-z0-9-".into()
+                })
             );
-            assert_eq!(parser.column, old_pos+6);
+            assert_eq!(parser.column, old_pos + 6);
             assert_eq!(parser.cur, None);
         }
     }
@@ -379,8 +405,8 @@ mod tests {
                     vec![("KeyOne".into(), "value 1".into())],
                 ))
             );
-            assert_eq!(parser.line, old_line+1);
-            assert_eq!(parser.column, old_col+13);
+            assert_eq!(parser.line, old_line + 1);
+            assert_eq!(parser.column, old_col + 13);
         }
 
         #[test]
@@ -399,8 +425,8 @@ mod tests {
                     ],
                 ))
             );
-            assert_eq!(parser.line, old_line+2);
-            assert_eq!(parser.column, old_col+13);
+            assert_eq!(parser.line, old_line + 2);
+            assert_eq!(parser.column, old_col + 13);
         }
 
         #[test]
@@ -419,8 +445,8 @@ mod tests {
                     ],
                 ))
             );
-            assert_eq!(parser.line, old_line+2);
-            assert_eq!(parser.column, old_col+13);
+            assert_eq!(parser.line, old_line + 2);
+            assert_eq!(parser.column, old_col + 13);
         }
 
         #[test]
@@ -439,8 +465,8 @@ mod tests {
                     ],
                 ))
             );
-            assert_eq!(parser.line, old_line+6);
-            assert_eq!(parser.column, old_col+16);
+            assert_eq!(parser.line, old_line + 6);
+            assert_eq!(parser.column, old_col + 16);
         }
 
         #[test]
@@ -451,10 +477,14 @@ mod tests {
             let old_col = parser.column;
             assert_eq!(
                 parser.parse_section(),
-                Err(ParseError{ line: 2, col: 6, msg: "expected '=' after key, but found 't'".into() })
+                Err(ParseError {
+                    line: 2,
+                    col: 6,
+                    msg: "expected '=' after key, but found 't'".into()
+                })
             );
-            assert_eq!(parser.line, old_line+2);
-            assert_eq!(parser.column, old_col+5);
+            assert_eq!(parser.line, old_line + 2);
+            assert_eq!(parser.column, old_col + 5);
         }
 
         #[test]
@@ -465,10 +495,14 @@ mod tests {
             let old_col = parser.column;
             assert_eq!(
                 parser.parse_section(),
-                Err(ParseError{ line: 1, col: 13, msg: "expected '=' after key, but found EOF".into() })
+                Err(ParseError {
+                    line: 1,
+                    col: 13,
+                    msg: "expected '=' after key, but found EOF".into()
+                })
             );
-            assert_eq!(parser.line, old_line+1);
-            assert_eq!(parser.column, old_col+12);
+            assert_eq!(parser.line, old_line + 1);
+            assert_eq!(parser.column, old_col + 12);
         }
     }
 
@@ -481,7 +515,7 @@ mod tests {
             let mut parser = Parser::new(input);
             let old_pos = parser.column;
             assert_eq!(parser.parse_section_header(), Ok("Section A".into()));
-            assert_eq!(parser.column, old_pos+10);
+            assert_eq!(parser.column, old_pos + 10);
         }
 
         #[test]
@@ -490,7 +524,11 @@ mod tests {
             let mut parser = Parser::new(input);
             assert_eq!(
                 parser.parse_section_header(),
-                Err(ParseError{ line: 0, col: 1, msg: "expected '[' as start of section header, but found 'S'".into() }),
+                Err(ParseError {
+                    line: 0,
+                    col: 1,
+                    msg: "expected '[' as start of section header, but found 'S'".into()
+                }),
             );
         }
 
@@ -500,7 +538,11 @@ mod tests {
             let mut parser = Parser::new(input);
             assert_eq!(
                 parser.parse_section_header(),
-                Err(ParseError{ line: 0, col: 2, msg: "section header cannot be empty".into() }),
+                Err(ParseError {
+                    line: 0,
+                    col: 2,
+                    msg: "section header cannot be empty".into()
+                }),
             );
         }
 
@@ -510,7 +552,11 @@ mod tests {
             let mut parser = Parser::new(input);
             assert_eq!(
                 parser.parse_section_header(),
-                Err(ParseError{ line: 0, col: 11, msg: "expected ']' as end of section header, but found EOF".into() }),
+                Err(ParseError {
+                    line: 0,
+                    col: 11,
+                    msg: "expected ']' as end of section header, but found EOF".into()
+                }),
             );
         }
 
@@ -520,7 +566,11 @@ mod tests {
             let mut parser = Parser::new(input);
             assert_eq!(
                 parser.parse_section_header(),
-                Err(ParseError{ line: 0, col: 1, msg: "expected ']' as end of section header, but found EOF".into() }),
+                Err(ParseError {
+                    line: 0,
+                    col: 1,
+                    msg: "expected ']' as end of section header, but found EOF".into()
+                }),
             );
         }
 
@@ -530,7 +580,11 @@ mod tests {
             let mut parser = Parser::new(input);
             assert_eq!(
                 parser.parse_section_header(),
-                Err(ParseError{ line: 0, col: 10, msg: "expected ']' as end of section header, but found EOF".into() }),
+                Err(ParseError {
+                    line: 0,
+                    col: 10,
+                    msg: "expected ']' as end of section header, but found EOF".into()
+                }),
             );
         }
     }
@@ -542,10 +596,7 @@ mod tests {
         fn test_only_comments_should_create_empty_unit() {
             let input = "# foo\n; bar";
             let mut parser = Parser::new(input);
-            assert_eq!(
-                parser.parse_unit().ok(),
-                Some(SystemdUnit::new()),
-            );
+            assert_eq!(parser.parse_unit().ok(), Some(SystemdUnit::new()),);
         }
 
         #[test]
@@ -614,11 +665,8 @@ mod tests {
             let input = "value 1";
             let mut parser = Parser::new(input);
             let old_pos = parser.column;
-            assert_eq!(
-                parser.parse_value(),
-                Ok("value 1".into()),
-            );
-            assert_eq!(parser.column, old_pos+6);
+            assert_eq!(parser.parse_value(), Ok("value 1".into()),);
+            assert_eq!(parser.column, old_pos + 6);
         }
 
         #[test]
@@ -626,11 +674,8 @@ mod tests {
             let input = "";
             let mut parser = Parser::new(input);
             let old_pos = parser.column;
-            assert_eq!(
-                parser.parse_value(),
-                Ok(input.into()),
-            );
-            assert_eq!(parser.column, old_pos+0);
+            assert_eq!(parser.parse_value(), Ok(input.into()),);
+            assert_eq!(parser.column, old_pos + 0);
         }
 
         #[test]
@@ -638,11 +683,8 @@ mod tests {
             let input = "this is some text";
             let mut parser = Parser::new(input);
             let old_pos = parser.column;
-            assert_eq!(
-                parser.parse_value(),
-                Ok(input.into()),
-            );
-            assert_eq!(parser.column, old_pos+16);
+            assert_eq!(parser.parse_value(), Ok(input.into()),);
+            assert_eq!(parser.column, old_pos + 16);
         }
 
         #[test]
@@ -655,8 +697,8 @@ mod tests {
                 parser.parse_value(),
                 Ok("this is some text more text".into()),
             );
-            assert_eq!(parser.line, old_line+1);
-            assert_eq!(parser.column, old_col+8);
+            assert_eq!(parser.line, old_line + 1);
+            assert_eq!(parser.column, old_col + 8);
         }
 
         #[test]
@@ -665,12 +707,9 @@ mod tests {
             let mut parser = Parser::new(input);
             let old_line = parser.line;
             let old_col = parser.column;
-            assert_eq!(
-                parser.parse_value(),
-                Ok("  late text".into()),
-            );
-            assert_eq!(parser.line, old_line+2);
-            assert_eq!(parser.column, old_col+8);
+            assert_eq!(parser.parse_value(), Ok("  late text".into()),);
+            assert_eq!(parser.line, old_line + 2);
+            assert_eq!(parser.column, old_col + 8);
         }
 
         #[test]
@@ -683,8 +722,8 @@ mod tests {
                 parser.parse_value(),
                 Ok("some text more text some more".into()),
             );
-            assert_eq!(parser.line, old_line+5);
-            assert_eq!(parser.column, old_col+8);
+            assert_eq!(parser.line, old_line + 5);
+            assert_eq!(parser.column, old_col + 8);
         }
 
         #[test]
@@ -693,12 +732,9 @@ mod tests {
             let mut parser = Parser::new(input);
             let old_line = parser.line;
             let old_col = parser.column;
-            assert_eq!(
-                parser.parse_value(),
-                Ok("text ".into()),
-            );
-            assert_eq!(parser.line, old_line+2);
-            assert_eq!(parser.column, old_col+4);
+            assert_eq!(parser.parse_value(), Ok("text ".into()),);
+            assert_eq!(parser.line, old_line + 2);
+            assert_eq!(parser.column, old_col + 4);
         }
 
         #[test]
@@ -707,12 +743,9 @@ mod tests {
             let mut parser = Parser::new(input);
             let old_line = parser.line;
             let old_col = parser.column;
-            assert_eq!(
-                parser.parse_value(),
-                Ok("text ".into()),
-            );
-            assert_eq!(parser.line, old_line+1);
-            assert_eq!(parser.column, old_col+0);
+            assert_eq!(parser.parse_value(), Ok("text ".into()),);
+            assert_eq!(parser.line, old_line + 1);
+            assert_eq!(parser.column, old_col + 0);
         }
 
         #[test]
@@ -725,8 +758,8 @@ mod tests {
                 parser.parse_value(),
                 Ok("org.foo.Arg1=arg1 \"org.foo.Arg2=arg 2\"    org.foo.Arg3=arg3".into()),
             );
-            assert_eq!(parser.line, old_line+1);
-            assert_eq!(parser.column, old_col+18);
+            assert_eq!(parser.line, old_line + 1);
+            assert_eq!(parser.column, old_col + 18);
         }
     }
 }

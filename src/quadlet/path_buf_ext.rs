@@ -1,5 +1,5 @@
 use std::env;
-use std::path::{PathBuf, Path};
+use std::path::{Path, PathBuf};
 
 use crate::systemd_unit::SystemdUnit;
 
@@ -13,9 +13,12 @@ impl PathBufExt<PathBuf> for PathBuf {
     fn absolute_from(&self, new_root: &Path) -> PathBuf {
         if !self.is_absolute() {
             if !new_root.as_os_str().is_empty() {
-                return new_root.join(self).cleaned()
+                return new_root.join(self).cleaned();
             } else {
-                return env::current_dir().expect("current directory").join(self).cleaned()
+                return env::current_dir()
+                    .expect("current directory")
+                    .join(self)
+                    .cleaned();
             }
         }
 
@@ -24,8 +27,10 @@ impl PathBufExt<PathBuf> for PathBuf {
 
     fn absolute_from_unit(&self, unit_file: &SystemdUnit) -> Self {
         let current_dir = env::current_dir().expect("current dir");
-        let unit_file_dir = unit_file.path()
-            .map_or_else(|| current_dir.as_path(), |p| p.parent().unwrap_or(current_dir.as_path()));
+        let unit_file_dir = unit_file.path().map_or_else(
+            || current_dir.as_path(),
+            |p| p.parent().unwrap_or(current_dir.as_path()),
+        );
 
         self.absolute_from(unit_file_dir)
     }
@@ -354,6 +359,5 @@ mod tests {
 
         // TODO: test cases from https://pkg.go.dev/path/filepath#Dir
         // TODO: test cases from https://pkg.go.dev/path/filepath#Clean
-
     }
 }

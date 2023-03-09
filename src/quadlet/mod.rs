@@ -1,11 +1,11 @@
 mod constants;
-mod podman_command;
-mod path_buf_ext;
 pub(crate) mod logger;
+mod path_buf_ext;
+mod podman_command;
 
-use crate::systemd_unit;
-use crate::systemd_unit::{SystemdUnit, SplitWord};
 use self::logger::*;
+use crate::systemd_unit;
+use crate::systemd_unit::{SplitWord, SystemdUnit};
 
 pub(crate) use self::constants::*;
 pub(crate) use self::path_buf_ext::*;
@@ -37,25 +37,23 @@ pub(crate) enum ConversionError {
 impl Display for ConversionError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            ConversionError::InvalidDeviceOptions(msg) |
-            ConversionError::InvalidDeviceType(msg) |
-            ConversionError::InvalidImageOrRootfs(msg) |
-            ConversionError::InvalidKillMode(msg) |
-            ConversionError::InvalidPortFormat(msg) |
-            ConversionError::InvalidPublishedPort(msg) |
-            ConversionError::InvalidRemapUsers(msg) |
-            ConversionError::InvalidServiceType(msg) |
-            ConversionError::InvalidSubnet(msg) |
-            ConversionError::UnknownKey(msg) |
-            ConversionError::YamlMissing(msg) => {
+            ConversionError::InvalidDeviceOptions(msg)
+            | ConversionError::InvalidDeviceType(msg)
+            | ConversionError::InvalidImageOrRootfs(msg)
+            | ConversionError::InvalidKillMode(msg)
+            | ConversionError::InvalidPortFormat(msg)
+            | ConversionError::InvalidPublishedPort(msg)
+            | ConversionError::InvalidRemapUsers(msg)
+            | ConversionError::InvalidServiceType(msg)
+            | ConversionError::InvalidSubnet(msg)
+            | ConversionError::UnknownKey(msg)
+            | ConversionError::YamlMissing(msg) => {
                 write!(f, "{msg}")
-            },
-            ConversionError::Io(e) => {
-                e.fmt(f)
-            },
+            }
+            ConversionError::Io(e) => e.fmt(f),
             ConversionError::Parsing(e) => {
                 write!(f, "Failed parsing unit file: {e}")
-            },
+            }
         }
     }
 }
@@ -85,7 +83,7 @@ pub(crate) fn quad_is_port_range(port: &str) -> bool {
 
     let mut chars = port.chars();
     let mut cur: Option<char>;
-    let mut digits;  // count how many digits we've read
+    let mut digits; // count how many digits we've read
 
     // necessary "\\d+" part
     digits = 0;
@@ -120,18 +118,18 @@ pub(crate) fn quad_is_port_range(port: &str) -> bool {
     }
 
     // parse optional "(/udp|/tcp)?" part
-    let mut tcp = 0;  // count how many characters we've read
-    let mut udp = 0;  // count how many characters we've read
+    let mut tcp = 0; // count how many characters we've read
+    let mut udp = 0; // count how many characters we've read
     loop {
         cur = chars.next();
         match cur {
             // parse "tcp"
-            Some('t') if tcp == 0 && udp == 0 => tcp+=1,
-            Some('c') if tcp == 1 => tcp+=1,
+            Some('t') if tcp == 0 && udp == 0 => tcp += 1,
+            Some('c') if tcp == 1 => tcp += 1,
             Some('p') if tcp == 2 => break,
             // parse "udp"
-            Some('u') if udp == 0 && tcp == 0 => udp+=1,
-            Some('d') if udp == 1 => udp+=1,
+            Some('u') if udp == 0 && tcp == 0 => udp += 1,
+            Some('d') if udp == 1 => udp += 1,
             Some('p') if udp == 2 => break,
             // illegal character
             Some(_) => return false,
@@ -171,7 +169,8 @@ pub(crate) fn quad_split_ports(ports: &str) -> Vec<String> {
     while let Some(c) = chars.next() {
         let c = c;
         match c {
-            '[' => { // IPv6 contain ':' characters, hence they are enclosed with '[...]'
+            '[' => {
+                // IPv6 contain ':' characters, hence they are enclosed with '[...]'
                 // so we consume all characters until ']' (including ':') for this part
                 next_part.push(c);
                 while let Some(c) = chars.next() {
@@ -181,12 +180,13 @@ pub(crate) fn quad_split_ports(ports: &str) -> Vec<String> {
                         _ => (),
                     }
                 }
-            },
-            ':' => { // assume all ':' characters are boundaries that start a new part
+            }
+            ':' => {
+                // assume all ':' characters are boundaries that start a new part
                 parts.push(next_part);
                 next_part = String::new();
                 continue;
-            },
+            }
             _ => {
                 next_part.push(c);
             }
@@ -198,10 +198,17 @@ pub(crate) fn quad_split_ports(ports: &str) -> Vec<String> {
     parts
 }
 
-pub(crate) fn check_for_unknown_keys(unit: &SystemdUnit, group_name: &str, supported_keys: &HashSet<&'static str>) -> Result<(), ConversionError> {
-    for (key,_) in unit.section_entries(group_name) {
+pub(crate) fn check_for_unknown_keys(
+    unit: &SystemdUnit,
+    group_name: &str,
+    supported_keys: &HashSet<&'static str>,
+) -> Result<(), ConversionError> {
+    for (key, _) in unit.section_entries(group_name) {
         if !supported_keys.contains(key) {
-            return Err(ConversionError::UnknownKey(format!("unsupported key '{key}' in group '{group_name}' in {:?}", unit.path())));
+            return Err(ConversionError::UnknownKey(format!(
+                "unsupported key '{key}' in group '{group_name}' in {:?}",
+                unit.path()
+            )));
         }
     }
 
@@ -211,25 +218,25 @@ pub(crate) fn check_for_unknown_keys(unit: &SystemdUnit, group_name: &str, suppo
 fn is_image_id(image_name: &str) -> bool {
     // All sha25:... names are assumed by podman to be fully specified
     if image_name.starts_with("sha256:") {
-        return true
+        return true;
     }
 
     // However, podman also accepts image ids as pure hex strings,
     // but only those of length 64 are unambiguous image ids
     if image_name.len() != 64 {
-        return false
+        return false;
     }
     if image_name.chars().any(|c| !c.is_ascii_hexdigit()) {
-        return false
+        return false;
     }
 
-    return true
+    return true;
 }
 
 fn is_unambiguous_name(image_name: &str) -> bool {
     // Fully specified image ids are unambiguous
     if is_image_id(image_name) {
-        return true
+        return true;
     }
 
     // Otherwise we require a fully qualified name
@@ -238,14 +245,14 @@ fn is_unambiguous_name(image_name: &str) -> bool {
     if let Some((domain, _)) = image_name.split_once("/") {
         // If its a domain (has dot or port or is "localhost") it is considered fq
         if domain.contains(['.', ':']) || domain == "localhost" {
-            return true
+            return true;
         }
     } else {
         // No domain or path, not fully qualified
-        return false
+        return false;
     }
 
-    return false
+    return false;
 }
 
 // warns if input is an ambiguous name, i.e. a partial image id or a short
@@ -278,70 +285,49 @@ mod tests {
         fn with_empty() {
             let input = "";
 
-            assert_eq!(
-                quad_split_ports(input),
-                vec![""],
-            );
+            assert_eq!(quad_split_ports(input), vec![""],);
         }
 
         #[test]
         fn with_only_port() {
             let input = "123";
 
-            assert_eq!(
-                quad_split_ports(input),
-                vec!["123"],
-            );
+            assert_eq!(quad_split_ports(input), vec!["123"],);
         }
 
         #[test]
         fn with_ipv4_and_port() {
             let input = "1.2.3.4:567";
 
-            assert_eq!(
-                quad_split_ports(input),
-                vec!["1.2.3.4", "567"],
-            );
+            assert_eq!(quad_split_ports(input), vec!["1.2.3.4", "567"],);
         }
 
         #[test]
         fn with_ipv6_and_port() {
             let input = "[::]:567";
 
-            assert_eq!(
-                quad_split_ports(input),
-                vec!["[::]", "567"],
-            );
+            assert_eq!(quad_split_ports(input), vec!["[::]", "567"],);
         }
 
         #[test]
         fn with_host_and_container_ports() {
             let input = "123:567";
 
-            assert_eq!(
-                quad_split_ports(input),
-                vec!["123", "567"],
-            );
+            assert_eq!(quad_split_ports(input), vec!["123", "567"],);
         }
 
         #[test]
         fn with_ipv4_host_and_container_ports() {
             let input = "0.0.0.0:123:567";
 
-            assert_eq!(
-                quad_split_ports(input),
-                vec!["0.0.0.0", "123", "567"],
-            );
+            assert_eq!(quad_split_ports(input), vec!["0.0.0.0", "123", "567"],);
         }
 
         #[test]
         fn with_ipv6_empty_host_container_port_and_protocol() {
             let input = "[1:2:3:4::]::567/tcp";
 
-            assert_eq!(
-                quad_split_ports(input),
-                vec!["[1:2:3:4::]", "", "567/tcp"],
-            );
+            assert_eq!(quad_split_ports(input), vec!["[1:2:3:4::]", "", "567/tcp"],);
         }
     }
 

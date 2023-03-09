@@ -13,7 +13,10 @@ impl PodmanCommand {
         }
     }
 
-    pub(crate) fn add<S>(&mut self, arg: S) where S: Into<String> {
+    pub(crate) fn add<S>(&mut self, arg: S)
+    where
+        S: Into<String>,
+    {
         self.args.push(arg.into());
     }
 
@@ -21,7 +24,10 @@ impl PodmanCommand {
         self.add_keys("--annotation", annotations);
     }
 
-    pub(crate) fn add_bool<S>(&mut self, arg: S, val: bool) where S: Into<String> {
+    pub(crate) fn add_bool<S>(&mut self, arg: S, val: bool)
+    where
+        S: Into<String>,
+    {
         if val {
             self.add(arg);
         } else {
@@ -44,17 +50,14 @@ impl PodmanCommand {
         self.add_keys("--label", labels);
     }
 
-    pub(crate) fn add_slice(&mut self, args: &[&str])
-    {
+    pub(crate) fn add_slice(&mut self, args: &[&str]) {
         self.args.reserve(args.len());
         for arg in args {
             self.args.push(arg.to_string())
         }
     }
 
-
-    pub(crate) fn add_vec(&mut self, args: &mut Vec<String>)
-    {
+    pub(crate) fn add_vec(&mut self, args: &mut Vec<String>) {
         self.args.append(args);
     }
 

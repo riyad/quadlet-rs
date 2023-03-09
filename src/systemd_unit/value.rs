@@ -1,7 +1,7 @@
+use super::{parse_bool, quote_value, unquote_value, Error};
 use once_cell::sync::Lazy;
 use ordered_multimap::ListOrderedMultimap;
 use std::str::FromStr;
-use super::{Error, parse_bool, quote_value, unquote_value};
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct Entries {
@@ -109,14 +109,8 @@ mod tests {
                 let input = "foo=\"bar\"";
                 let value = EntryValue::from_unquoted(input);
 
-                assert_eq!(
-                    value.unquote(),
-                    input
-                );
-                assert_eq!(
-                    value.raw(),
-                    "foo=\\\"bar\\\""
-                );
+                assert_eq!(value.unquote(), input);
+                assert_eq!(value.raw(), "foo=\\\"bar\\\"");
             }
         }
 
@@ -128,10 +122,7 @@ mod tests {
                 for input in ["1", "yes", "true", "on"] {
                     let value = EntryValue::from_str(input).unwrap();
 
-                    assert_eq!(
-                        value.to_bool(),
-                        Ok(true),
-                    )
+                    assert_eq!(value.to_bool(), Ok(true),)
                 }
             }
 
@@ -140,10 +131,7 @@ mod tests {
                 for input in ["0", "no", "false", "off"] {
                     let value = EntryValue::from_str(input).unwrap();
 
-                    assert_eq!(
-                        value.to_bool(),
-                        Ok(false),
-                    )
+                    assert_eq!(value.to_bool(), Ok(false),)
                 }
             }
 
@@ -153,10 +141,7 @@ mod tests {
 
                 let value = EntryValue::from_str(input).unwrap();
 
-                assert_eq!(
-                    value.to_bool(),
-                    Ok(false),
-                )
+                assert_eq!(value.to_bool(), Ok(false),)
             }
 
             #[test]
@@ -165,10 +150,7 @@ mod tests {
 
                 let value = EntryValue::from_str(input).unwrap();
 
-                assert_eq!(
-                    value.to_bool(),
-                    Ok(false),
-                )
+                assert_eq!(value.to_bool(), Ok(false),)
             }
 
             #[test]
@@ -177,10 +159,7 @@ mod tests {
 
                 let value = EntryValue::from_str(input).unwrap();
 
-                assert_eq!(
-                    value.to_bool(),
-                    Err(Error::ParseBool),
-                )
+                assert_eq!(value.to_bool(), Err(Error::ParseBool),)
             }
         }
 
@@ -192,14 +171,8 @@ mod tests {
                 let input = "foo \"bar\"";
                 let value = EntryValue::try_from_raw(input).unwrap();
 
-                assert_eq!(
-                    value.raw(),
-                    input
-                );
-                assert_eq!(
-                    value.unquote(),
-                    "foo bar"
-                );
+                assert_eq!(value.raw(), input);
+                assert_eq!(value.unquote(), "foo bar");
             }
         }
 
@@ -213,10 +186,7 @@ mod tests {
                     unquoted: String::new(),
                 };
 
-                assert_eq!(
-                    value.try_unquote(),
-                    Ok("foo bar foo=\"bar\"".into()),
-                );
+                assert_eq!(value.try_unquote(), Ok("foo bar foo=\"bar\"".into()),);
             }
 
             #[test]
@@ -228,7 +198,9 @@ mod tests {
 
                 assert_eq!(
                     value.try_unquote(),
-                    Err(Error::Unquoting("\\0 character not allowed in escape sequence".into())),
+                    Err(Error::Unquoting(
+                        "\\0 character not allowed in escape sequence".into()
+                    )),
                 );
             }
         }
@@ -257,14 +229,8 @@ mod tests {
             let input = "foo=\"bar\"";
             let value: EntryValue = input.into();
 
-            assert_eq!(
-                value.unquote(),
-                input
-            );
-            assert_eq!(
-                value.raw(),
-                "foo=\\\"bar\\\""
-            );
+            assert_eq!(value.unquote(), input);
+            assert_eq!(value.raw(), "foo=\\\"bar\\\"");
         }
     }
 
@@ -276,14 +242,8 @@ mod tests {
             let input = "foo \"bar\"";
             let value = EntryValue::try_from_raw(input).unwrap();
 
-            assert_eq!(
-                value.raw(),
-                input
-            );
-            assert_eq!(
-                value.unquote(),
-                "foo bar"
-            );
+            assert_eq!(value.raw(), input);
+            assert_eq!(value.unquote(), "foo bar");
         }
     }
 
@@ -295,14 +255,8 @@ mod tests {
             let input = "foo=\"bar\"".to_string();
             let value: EntryValue = input.clone().into();
 
-            assert_eq!(
-                value.unquote(),
-                input
-            );
-            assert_eq!(
-                value.raw(),
-                "foo=\\\"bar\\\""
-            );
+            assert_eq!(value.unquote(), input);
+            assert_eq!(value.raw(), "foo=\\\"bar\\\"");
         }
     }
 }

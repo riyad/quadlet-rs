@@ -1,9 +1,9 @@
 use std::fs::{File, OpenOptions};
-use std::io::{Write, stderr};
+use std::io::{stderr, Write};
 use std::os::unix::fs::OpenOptionsExt;
 use std::process;
-use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
+use std::sync::Mutex;
 
 // although we're using AtomicBool, all accesses have to be wrapped with
 // `unsafe { }` because it is `static mut`
@@ -47,13 +47,13 @@ pub(crate) fn __log(msg: String) {
         // If we can't log, print to stderr
         eprintln!("{line}");
         stderr().flush().unwrap();
-	}
+    }
 }
 
 #[doc(hidden)]
 fn __log_to_kmsg(msg: &str) -> bool {
     if unsafe { *NO_KMSG.get_mut() } {
-        return false
+        return false;
     }
 
     let mut kmsg_file = KMSG_FILE.lock().unwrap();
@@ -64,7 +64,7 @@ fn __log_to_kmsg(msg: &str) -> bool {
             Err(e) => {
                 unsafe { *NO_KMSG.get_mut() = true };
                 debug!("Deactivated logging to /dev/kmsg: {e}");
-                return false
+                return false;
             }
         };
     }
@@ -73,7 +73,7 @@ fn __log_to_kmsg(msg: &str) -> bool {
         let file = kmsg_file.as_mut().unwrap();
         if file.write_all(msg.as_bytes()).is_err() {
             *kmsg_file = None;
-            return false
+            return false;
         }
     }
 

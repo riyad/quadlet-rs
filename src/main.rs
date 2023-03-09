@@ -1,9 +1,9 @@
 mod quadlet;
 mod systemd_unit;
 
-use self::quadlet::*;
 use self::quadlet::logger::*;
 use self::quadlet::PathBufExt;
+use self::quadlet::*;
 
 use self::systemd_unit::*;
 
@@ -19,18 +19,12 @@ use std::os;
 use std::path::{Path, PathBuf};
 use std::process;
 
-static SUPPORTED_EXTENSIONS: Lazy<[&OsStr; 4]> = Lazy::new(|| {
-    [
-        "kube",
-        "container",
-        "network",
-        "volume",
-    ].map(|ext| OsStr::new(ext))
-});
+static SUPPORTED_EXTENSIONS: Lazy<[&OsStr; 4]> =
+    Lazy::new(|| ["kube", "container", "network", "volume"].map(|ext| OsStr::new(ext)));
 
 const QUADLET_VERSION: &str = "0.2.0-dev";
 const UNIT_DIR_ADMIN: &str  = "/etc/containers/systemd";
-const UNIT_DIR_DISTRO: &str  = "/usr/share/containers/systemd";
+const UNIT_DIR_DISTRO: &str = "/usr/share/containers/systemd";
 
 #[derive(Debug, Default, PartialEq)]
 struct Config {
@@ -42,9 +36,9 @@ struct Config {
     version: bool,
 }
 
-
 fn help() {
-    println!("Usage:
+    println!(
+        "Usage:
 quadlet-rs --version
 quadlet-rs [--dry-run] [--no-kmsg-log] [--user] [-v|--verbose] OUTPUT_DIR [OUTPUT_DIR] [OUTPUT_DIR]
 
@@ -52,7 +46,8 @@ Options:
     --dry-run      Run in dry-run mode printing debug information
     --no-kmsg-log  Don't log to kmsg
     --user         Run as systemd user
-    -v,--verbose   Print debug information");
+    -v,--verbose   Print debug information"
+    );
 }
 
 fn parse_args(args: Vec<String>) -> Result<Config, String> {
@@ -68,7 +63,7 @@ fn parse_args(args: Vec<String>) -> Result<Config, String> {
     cfg.is_user = args[0].contains("user");
 
     if args.len() < 2 {
-        return Err("Missing output directory argument".into())
+        return Err("Missing output directory argument".into());
     } else {
         let mut iter = args.iter();
         // skip $0
@@ -83,12 +78,12 @@ fn parse_args(args: Vec<String>) -> Result<Config, String> {
                     cfg.version = true;
                     // short circuit
                     break;
-                },
+                }
                 Some(path) => {
                     cfg.output_path = path.into();
                     // we only need the first path
                     break;
-                },
+                }
                 None => return Err("Missing output directory argument".into()),
             }
         }
@@ -104,11 +99,9 @@ fn parse_args(args: Vec<String>) -> Result<Config, String> {
 fn unit_search_dirs(is_user: bool) -> Vec<PathBuf> {
     // Allow overdiding source dir, this is mainly for the CI tests
     if let Ok(unit_dirs_env) = std::env::var("QUADLET_UNIT_DIRS") {
-        let unit_dirs_env: Vec<PathBuf> = unit_dirs_env
-            .split(":")
-            .map(|s| PathBuf::from(s))
-            .collect();
-        return unit_dirs_env
+        let unit_dirs_env: Vec<PathBuf> =
+            unit_dirs_env.split(":").map(|s| PathBuf::from(s)).collect();
+        return unit_dirs_env;
     }
 
     let mut dirs: Vec<PathBuf> = vec![];
@@ -122,7 +115,10 @@ fn unit_search_dirs(is_user: bool) -> Vec<PathBuf> {
     dirs
 }
 
-fn load_units_from_dir(source_path: &PathBuf, units: &mut HashMap<OsString, SystemdUnit>) -> io::Result<()> {
+fn load_units_from_dir(
+    source_path: &PathBuf,
+    units: &mut HashMap<OsString, SystemdUnit>,
+) -> io::Result<()> {
     for entry in source_path.read_dir()? {
         let entry = entry?;
         let path = entry.path();
@@ -143,18 +139,18 @@ fn load_units_from_dir(source_path: &PathBuf, units: &mut HashMap<OsString, Syst
             Err(e) => {
                 log!("Error loading {path:?}, ignoring: {e}");
                 continue;
-           },
+            }
         };
 
         let unit = match SystemdUnit::load_from_str(buf.as_str()) {
             Ok(mut unit) => {
                 unit.path = Some(path);
                 unit
-            },
+            }
             Err(e) => {
                 log!("Error loading {path:?}, ignoring: {e}");
                 continue;
-           },
+            }
         };
 
         units.insert(name, unit);
@@ -163,20 +159,35 @@ fn load_units_from_dir(source_path: &PathBuf, units: &mut HashMap<OsString, Syst
     Ok(())
 }
 
-fn quad_replace_extension(file: &PathBuf, new_extension: &str, extra_prefix: &str, extra_suffix: &str) -> PathBuf {
+fn quad_replace_extension(
+    file: &PathBuf,
+    new_extension: &str,
+    extra_prefix: &str,
+    extra_suffix: &str,
+) -> PathBuf {
     let base_name = file.file_stem().unwrap().to_str().unwrap();
 
-    file.with_file_name(format!("{extra_prefix}{base_name}{extra_suffix}{new_extension}"))
+    file.with_file_name(format!(
+        "{extra_prefix}{base_name}{extra_suffix}{new_extension}"
+    ))
 }
 
 // Convert a quadlet container file (unit file with a Container group) to a systemd
 // service file (unit file with Service group) based on the options in the Container group.
 // The original Container group is kept around as X-Container.
-fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUnit, ConversionError> {
+fn convert_container(
+    container: &SystemdUnit,
+    is_user: bool,
+) -> Result<SystemdUnit, ConversionError> {
     let mut service = SystemdUnit::new();
 
     service.merge_from(container);
-    service.path = Some(quad_replace_extension(container.path().unwrap(), ".service", "", ""));
+    service.path = Some(quad_replace_extension(
+        container.path().unwrap(),
+        ".service",
+        "",
+        "",
+    ));
 
     if container.path().is_some() {
         service.append_entry(
@@ -191,15 +202,21 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
     service.rename_section(CONTAINER_SECTION, X_CONTAINER_SECTION);
 
     // One image or rootfs must be specified for the container
-    let image = container.lookup_last(CONTAINER_SECTION, "Image")
+    let image = container
+        .lookup_last(CONTAINER_SECTION, "Image")
         .map_or(String::new(), |s| s.to_string());
-    let rootfs = container.lookup_last(CONTAINER_SECTION, "Rootfs")
+    let rootfs = container
+        .lookup_last(CONTAINER_SECTION, "Rootfs")
         .map_or(String::new(), |s| s.to_string());
     if image.is_empty() && rootfs.is_empty() {
-        return Err(ConversionError::InvalidImageOrRootfs("no Image or Rootfs key specified".into()))
+        return Err(ConversionError::InvalidImageOrRootfs(
+            "no Image or Rootfs key specified".into(),
+        ));
     }
     if !image.is_empty() && !rootfs.is_empty() {
-        return Err(ConversionError::InvalidImageOrRootfs("the Image And Rootfs keys conflict can not be specified together".into()))
+        return Err(ConversionError::InvalidImageOrRootfs(
+            "the Image And Rootfs keys conflict can not be specified together".into(),
+        ));
     }
 
     let podman_container_name = container
@@ -209,11 +226,7 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
         .unwrap_or("systemd-%N".to_owned());
 
     // Set PODMAN_SYSTEMD_UNIT so that podman auto-update can restart the service.
-    service.append_entry(
-        SERVICE_SECTION,
-        "Environment",
-        "PODMAN_SYSTEMD_UNIT=%n",
-    );
+    service.append_entry(SERVICE_SECTION, "Environment", "PODMAN_SYSTEMD_UNIT=%n");
 
     // Only allow mixed or control-group, as nothing else works well
     let kill_mode = service.lookup_last(SERVICE_SECTION, "KillMode");
@@ -221,9 +234,11 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
         None | Some("mixed") | Some("control-group") => {
             // We default to mixed instead of control-group, because it lets conmon do its thing
             service.set_entry(SERVICE_SECTION, "KillMode", "mixed");
-        },
+        }
         Some(kill_mode) => {
-            return Err(ConversionError::InvalidKillMode(format!("invalid KillMode '{kill_mode}'")));
+            return Err(ConversionError::InvalidKillMode(format!(
+                "invalid KillMode '{kill_mode}'"
+            )));
         }
     }
 
@@ -235,11 +250,7 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
     let env_args: HashMap<String, String> = quad_parse_kvs(&environments);
 
     // Need the containers filesystem mounted to start podman
-    service.append_entry(
-        UNIT_SECTION,
-        "RequiresMountsFor",
-        "%t/containers",
-    );
+    service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
 
     // If conmon exited uncleanly it may not have removed the container, so
     // force it, -i makes it ignore non-existing files.
@@ -279,11 +290,7 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
     handle_log_driver(container, CONTAINER_SECTION, &mut podman);
 
     // We delegate groups to the runtime
-    service.append_entry(
-        SERVICE_SECTION,
-        "Delegate",
-        "yes",
-    );
+    service.append_entry(SERVICE_SECTION, "Delegate", "yes");
     podman.add_slice(&["--cgroups=split"]);
 
     let timezone = container.lookup_last(CONTAINER_SECTION, "Timezone");
@@ -296,88 +303,89 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
     add_networks(container, CONTAINER_SECTION, &mut service, &mut podman)?;
 
     // Run with a pid1 init to reap zombies by default (as most apps don't do that)
-    let run_init = container.lookup_last(CONTAINER_SECTION, "RunInit")
-        .map(|s| parse_bool(s).unwrap_or(false));  // key found: parse or default
+    let run_init = container
+        .lookup_last(CONTAINER_SECTION, "RunInit")
+        .map(|s| parse_bool(s).unwrap_or(false)); // key found: parse or default
     if let Some(run_init) = run_init {
         podman.add_bool("--init", run_init);
     }
 
     let service_type = container.lookup_last(SERVICE_SECTION, "Type");
     match service_type {
-        Some("oneshot") => {},
+        Some("oneshot") => {}
         Some("notify") | None => {
             // If we're not in oneshot mode always use some form of sd-notify, normally via conmon,
             // but we also allow passing it to the container by setting Notify=yes
 
-            let notify = container.lookup_last(CONTAINER_SECTION, "Notify")
-                .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
-                .unwrap_or(false);  // key not found: use default
+            let notify = container
+                .lookup_last(CONTAINER_SECTION, "Notify")
+                .map(|s| parse_bool(s).unwrap_or(false)) // key found: parse or default
+                .unwrap_or(false); // key not found: use default
             if notify {
                 podman.add("--sdnotify=container");
             } else {
                 podman.add("--sdnotify=conmon");
             }
-            service.set_entry(
-                SERVICE_SECTION,
-                "Type",
-                "notify",
-            );
-            service.set_entry(
-                SERVICE_SECTION,
-                "NotifyAccess",
-                "all",
-            );
+            service.set_entry(SERVICE_SECTION, "Type", "notify");
+            service.set_entry(SERVICE_SECTION, "NotifyAccess", "all");
 
             // Detach from container, we don't need the podman process to hang around
             podman.add("-d");
-        },
+        }
         Some(service_type) => {
-            return Err(ConversionError::InvalidServiceType(format!("invalid service Type '{service_type}'")));
-        },
+            return Err(ConversionError::InvalidServiceType(format!(
+                "invalid service Type '{service_type}'"
+            )));
+        }
     }
 
     if let None = container.lookup_last(SERVICE_SECTION, "SyslogIdentifier") {
-        service.set_entry(
-            SERVICE_SECTION,
-            "SyslogIdentifier",
-            "%N",
-        );
+        service.set_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
     }
 
     // Default to no higher level privileges or caps
-    let no_new_privileges = container.lookup_last(CONTAINER_SECTION, "NoNewPrivileges")
-        .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
-        .unwrap_or(false);  // key not found: use default
+    let no_new_privileges = container
+        .lookup_last(CONTAINER_SECTION, "NoNewPrivileges")
+        .map(|s| parse_bool(s).unwrap_or(false)) // key found: parse or default
+        .unwrap_or(false); // key not found: use default
     if no_new_privileges {
         podman.add("--security-opt=no-new-privileges");
     }
 
-    let security_label_disable = container.lookup_last(CONTAINER_SECTION, "SecurityLabelDisable")
-        .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
-        .unwrap_or(false);  // key not found: use default
+    let security_label_disable = container
+        .lookup_last(CONTAINER_SECTION, "SecurityLabelDisable")
+        .map(|s| parse_bool(s).unwrap_or(false)) // key found: parse or default
+        .unwrap_or(false); // key not found: use default
     if security_label_disable {
         podman.add_slice(&["--security-opt", "label:disable"]);
     }
 
-    let security_label_type = container.lookup_last(CONTAINER_SECTION, "SecurityLabelType").unwrap_or_default();
+    let security_label_type = container
+        .lookup_last(CONTAINER_SECTION, "SecurityLabelType")
+        .unwrap_or_default();
     if !security_label_type.is_empty() {
         podman.add("--security-opt");
         podman.add(format!("label=type:{security_label_type}"));
     }
 
-    let security_label_file_type = container.lookup_last(CONTAINER_SECTION, "SecurityLabelFileType").unwrap_or_default();
+    let security_label_file_type = container
+        .lookup_last(CONTAINER_SECTION, "SecurityLabelFileType")
+        .unwrap_or_default();
     if !security_label_file_type.is_empty() {
         podman.add("--security-opt");
         podman.add(format!("label=filetype:{security_label_file_type}"));
     }
 
-    let security_label_level = container.lookup_last(CONTAINER_SECTION, "SecurityLabelLevel").unwrap_or_default();
+    let security_label_level = container
+        .lookup_last(CONTAINER_SECTION, "SecurityLabelLevel")
+        .unwrap_or_default();
     if !security_label_level.is_empty() {
         podman.add("--security-opt");
         podman.add(format!("label=level:{security_label_level}"));
     }
 
-    let devices: Vec<String> = container.lookup_all_values(CONTAINER_SECTION, "AddDevice")
+    let devices: Vec<String> = container
+        .lookup_all_values(CONTAINER_SECTION, "AddDevice")
         .flat_map(|v| SplitStrv::new(v.raw()))
         .collect();
     for device in devices {
@@ -399,7 +407,7 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
     }
 
     // But allow overrides with AddCapability
-    let  add_caps: Vec<String> = container
+    let add_caps: Vec<String> = container
         .lookup_all_values(CONTAINER_SECTION, "AddCapability")
         .flat_map(|v| SplitStrv::new(v.raw()))
         .collect();
@@ -407,17 +415,18 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
         podman.add(format!("--cap-add={}", caps.to_ascii_lowercase()))
     }
 
-
-    let read_only = container.lookup_last(CONTAINER_SECTION, "ReadOnly")
-        .map(|s| parse_bool(s).unwrap_or(false));  // key found: parse or default
+    let read_only = container
+        .lookup_last(CONTAINER_SECTION, "ReadOnly")
+        .map(|s| parse_bool(s).unwrap_or(false)); // key found: parse or default
     if let Some(read_only) = read_only {
         podman.add_bool("--read-only", read_only);
     }
-    let read_only = read_only.unwrap_or(false);  // key not found: use default
+    let read_only = read_only.unwrap_or(false); // key not found: use default
 
-    let volatile_tmp = container.lookup_last(CONTAINER_SECTION, "VolatileTmp")
-        .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
-        .unwrap_or(false);  // key not found: use default
+    let volatile_tmp = container
+        .lookup_last(CONTAINER_SECTION, "VolatileTmp")
+        .map(|s| parse_bool(s).unwrap_or(false)) // key found: parse or default
+        .unwrap_or(false); // key not found: use default
     if volatile_tmp {
         // Read only mode already has a tmpfs by default
         if !read_only {
@@ -431,12 +440,14 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
     let has_user = container.has_key(CONTAINER_SECTION, "User");
     let has_group = container.has_key(CONTAINER_SECTION, "Group");
     if has_user || has_group {
-        let uid = container.lookup_last(CONTAINER_SECTION, "User")
-            .map(|s| s.parse::<u32>().unwrap_or(0))  // key found: parse or default
-            .unwrap_or(0);  // key not found: use default
-        let gid = container.lookup_last(CONTAINER_SECTION, "Group")
-            .map(|s| s.parse::<u32>().unwrap_or(0))  // key found: parse or default
-            .unwrap_or(0);  // key not found: use default
+        let uid = container
+            .lookup_last(CONTAINER_SECTION, "User")
+            .map(|s| s.parse::<u32>().unwrap_or(0)) // key found: parse or default
+            .unwrap_or(0); // key not found: use default
+        let gid = container
+            .lookup_last(CONTAINER_SECTION, "Group")
+            .map(|s| s.parse::<u32>().unwrap_or(0)) // key found: parse or default
+            .unwrap_or(0); // key not found: use default
 
         podman.add("--user");
         if has_group {
@@ -448,9 +459,7 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
 
     handle_user_remap(&container, CONTAINER_SECTION, &mut podman, is_user, true)?;
 
-    let volumes: Vec<&str> = container
-        .lookup_all(CONTAINER_SECTION, "Volume")
-        .collect();
+    let volumes: Vec<&str> = container.lookup_all(CONTAINER_SECTION, "Volume").collect();
     for volume in volumes {
         let parts: Vec<&str> = volume.split(":").collect();
 
@@ -482,10 +491,12 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
 
     let exposed_ports = container.lookup_all(CONTAINER_SECTION, "ExposeHostPort");
     for exposed_port in exposed_ports {
-        let exposed_port = exposed_port.trim();  // Allow whitespaces before and after
+        let exposed_port = exposed_port.trim(); // Allow whitespaces before and after
 
         if !quad_is_port_range(exposed_port) {
-            return Err(ConversionError::InvalidPortFormat(format!("invalid port format '{exposed_port}'")));
+            return Err(ConversionError::InvalidPortFormat(format!(
+                "invalid port format '{exposed_port}'"
+            )));
         }
 
         podman.add(format!("--expose={exposed_port}"))
@@ -509,25 +520,32 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
         }
     }
 
-    let labels: Vec<&str> = container.lookup_all_values(CONTAINER_SECTION, "Label")
+    let labels: Vec<&str> = container
+        .lookup_all_values(CONTAINER_SECTION, "Label")
         .map(|v| v.raw().as_str())
         .collect();
     let label_args: HashMap<String, String> = quad_parse_kvs(&labels);
     podman.add_labels(&label_args);
 
-    let annotations: Vec<&str> = container.lookup_all_values(CONTAINER_SECTION, "Annotation")
+    let annotations: Vec<&str> = container
+        .lookup_all_values(CONTAINER_SECTION, "Annotation")
         .map(|v| v.raw().as_str())
         .collect();
     let annotation_args: HashMap<String, String> = quad_parse_kvs(&annotations);
     podman.add_annotations(&annotation_args);
 
-    let env_files: Vec<PathBuf> = container.lookup_all_values(CONTAINER_SECTION, "EnvironmentFile")
-        .flat_map(|v| SplitWord::new(v.raw()) )
+    let env_files: Vec<PathBuf> = container
+        .lookup_all_values(CONTAINER_SECTION, "EnvironmentFile")
+        .flat_map(|v| SplitWord::new(v.raw()))
         .map(|s| PathBuf::from(s).absolute_from_unit(container))
         .collect();
     for env_file in env_files {
         podman.add("--env-file");
-        podman.add(env_file.to_str().expect("EnvironmentFile path is not a valid UTF-8 string"));
+        podman.add(
+            env_file
+                .to_str()
+                .expect("EnvironmentFile path is not a valid UTF-8 string"),
+        );
     }
 
     if let Some(env_host) = container.lookup_last(CONTAINER_SECTION, "EnvironmentHost") {
@@ -560,9 +578,9 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
         }
         let mut params_array = Vec::with_capacity(params.len());
         params_array.push(format!("type={}", params_map["type"]));
-        for (k,v) in params_map {
+        for (k, v) in params_map {
             if k == "type" {
-                continue
+                continue;
             }
             params_array.push(format!("{k}={v}"));
         }
@@ -570,8 +588,9 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
         podman.add(params_array.join(","));
     }
 
-    let mut podman_args: Vec<String> = container.lookup_all_values(CONTAINER_SECTION, "PodmanArgs")
-        .flat_map(|v| SplitWord::new(v.raw()) )
+    let mut podman_args: Vec<String> = container
+        .lookup_all_values(CONTAINER_SECTION, "PodmanArgs")
+        .flat_map(|v| SplitWord::new(v.raw()))
         .collect();
     podman.add_vec(&mut podman_args);
 
@@ -582,7 +601,8 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
         podman.add(rootfs);
     }
 
-    let mut exec_args = container.lookup_last_value(CONTAINER_SECTION, "Exec")
+    let mut exec_args = container
+        .lookup_last_value(CONTAINER_SECTION, "Exec")
         .map(|v| SplitWord::new(v.raw()).collect())
         .unwrap_or(vec![]);
     podman.add_vec(&mut exec_args);
@@ -596,25 +616,35 @@ fn convert_container(container: &SystemdUnit, is_user: bool) -> Result<SystemdUn
     Ok(service)
 }
 
-fn handle_user_remap(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand, is_user: bool, support_manual: bool) -> Result<(), ConversionError> {
-    let uid_maps: Vec<String> = unit_file.
-        lookup_all_values(section, "RemapUid")
+fn handle_user_remap(
+    unit_file: &SystemdUnit,
+    section: &str,
+    podman: &mut PodmanCommand,
+    is_user: bool,
+    support_manual: bool,
+) -> Result<(), ConversionError> {
+    let uid_maps: Vec<String> = unit_file
+        .lookup_all_values(section, "RemapUid")
         .flat_map(|v| SplitStrv::new(v.raw()))
         .collect();
-    let gid_maps: Vec<String> = unit_file.
-        lookup_all_values(section, "RemapGid")
+    let gid_maps: Vec<String> = unit_file
+        .lookup_all_values(section, "RemapGid")
         .flat_map(|v| SplitStrv::new(v.raw()))
         .collect();
     let remap_users = unit_file.lookup_last(section, "RemapUsers");
     match remap_users {
         None => {
             if !uid_maps.is_empty() {
-                return Err(ConversionError::InvalidRemapUsers("RemapUid set without RemapUsers".into()));
+                return Err(ConversionError::InvalidRemapUsers(
+                    "RemapUid set without RemapUsers".into(),
+                ));
             }
             if !gid_maps.is_empty() {
-                return Err(ConversionError::InvalidRemapUsers("RemapGid set without RemapUsers".into()));
+                return Err(ConversionError::InvalidRemapUsers(
+                    "RemapGid set without RemapUsers".into(),
+                ));
             }
-        },
+        }
         Some("manual") => {
             if support_manual {
                 for uid_map in uid_maps {
@@ -624,11 +654,14 @@ fn handle_user_remap(unit_file: &SystemdUnit, section: &str, podman: &mut Podman
                     podman.add(format!("--gidmap={gid_map}"));
                 }
             } else {
-                return Err(ConversionError::InvalidRemapUsers("RemapUsers=manual is not supported".into()));
+                return Err(ConversionError::InvalidRemapUsers(
+                    "RemapUsers=manual is not supported".into(),
+                ));
             }
-        },
+        }
         Some("auto") => {
-            let mut auto_opts: Vec<String> = Vec::with_capacity(uid_maps.len() + gid_maps.len() + 1);
+            let mut auto_opts: Vec<String> =
+                Vec::with_capacity(uid_maps.len() + gid_maps.len() + 1);
             for uid_map in uid_maps {
                 auto_opts.push(format!("uidmapping={uid_map}"));
             }
@@ -637,8 +670,8 @@ fn handle_user_remap(unit_file: &SystemdUnit, section: &str, podman: &mut Podman
             }
             let uid_size = unit_file
                 .lookup_last(section, "RemapUidSize")
-                .map(|s| s.parse::<u32>().unwrap_or(0))  // key found: parse or default
-                .unwrap_or(0);  // key not found: use default
+                .map(|s| s.parse::<u32>().unwrap_or(0)) // key found: parse or default
+                .unwrap_or(0); // key not found: use default
             if uid_size > 0 {
                 auto_opts.push(format!("size={uid_size}"));
             }
@@ -648,22 +681,31 @@ fn handle_user_remap(unit_file: &SystemdUnit, section: &str, podman: &mut Podman
             } else {
                 podman.add(format!("--userns=auto:{}", auto_opts.join(",")))
             }
-        },
+        }
         Some("keep-id") => {
             if !is_user {
-                return Err(ConversionError::InvalidRemapUsers("RemapUsers=keep-id is unsupported for system units".into()));
+                return Err(ConversionError::InvalidRemapUsers(
+                    "RemapUsers=keep-id is unsupported for system units".into(),
+                ));
             }
             podman.add("--userns=keep-id");
-        },
+        }
         Some(remap_users) => {
-            return Err(ConversionError::InvalidRemapUsers(format!("unsupported RemapUsers option '{remap_users}'")));
-        },
+            return Err(ConversionError::InvalidRemapUsers(format!(
+                "unsupported RemapUsers option '{remap_users}'"
+            )));
+        }
     }
 
     Ok(())
 }
 
-fn add_networks(quadlet_unit_file: &SystemdUnit, section: &str, service_unit_file: &mut SystemdUnit, podman: &mut PodmanCommand) -> Result<(), ConversionError> {
+fn add_networks(
+    quadlet_unit_file: &SystemdUnit,
+    section: &str,
+    service_unit_file: &mut SystemdUnit,
+    podman: &mut PodmanCommand,
+) -> Result<(), ConversionError> {
     let networks = quadlet_unit_file.lookup_all(section, "Network");
     for network in networks {
         if !network.is_empty() {
@@ -677,13 +719,27 @@ fn add_networks(quadlet_unit_file: &SystemdUnit, section: &str, service_unit_fil
             let podman_network_name;
             if network_name.ends_with(".network") {
                 // the podman network name is systemd-$name
-                podman_network_name = quad_replace_extension(&PathBuf::from(network_name), "", "systemd-", "");
+                podman_network_name =
+                    quad_replace_extension(&PathBuf::from(network_name), "", "systemd-", "");
 
                 // the systemd unit name is $name-network.service
-                let network_service_name = quad_replace_extension(&PathBuf::from(network_name), ".service", "", "-network");
+                let network_service_name = quad_replace_extension(
+                    &PathBuf::from(network_name),
+                    ".service",
+                    "",
+                    "-network",
+                );
 
-                service_unit_file.append_entry(UNIT_SECTION, "Requires", network_service_name.to_str().unwrap());
-                service_unit_file.append_entry(UNIT_SECTION, "After", network_service_name.to_str().unwrap());
+                service_unit_file.append_entry(
+                    UNIT_SECTION,
+                    "Requires",
+                    network_service_name.to_str().unwrap(),
+                );
+                service_unit_file.append_entry(
+                    UNIT_SECTION,
+                    "After",
+                    network_service_name.to_str().unwrap(),
+                );
 
                 network_name = podman_network_name.to_str().unwrap();
             }
@@ -699,12 +755,14 @@ fn add_networks(quadlet_unit_file: &SystemdUnit, section: &str, service_unit_fil
     Ok(())
 }
 
-fn handle_publish_ports(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) -> Result<(), ConversionError> {
-    let publish_ports: Vec<&str> = unit_file
-        .lookup_all(section, "PublishPort")
-        .collect();
+fn handle_publish_ports(
+    unit_file: &SystemdUnit,
+    section: &str,
+    podman: &mut PodmanCommand,
+) -> Result<(), ConversionError> {
+    let publish_ports: Vec<&str> = unit_file.lookup_all(section, "PublishPort").collect();
     for publish_port in publish_ports {
-        let publish_port = publish_port.trim();  // Allow whitespaces before and after
+        let publish_port = publish_port.trim(); // Allow whitespaces before and after
 
         //  IP address could have colons in it. For example: "[::]:8080:80/tcp, so use custom splitter
         let mut parts = quad_split_ports(publish_port);
@@ -720,21 +778,23 @@ fn handle_publish_ports(unit_file: &SystemdUnit, section: &str, podman: &mut Pod
         match parts.len() {
             1 => {
                 container_port = parts.pop().unwrap();
-            },
+            }
             2 => {
                 // NOTE: order is inverted because of pop()
                 container_port = parts.pop().unwrap();
                 host_port = parts.pop().unwrap();
-            },
+            }
             3 => {
                 // NOTE: order is inverted because of pop()
                 container_port = parts.pop().unwrap();
                 host_port = parts.pop().unwrap();
                 ip = parts.pop().unwrap();
-            },
+            }
             _ => {
-                return Err(ConversionError::InvalidPublishedPort(format!("invalid published port '{publish_port}'")));
-            },
+                return Err(ConversionError::InvalidPublishedPort(format!(
+                    "invalid published port '{publish_port}'"
+                )));
+            }
         }
 
         if ip == "0.0.0.0" {
@@ -742,11 +802,15 @@ fn handle_publish_ports(unit_file: &SystemdUnit, section: &str, podman: &mut Pod
         }
 
         if !host_port.is_empty() && !quad_is_port_range(host_port.as_str()) {
-            return Err(ConversionError::InvalidPortFormat(format!("invalid port format '{host_port}'")));
+            return Err(ConversionError::InvalidPortFormat(format!(
+                "invalid port format '{host_port}'"
+            )));
         }
 
         if !container_port.is_empty() && !quad_is_port_range(container_port.as_str()) {
-            return Err(ConversionError::InvalidPortFormat(format!("invalid port format '{container_port}'")));
+            return Err(ConversionError::InvalidPortFormat(format!(
+                "invalid port format '{container_port}'"
+            )));
         }
 
         podman.add("--publish");
@@ -765,7 +829,8 @@ fn handle_publish_ports(unit_file: &SystemdUnit, section: &str, podman: &mut Pod
 }
 
 fn handle_log_driver(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {
-    let log_driver = unit_file.lookup_last(section, "LogDriver")
+    let log_driver = unit_file
+        .lookup_last(section, "LogDriver")
         .unwrap_or(DEFAULT_LOG_DRIVER);
 
     podman.add_slice(&["--log-driver", log_driver]);
@@ -778,25 +843,23 @@ fn handle_storage_source(unit_file: &mut SystemdUnit, source: &str) -> String {
         unit_file.append_entry(UNIT_SECTION, "RequiresMountsFor", &source);
     } else if source.ends_with(".volume") {
         // the podman volume name is systemd-$name
-        let volume_name = quad_replace_extension(
-            &PathBuf::from(&source), "", "systemd-", "");
+        let volume_name = quad_replace_extension(&PathBuf::from(&source), "", "systemd-", "");
 
         // the systemd unit name is $name-volume.service
-        let volume_service_name = quad_replace_extension(
-            &PathBuf::from(&source), ".service", "", "-volume");
+        let volume_service_name =
+            quad_replace_extension(&PathBuf::from(&source), ".service", "", "-volume");
 
-        source = volume_name.to_str().expect("volume name ist not valid UTF-8 string").to_string();
+        source = volume_name
+            .to_str()
+            .expect("volume name ist not valid UTF-8 string")
+            .to_string();
 
         unit_file.append_entry(
             UNIT_SECTION,
             "Requires",
             volume_service_name.to_str().unwrap(),
         );
-        unit_file.append_entry(
-            UNIT_SECTION,
-            "After",
-            volume_service_name.to_str().unwrap(),
-        );
+        unit_file.append_entry(UNIT_SECTION, "After", volume_service_name.to_str().unwrap());
     }
 
     source
@@ -805,7 +868,12 @@ fn handle_storage_source(unit_file: &mut SystemdUnit, source: &str) -> String {
 fn convert_kube(kube: &SystemdUnit, is_user: bool) -> Result<SystemdUnit, ConversionError> {
     let mut service = SystemdUnit::new();
     service.merge_from(kube);
-    service.path = Some(quad_replace_extension(kube.path().unwrap(), ".service", "", ""));
+    service.path = Some(quad_replace_extension(
+        kube.path().unwrap(),
+        ".service",
+        "",
+        "",
+    ));
 
     if kube.path().is_some() {
         service.append_entry(
@@ -822,7 +890,7 @@ fn convert_kube(kube: &SystemdUnit, is_user: bool) -> Result<SystemdUnit, Conver
 
     let yaml_path = kube.lookup_last(KUBE_SECTION, "Yaml").unwrap_or("");
     if yaml_path.is_empty() {
-        return Err(ConversionError::YamlMissing("no Yaml key specified".into()))
+        return Err(ConversionError::YamlMissing("no Yaml key specified".into()));
     }
 
     let yaml_path = PathBuf::from(yaml_path).absolute_from_unit(kube);
@@ -833,9 +901,11 @@ fn convert_kube(kube: &SystemdUnit, is_user: bool) -> Result<SystemdUnit, Conver
         None | Some("mixed") | Some("control-group") => {
             // We default to mixed instead of control-group, because it lets conmon do its thing
             service.set_entry(SERVICE_SECTION, "KillMode", "mixed");
-        },
+        }
         Some(kill_mode) => {
-            return Err(ConversionError::InvalidKillMode(format!("invalid KillMode '{kill_mode}'")));
+            return Err(ConversionError::InvalidKillMode(format!(
+                "invalid KillMode '{kill_mode}'"
+            )));
         }
     }
 
@@ -858,7 +928,6 @@ fn convert_kube(kube: &SystemdUnit, is_user: bool) -> Result<SystemdUnit, Conver
     podman_start.add_slice(&[
         // Replace any previous container with the same name, not fail
         "--replace",
-
         // Use a service container
         "--service-container=true",
     ]);
@@ -869,20 +938,28 @@ fn convert_kube(kube: &SystemdUnit, is_user: bool) -> Result<SystemdUnit, Conver
 
     add_networks(kube, KUBE_SECTION, &mut service, &mut podman_start)?;
 
-    let config_maps: Vec<PathBuf> = kube.
-        lookup_all_values(KUBE_SECTION, "ConfigMap")
+    let config_maps: Vec<PathBuf> = kube
+        .lookup_all_values(KUBE_SECTION, "ConfigMap")
         .flat_map(|v| SplitStrv::new(v.raw()))
         .map(PathBuf::from)
         .collect();
     for config_map in config_maps {
         let config_map_path = config_map.absolute_from_unit(kube);
         podman_start.add("--configmap");
-        podman_start.add(config_map_path.to_str().expect("ConfigMap path is not valid UTF-8 string"));
+        podman_start.add(
+            config_map_path
+                .to_str()
+                .expect("ConfigMap path is not valid UTF-8 string"),
+        );
     }
 
     handle_publish_ports(kube, KUBE_SECTION, &mut podman_start)?;
 
-    podman_start.add(yaml_path.to_str().expect("Yaml path is not valid UTF-8 string"));
+    podman_start.add(
+        yaml_path
+            .to_str()
+            .expect("Yaml path is not valid UTF-8 string"),
+    );
 
     service.append_entry_value(
         SERVICE_SECTION,
@@ -892,7 +969,11 @@ fn convert_kube(kube: &SystemdUnit, is_user: bool) -> Result<SystemdUnit, Conver
 
     let mut podman_stop = PodmanCommand::new_command("kube");
     podman_stop.add("down");
-    podman_stop.add(yaml_path.to_str().expect("Yaml path is not valid UTF-8 string"));
+    podman_stop.add(
+        yaml_path
+            .to_str()
+            .expect("Yaml path is not valid UTF-8 string"),
+    );
     service.append_entry_value(
         SERVICE_SECTION,
         "ExecStop",
@@ -908,7 +989,12 @@ fn convert_kube(kube: &SystemdUnit, is_user: bool) -> Result<SystemdUnit, Conver
 fn convert_network(network: &SystemdUnit) -> Result<SystemdUnit, ConversionError> {
     let mut service = SystemdUnit::new();
     service.merge_from(network);
-    service.path = Some(quad_replace_extension(network.path().unwrap(), ".service", "", "-network"));
+    service.path = Some(quad_replace_extension(
+        network.path().unwrap(),
+        ".service",
+        "",
+        "-network",
+    ));
 
     if network.path().is_some() {
         service.append_entry(
@@ -923,8 +1009,12 @@ fn convert_network(network: &SystemdUnit) -> Result<SystemdUnit, ConversionError
     // Rename old Network group to x-Network so that systemd ignores it
     service.rename_section(NETWORK_SECTION, X_NETWORK_SECTION);
 
-    let podman_network_name = quad_replace_extension(network.path().unwrap(),  "", "systemd-", "")
-        .file_name().unwrap().to_str().unwrap().to_string();
+    let podman_network_name = quad_replace_extension(network.path().unwrap(), "", "systemd-", "")
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
 
     // Need the containers filesystem mounted to start podman
     service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
@@ -936,9 +1026,10 @@ fn convert_network(network: &SystemdUnit) -> Result<SystemdUnit, ConversionError
     // Quadlet support added in: https://github.com/containers/podman/pull/16688
     //podman.add("--ignore");
 
-    let disable_dns = network.lookup_last(NETWORK_SECTION, "DisableDNS")
-        .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
-        .unwrap_or(false);  // key not found: use default
+    let disable_dns = network
+        .lookup_last(NETWORK_SECTION, "DisableDNS")
+        .map(|s| parse_bool(s).unwrap_or(false)) // key found: parse or default
+        .unwrap_or(false); // key not found: use default
     if disable_dns {
         podman.add("--disable-dns")
     }
@@ -955,10 +1046,14 @@ fn convert_network(network: &SystemdUnit) -> Result<SystemdUnit, ConversionError
     let ip_ranges: Vec<&str> = network.lookup_all(NETWORK_SECTION, "IPRange").collect();
     if !subnets.is_empty() {
         if gateways.len() > subnets.len() {
-            return Err(ConversionError::InvalidSubnet("cannot set more gateways than subnets".into()));
+            return Err(ConversionError::InvalidSubnet(
+                "cannot set more gateways than subnets".into(),
+            ));
         }
         if ip_ranges.len() > subnets.len() {
-            return Err(ConversionError::InvalidSubnet("cannot set more ranges than subnets".into()));
+            return Err(ConversionError::InvalidSubnet(
+                "cannot set more ranges than subnets".into(),
+            ));
         }
         for (i, subnet) in subnets.iter().enumerate() {
             podman.add(format!("--subnet={subnet}"));
@@ -970,12 +1065,15 @@ fn convert_network(network: &SystemdUnit) -> Result<SystemdUnit, ConversionError
             }
         }
     } else if !gateways.is_empty() || !ip_ranges.is_empty() {
-		return Err(ConversionError::InvalidSubnet("cannot set Gateway or IPRange without Subnet".into()));
+        return Err(ConversionError::InvalidSubnet(
+            "cannot set Gateway or IPRange without Subnet".into(),
+        ));
     }
 
-    let internal = network.lookup_last(NETWORK_SECTION, "Internal")
-        .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
-        .unwrap_or(false);  // key not found: use default
+    let internal = network
+        .lookup_last(NETWORK_SECTION, "Internal")
+        .map(|s| parse_bool(s).unwrap_or(false)) // key found: parse or default
+        .unwrap_or(false); // key not found: use default
     if internal {
         podman.add("--internal")
     }
@@ -985,14 +1083,16 @@ fn convert_network(network: &SystemdUnit) -> Result<SystemdUnit, ConversionError
         podman.add(format!("--ipam-driver={ipam_driver}"));
     }
 
-    let ipv6 = network.lookup_last(NETWORK_SECTION, "IPv6")
-        .map(|s| parse_bool(s).unwrap_or(false))  // key found: parse or default
-        .unwrap_or(false);  // key not found: use default
+    let ipv6 = network
+        .lookup_last(NETWORK_SECTION, "IPv6")
+        .map(|s| parse_bool(s).unwrap_or(false)) // key found: parse or default
+        .unwrap_or(false); // key not found: use default
     if ipv6 {
         podman.add("--ipv6")
     }
 
-    let network_options: Vec<&str> = network.lookup_all_values(NETWORK_SECTION, "Options")
+    let network_options: Vec<&str> = network
+        .lookup_all_values(NETWORK_SECTION, "Options")
         .map(|v| v.raw().as_str())
         .collect();
     let network_options: HashMap<String, String> = quad_parse_kvs(&network_options);
@@ -1000,7 +1100,8 @@ fn convert_network(network: &SystemdUnit) -> Result<SystemdUnit, ConversionError
         podman.add_keys("--opt", &network_options);
     }
 
-    let labels: Vec<&str> = network.lookup_all_values(NETWORK_SECTION, "Label")
+    let labels: Vec<&str> = network
+        .lookup_all_values(NETWORK_SECTION, "Label")
         .map(|v| v.raw().as_str())
         .collect();
     let label_args: HashMap<String, String> = quad_parse_kvs(&labels);
@@ -1014,17 +1115,19 @@ fn convert_network(network: &SystemdUnit) -> Result<SystemdUnit, ConversionError
         EntryValue::try_from_raw(podman.to_escaped_string().as_str())?,
     );
 
-    service.append_entry(SERVICE_SECTION,"Type", "oneshot");
-    service.append_entry(SERVICE_SECTION,"RemainAfterExit", "yes");
+    service.append_entry(SERVICE_SECTION, "Type", "oneshot");
+    service.append_entry(SERVICE_SECTION, "RemainAfterExit", "yes");
 
     service.append_entry_value(
         SERVICE_SECTION,
         "ExecCondition",
-        EntryValue::try_from_raw(format!("/usr/bin/bash -c \"! /usr/bin/podman network exists {podman_network_name}\""))?,
+        EntryValue::try_from_raw(format!(
+            "/usr/bin/bash -c \"! /usr/bin/podman network exists {podman_network_name}\""
+        ))?,
     );
 
     // The default syslog identifier is the exec basename (podman) which isn't very useful here
-    service.append_entry(SERVICE_SECTION,"SyslogIdentifier", "%N");
+    service.append_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
 
     Ok(service)
 }
@@ -1035,7 +1138,12 @@ fn convert_network(network: &SystemdUnit) -> Result<SystemdUnit, ConversionError
 fn convert_volume(volume: &SystemdUnit) -> Result<SystemdUnit, ConversionError> {
     let mut service = SystemdUnit::new();
     service.merge_from(volume);
-    service.path = Some(quad_replace_extension(volume.path().unwrap(), ".service", "", "-volume"));
+    service.path = Some(quad_replace_extension(
+        volume.path().unwrap(),
+        ".service",
+        "",
+        "-volume",
+    ));
 
     if volume.path().is_some() {
         service.append_entry(
@@ -1051,12 +1159,17 @@ fn convert_volume(volume: &SystemdUnit) -> Result<SystemdUnit, ConversionError> 
     service.rename_section(VOLUME_SECTION, X_VOLUME_SECTION);
 
     let podman_volume_name = quad_replace_extension(volume.path().unwrap(), "", "systemd-", "")
-        .file_name().unwrap().to_str().unwrap().to_string();
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
 
     // Need the containers filesystem mounted to start podman
     service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
 
-    let labels: Vec<&str> = volume.lookup_all_values(VOLUME_SECTION, "Label")
+    let labels: Vec<&str> = volume
+        .lookup_all_values(VOLUME_SECTION, "Label")
         .map(|v| v.raw().as_str())
         .collect();
     let label_args: HashMap<String, String> = quad_parse_kvs(&labels);
@@ -1070,20 +1183,25 @@ fn convert_volume(volume: &SystemdUnit) -> Result<SystemdUnit, ConversionError> 
 
     let mut opts: Vec<String> = Vec::with_capacity(2);
     if volume.has_key(VOLUME_SECTION, "User") {
-        let uid = volume.lookup_last(VOLUME_SECTION, "User")
-                .map(|s| s.parse::<u32>().unwrap_or(0))  // key found: parse or default
-                .unwrap_or(0);  // key not found: use default
+        let uid = volume
+            .lookup_last(VOLUME_SECTION, "User")
+            .map(|s| s.parse::<u32>().unwrap_or(0)) // key found: parse or default
+            .unwrap_or(0); // key not found: use default
         opts.push(format!("uid={uid}"));
     }
     if volume.has_key(VOLUME_SECTION, "Group") {
-        let gid = volume.lookup_last(VOLUME_SECTION, "Group")
-                .map(|s| s.parse::<u32>().unwrap_or(0))  // key found: parse or default
-                .unwrap_or(0);  // key not found: use default
+        let gid = volume
+            .lookup_last(VOLUME_SECTION, "Group")
+            .map(|s| s.parse::<u32>().unwrap_or(0)) // key found: parse or default
+            .unwrap_or(0); // key not found: use default
         opts.push(format!("gid={gid}"));
     }
 
-    if let Some(copy) = volume.lookup_last(VOLUME_SECTION, "Copy")
-            .map(|s| parse_bool(s).unwrap_or(false)) {  // key found: parse or default
+    if let Some(copy) = volume
+        .lookup_last(VOLUME_SECTION, "Copy")
+        .map(|s| parse_bool(s).unwrap_or(false))
+    {
+        // key found: parse or default
         if copy {
             podman.add_slice(&["--opt", "copy"]);
         } else {
@@ -1107,7 +1225,9 @@ fn convert_volume(volume: &SystemdUnit) -> Result<SystemdUnit, ConversionError> 
                 podman.add("--opt");
                 podman.add(format!("type={dev_type}"));
             } else {
-                return Err(ConversionError::InvalidDeviceType("key Type can't be used without Device".into()))
+                return Err(ConversionError::InvalidDeviceType(
+                    "key Type can't be used without Device".into(),
+                ));
             }
         }
     }
@@ -1117,7 +1237,9 @@ fn convert_volume(volume: &SystemdUnit) -> Result<SystemdUnit, ConversionError> 
             if dev_valid {
                 opts.push(mount_opts.into());
             } else {
-                return Err(ConversionError::InvalidDeviceOptions("key Options can't be used without Device".into()))
+                return Err(ConversionError::InvalidDeviceOptions(
+                    "key Options can't be used without Device".into(),
+                ));
             }
         }
     }
@@ -1136,17 +1258,19 @@ fn convert_volume(volume: &SystemdUnit) -> Result<SystemdUnit, ConversionError> 
         EntryValue::try_from_raw(podman.to_escaped_string().as_str())?,
     );
 
-    service.append_entry(SERVICE_SECTION,"Type", "oneshot");
-    service.append_entry(SERVICE_SECTION,"RemainAfterExit", "yes");
+    service.append_entry(SERVICE_SECTION, "Type", "oneshot");
+    service.append_entry(SERVICE_SECTION, "RemainAfterExit", "yes");
 
     service.append_entry_value(
         SERVICE_SECTION,
         "ExecCondition",
-        EntryValue::try_from_raw(format!("/usr/bin/bash -c \"! /usr/bin/podman volume exists {podman_volume_name}\""))?,
+        EntryValue::try_from_raw(format!(
+            "/usr/bin/bash -c \"! /usr/bin/podman volume exists {podman_volume_name}\""
+        ))?,
     );
 
     // The default syslog identifier is the exec basename (podman) which isn't very useful here
-    service.append_entry(SERVICE_SECTION,"SyslogIdentifier", "%N");
+    service.append_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
 
     Ok(service)
 }
@@ -1185,7 +1309,7 @@ fn enable_service_file(output_path: &Path, service: &SystemdUnit) {
     let mut wanted_by: Vec<PathBuf> = service
         .lookup_all_values(INSTALL_SECTION, "WantedBy")
         .flat_map(|v| SplitStrv::new(v.raw()))
-        .filter(|s| !s.contains('/'))  // Only allow filenames, not paths
+        .filter(|s| !s.contains('/')) // Only allow filenames, not paths
         .map(|wanted_by_unit| {
             let mut path = PathBuf::from(format!("{wanted_by_unit}.wants/"));
             path.push(service_name);
@@ -1197,7 +1321,7 @@ fn enable_service_file(output_path: &Path, service: &SystemdUnit) {
     let mut required_by: Vec<PathBuf> = service
         .lookup_all_values(INSTALL_SECTION, "RequiredBy")
         .flat_map(|v| SplitStrv::new(v.raw()))
-        .filter(|s| !s.contains('/'))  // Only allow filenames, not paths
+        .filter(|s| !s.contains('/')) // Only allow filenames, not paths
         .map(|required_by_unit| {
             let mut path = PathBuf::from(format!("{required_by_unit}.requires/"));
             path.push(service_name);
@@ -1227,9 +1351,12 @@ fn enable_service_file(output_path: &Path, service: &SystemdUnit) {
         }
 
         debug!("Creating symlink {symlink_path:?} -> {target:?}");
-        fs::remove_file(&symlink_path).unwrap_or_default();  // overwrite existing symlinks
+        fs::remove_file(&symlink_path).unwrap_or_default(); // overwrite existing symlinks
         if let Err(e) = os::unix::fs::symlink(target, &symlink_path) {
-            log!("Failed creating symlink {:?}: {e}", symlink_path.to_str().unwrap());
+            log!(
+                "Failed creating symlink {:?}: {e}",
+                symlink_path.to_str().unwrap()
+            );
             continue;
         }
     }
@@ -1245,7 +1372,7 @@ fn main() {
             println!("Error: {}", msg);
             help();
             process::exit(1)
-        },
+        }
     };
 
     if cfg.verbose || cfg.dry_run {
@@ -1262,7 +1389,10 @@ fn main() {
     }
 
     if !cfg.dry_run {
-        debug!("Starting quadlet-rs-generator, output to: {:?}", &cfg.output_path);
+        debug!(
+            "Starting quadlet-rs-generator, output to: {:?}",
+            &cfg.output_path
+        );
     }
 
     let source_paths = unit_search_dirs(cfg.is_user);
@@ -1283,7 +1413,10 @@ fn main() {
 
     if !cfg.dry_run {
         if let Err(e) = fs::create_dir_all(&cfg.output_path) {
-            log!("Can't create dir {:?}: {e}", cfg.output_path.to_str().unwrap());
+            log!(
+                "Can't create dir {:?}: {e}",
+                cfg.output_path.to_str().unwrap()
+            );
             process::exit(1);
         }
     }
@@ -1309,16 +1442,24 @@ fn main() {
             Err(e) => {
                 log!("Error converting {name:?}, ignoring: {e}");
                 continue;
-            },
+            }
         };
 
         let mut service_output_path = cfg.output_path.clone();
-        service_output_path.push(service.path().expect("should have a path").file_name().unwrap());
+        service_output_path.push(
+            service
+                .path()
+                .expect("should have a path")
+                .file_name()
+                .unwrap(),
+        );
         service.path = Some(service_output_path);
 
         if cfg.dry_run {
             println!("---{:?}---", service.path().expect("should have a path"));
-            _ = io::stdout().write(service.to_string().as_bytes()).expect("should write to STDOUT");
+            _ = io::stdout()
+                .write(service.to_string().as_bytes())
+                .expect("should write to STDOUT");
             // NOTE: currently setting entries can fail, because of (un-)quoting errors, so we can't fail here any more
             // TODO: revisit this decision, then we could use the following code ...
             /*match service.to_string() {
@@ -1332,7 +1473,10 @@ fn main() {
             }*/
         } else {
             if let Err(e) = generate_service_file(&mut service) {
-                log!("Error writing {:?}, ignoring: {e}", service.path().expect("should have a path"));
+                log!(
+                    "Error writing {:?}, ignoring: {e}",
+                    service.path().expect("should have a path")
+                );
                 continue;
             }
             enable_service_file(&cfg.output_path, &service);
@@ -1351,9 +1495,7 @@ mod tests {
 
         #[test]
         fn fails_with_no_arguments() {
-            let args: Vec<String> = vec![
-                "./quadlet-rs".into(),
-            ];
+            let args: Vec<String> = vec!["./quadlet-rs".into()];
 
             assert_eq!(
                 parse_args(args),
@@ -1381,10 +1523,8 @@ mod tests {
 
         #[test]
         fn parses_user_invocation_from_arg_0() {
-            let args: Vec<String> = vec![
-                "./quadlet-rs-user-generator".into(),
-                "./output_dir".into(),
-            ];
+            let args: Vec<String> =
+                vec!["./quadlet-rs-user-generator".into(), "./output_dir".into()];
 
             assert_eq!(
                 parse_args(args),
@@ -1489,11 +1629,7 @@ mod tests {
 
         #[test]
         fn accepts_short_verbose() {
-            let args: Vec<String> = vec![
-                "./quadlet-rs".into(),
-                "-v".into(),
-                "./output_dir".into(),
-            ];
+            let args: Vec<String> = vec!["./quadlet-rs".into(), "-v".into(), "./output_dir".into()];
 
             assert_eq!(
                 parse_args(args),
@@ -1507,10 +1643,7 @@ mod tests {
 
         #[test]
         fn accepts_one_output_dir() {
-            let args: Vec<String> = vec![
-                "./quadlet-rs".into(),
-                "./output_dir".into(),
-            ];
+            let args: Vec<String> = vec!["./quadlet-rs".into(), "./output_dir".into()];
 
             assert_eq!(
                 parse_args(args),
@@ -1523,10 +1656,7 @@ mod tests {
 
         #[test]
         fn requires_output_dir() {
-            let args: Vec<String> = vec![
-                "./quadlet-rs".into(),
-                "-v".into(),
-            ];
+            let args: Vec<String> = vec!["./quadlet-rs".into(), "-v".into()];
 
             assert_eq!(
                 parse_args(args),
@@ -1541,7 +1671,7 @@ mod tests {
                 "./output_dir1".into(),
                 "./output_dir2".into(),
                 "./output_dir3".into(),
-                "./output_dir4".into(),  // systemd actually only specifies 3 output dirs
+                "./output_dir4".into(), // systemd actually only specifies 3 output dirs
             ];
 
             assert_eq!(

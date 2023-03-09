@@ -9,10 +9,10 @@ pub use self::quoted::*;
 pub use self::split::*;
 pub(crate) use self::value::*;
 
+use ordered_multimap::list_ordered_multimap::ListOrderedMultimap;
 use std::fmt;
 use std::io;
 use std::path::PathBuf;
-use ordered_multimap::list_ordered_multimap::ListOrderedMultimap;
 
 // TODO: mimic https://doc.rust-lang.org/std/num/enum.IntErrorKind.html
 // TODO: use thiserror?
@@ -28,14 +28,17 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::ParseBool => {
-                write!(f, "value must be one of `1`, `yes`, `true`, `on`, `0`, `no`, `false`, `off`")
-            },
+                write!(
+                    f,
+                    "value must be one of `1`, `yes`, `true`, `on`, `0`, `no`, `false`, `off`"
+                )
+            }
             Error::Unquoting(msg) => {
                 write!(f, "failed unquoting value: {msg}")
-            },
+            }
             Error::Unit(e) => {
                 write!(f, "failed to parse unit file: {e}")
-            },
+            }
         }
     }
 }
@@ -50,7 +53,7 @@ pub(crate) fn parse_bool(s: &str) -> Result<bool, Error> {
     if ["1", "yes", "true", "on"].contains(&s) {
         return Ok(true);
     } else if ["0", "no", "false", "off"].contains(&s) {
-        return Ok(false)
+        return Ok(false);
     }
 
     Err(Error::ParseBool)
@@ -65,31 +68,31 @@ pub(crate) struct SystemdUnit {
 impl SystemdUnit {
     /// Appends `key=value` to last instance of `section`
     pub(crate) fn append_entry<S, K, V>(&mut self, section: S, key: K, value: V)
-    where S: Into<String>,
-          K: Into<String>,
-          V: Into<String>,
+    where
+        S: Into<String>,
+        K: Into<String>,
+        V: Into<String>,
     {
-        self.append_entry_value(
-            section,
-            key,
-            EntryValue::from_unquoted(value),
-        );
+        self.append_entry_value(section, key, EntryValue::from_unquoted(value));
     }
     /// Appends `key=value` to last instance of `section`
     pub(crate) fn append_entry_value<S, K>(&mut self, section: S, key: K, value: EntryValue)
-    where S: Into<String>,
-          K: Into<String>,
+    where
+        S: Into<String>,
+        K: Into<String>,
     {
         self.sections
             .entry(section.into())
             .or_insert_entry(Entries::default())
             .into_mut()
-            .data.append(key.into(), value);
+            .data
+            .append(key.into(), value);
     }
 
     pub(crate) fn has_key<S, K>(&self, section: S, key: K) -> bool
-    where S: Into<String>,
-          K: Into<String>,
+    where
+        S: Into<String>,
+        K: Into<String>,
     {
         self.sections
             .get(&section.into())
@@ -115,18 +118,28 @@ impl SystemdUnit {
     }
 
     /// Get an interator of values for all `key`s in all instances of `section`
-    pub(crate) fn lookup_all<'a, S, K>(&'a self, section: S, key: K) -> impl DoubleEndedIterator<Item = &'a str>
-    where S: Into<String>,
-          K: Into<String>,
+    pub(crate) fn lookup_all<'a, S, K>(
+        &'a self,
+        section: S,
+        key: K,
+    ) -> impl DoubleEndedIterator<Item = &'a str>
+    where
+        S: Into<String>,
+        K: Into<String>,
     {
         self.lookup_all_values(section, key)
             .map(|v| v.unquoted().as_str())
     }
 
     /// Get an interator of values for all `key`s in all instances of `section`
-    pub(crate) fn lookup_all_values<'a, S, K>(&'a self, section: S, key: K) -> impl DoubleEndedIterator<Item = &EntryValue>
-    where S: Into<String>,
-          K: Into<String>,
+    pub(crate) fn lookup_all_values<'a, S, K>(
+        &'a self,
+        section: S,
+        key: K,
+    ) -> impl DoubleEndedIterator<Item = &EntryValue>
+    where
+        S: Into<String>,
+        K: Into<String>,
     {
         self.sections
             .get(&section.into())
@@ -139,18 +152,21 @@ impl SystemdUnit {
     /// Get a Vec of values for all `key`s in all instances of `section`
     /// This mimics quadlet's behavior in that empty values reset the list.
     pub(crate) fn lookup_all_with_reset<'a, S, K>(&'a self, section: S, key: K) -> Vec<&'a str>
-    where S: Into<String>,
-          K: Into<String>,
+    where
+        S: Into<String>,
+        K: Into<String>,
     {
-        let values = self.sections
+        let values = self
+            .sections
             .get(&section.into())
             .unwrap_or_default()
-            .data.get_all(&key.into())
+            .data
+            .get_all(&key.into())
             .map(|v| v.unquoted().as_str());
 
         // size_hint.0 is not optimal, but may prevent forseeable growing
         let est_cap = values.size_hint().0;
-        values.fold( Vec::with_capacity(est_cap), |mut res, v| {
+        values.fold(Vec::with_capacity(est_cap), |mut res, v| {
             if v.is_empty() {
                 res.clear();
             } else {
@@ -162,8 +178,9 @@ impl SystemdUnit {
 
     // Get the last value for `key` in all instances of `section`
     pub(crate) fn lookup_last<'a, S, K>(&'a self, section: S, key: K) -> Option<&'a str>
-    where S: Into<String>,
-          K: Into<String>,
+    where
+        S: Into<String>,
+        K: Into<String>,
     {
         self.lookup_last_value(section, key)
             .map(|v| v.unquoted().as_str())
@@ -171,8 +188,9 @@ impl SystemdUnit {
 
     // Get the last value for `key` in all instances of `section`
     pub(crate) fn lookup_last_value<'a, S, K>(&'a self, section: S, key: K) -> Option<&EntryValue>
-    where S: Into<String>,
-          K: Into<String>,
+    where
+        S: Into<String>,
+        K: Into<String>,
     {
         self.sections
             .get(&section.into())
@@ -205,13 +223,13 @@ impl SystemdUnit {
         let from_key = from.into();
 
         if !self.sections.contains_key(&from_key) {
-            return
+            return;
         }
 
         let from_values: Vec<Entries> = self.sections.remove_all(&from_key).collect();
 
         if from_values.is_empty() {
-            return
+            return;
         }
 
         let to_key = to.into();
@@ -222,12 +240,18 @@ impl SystemdUnit {
         }
     }
 
-    pub(crate) fn section_entries<'a, S: Into<String>>(&'a self, name: S) -> impl DoubleEndedIterator<Item=(&'a str, &'a str)> {
+    pub(crate) fn section_entries<'a, S: Into<String>>(
+        &'a self,
+        name: S,
+    ) -> impl DoubleEndedIterator<Item = (&'a str, &'a str)> {
         self.section_entry_values(name)
             .map(|(k, v)| (k, v.unquoted().as_str()))
     }
 
-    pub(crate) fn section_entry_values<'a, S: Into<String>>(&'a self, name: S) -> impl DoubleEndedIterator<Item=(&'a str, &EntryValue)> {
+    pub(crate) fn section_entry_values<'a, S: Into<String>>(
+        &'a self,
+        name: S,
+    ) -> impl DoubleEndedIterator<Item = (&'a str, &EntryValue)> {
         self.sections
             .get(&name.into())
             .unwrap_or_default()
@@ -237,23 +261,21 @@ impl SystemdUnit {
     }
 
     pub(crate) fn set_entry<S, K, V>(&mut self, section: S, key: K, value: V)
-    where S: Into<String>,
-          K: Into<String>,
-          V: Into<String>,
+    where
+        S: Into<String>,
+        K: Into<String>,
+        V: Into<String>,
     {
         let value = value.into();
 
-        self.set_entry_value(
-            section,
-            key,
-            EntryValue::from_unquoted(value),
-        );
+        self.set_entry_value(section, key, EntryValue::from_unquoted(value));
     }
 
     pub(crate) fn set_entry_raw<S, K, V>(&mut self, section: S, key: K, value: V)
-    where S: Into<String>,
-          K: Into<String>,
-          V: Into<String>,
+    where
+        S: Into<String>,
+        K: Into<String>,
+        V: Into<String>,
     {
         self.set_entry_value(
             section,
@@ -263,10 +285,12 @@ impl SystemdUnit {
     }
 
     pub(crate) fn set_entry_value<S, K>(&mut self, section: S, key: K, value: EntryValue)
-    where S: Into<String>,
-          K: Into<String>,
+    where
+        S: Into<String>,
+        K: Into<String>,
     {
-        let entries = self.sections
+        let entries = self
+            .sections
             .entry(section.into())
             .or_insert(Entries::default());
 
@@ -276,12 +300,13 @@ impl SystemdUnit {
         // we do a stupid form of read-modify-write called remove-modify-append m(
         // the good thing is: both remove() and append preserve the order of values (with this key)
         let mut values: Vec<_> = entries.data.remove_all(&key).collect();
-        values.pop();  // remove the "old" last value ...
+        values.pop(); // remove the "old" last value ...
+
         // ... reinsert all the values again ...
         for v in values {
             entries.data.append(key.clone(), v);
-
         }
+
         // ... and append a "new" last value
         entries.data.append(key.into(), value);
     }
@@ -370,7 +395,7 @@ KeyOne=value 1";
                 assert_eq!(unit.len(), 1);
 
                 unit.append_entry("Section A", "NewKey", "new value");
-                assert_eq!(unit.len(), 1);  // shouldn't change the number of sections
+                assert_eq!(unit.len(), 1); // shouldn't change the number of sections
 
                 let mut iter = unit.section_entries("Section A");
                 assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
@@ -617,7 +642,11 @@ KeyOne=valueA3";
                 assert!(result.is_err());
                 assert_eq!(
                     result,
-                    Err(Error::Unit(parser::ParseError{ line: 0, col: 1, msg: "Expected comment or section".into() })),
+                    Err(Error::Unit(parser::ParseError {
+                        line: 0,
+                        col: 1,
+                        msg: "Expected comment or section".into()
+                    })),
                 )
             }
 
@@ -716,7 +745,13 @@ unescape=\\_";
 
                     assert_eq!(
                         SystemdUnit::load_from_str(input).err(),
-                        Some(Error::Unit(parser::ParseError{ line: 1, col: 11, msg: "failed unquoting value: expecting escape sequence, but found '_'.".into()}))
+                        Some(Error::Unit(parser::ParseError {
+                            line: 1,
+                            col: 11,
+                            msg:
+                                "failed unquoting value: expecting escape sequence, but found '_'."
+                                    .into()
+                        }))
                     );
                 }
 
@@ -729,7 +764,10 @@ unescape=\\a\\b\\f\\n\\r\\t\\v\\\\\\\"\\\'\\s";
                     assert_eq!(unit.len(), 1);
 
                     let mut iter = unit.section_entries("Section A");
-                    assert_eq!(iter.next().unwrap(), ("unescape", "\u{7}\u{8}\u{c}\n\r\t\u{b}\\\"\' "));
+                    assert_eq!(
+                        iter.next().unwrap(),
+                        ("unescape", "\u{7}\u{8}\u{c}\n\r\t\u{b}\\\"\' ")
+                    );
                     assert_eq!(iter.next(), None);
                 }
 
@@ -742,7 +780,10 @@ unescape=\\xaa \\u1234 \\U0010cdef \\123";
                     assert_eq!(unit.len(), 1);
 
                     let mut iter = unit.section_entries("Section A");
-                    assert_eq!(iter.next().unwrap(), ("unescape", "\u{aa} \u{1234} \u{10cdef} \u{53}"));
+                    assert_eq!(
+                        iter.next().unwrap(),
+                        ("unescape", "\u{aa} \u{1234} \u{10cdef} \u{53}")
+                    );
                     assert_eq!(iter.next(), None);
                 }
 
@@ -786,7 +827,13 @@ unescape=\\äöü";
 
                     assert_eq!(
                         SystemdUnit::load_from_str(input).err(),
-                        Some(Error::Unit(parser::ParseError{line: 1, col: 13, msg: "failed unquoting value: expecting escape sequence, but found 'ä'.".into()}))
+                        Some(Error::Unit(parser::ParseError {
+                            line: 1,
+                            col: 13,
+                            msg:
+                                "failed unquoting value: expecting escape sequence, but found 'ä'."
+                                    .into()
+                        }))
                     );
                 }
 
@@ -831,11 +878,17 @@ KeyThree=value 3\\
 
                 let mut iter = unit.section_entries("Section B");
                 assert_eq!(iter.next(), Some(("Setting", "something some thing …")));
-                assert_eq!(iter.next(), Some(("KeyTwo", "value 2        value 2 continued")));
+                assert_eq!(
+                    iter.next(),
+                    Some(("KeyTwo", "value 2        value 2 continued"))
+                );
                 assert_eq!(iter.next(), None);
 
                 let mut iter = unit.section_entries("Section C");
-                assert_eq!(iter.next(), Some(("KeyThree", "value 3       value 3 continued")));
+                assert_eq!(
+                    iter.next(),
+                    Some(("KeyThree", "value 3       value 3 continued"))
+                );
                 assert_eq!(iter.next(), None);
             }
 
@@ -855,7 +908,10 @@ Exec=/some/path \"an arg\" \"a;b\\nc\\td'e\" a;b\\nc\\td 'a\"b'";
                 assert_eq!(iter.next(), Some(("Image", "imagename")));
                 assert_eq!(iter.next(), Some(("PodmanArgs", "--foo    --bar")));
                 assert_eq!(iter.next(), Some(("PodmanArgs", "--also")));
-                assert_eq!(iter.next(), Some(("Exec", "/some/path an arg a;b\nc\td'e a;b\nc\td a\"b")));
+                assert_eq!(
+                    iter.next(),
+                    Some(("Exec", "/some/path an arg a;b\nc\td'e a;b\nc\td a\"b"))
+                );
                 assert_eq!(iter.next(), None);
             }
         }
@@ -877,14 +933,11 @@ Key2=valA2";
                 let unit = SystemdUnit::load_from_str(input).unwrap();
 
                 let values: Vec<_> = unit.lookup_all("secA", "Key1").collect();
-                assert_eq!(
-                    values,
-                    vec!["valA1.1", "valA1.2", "valA2.1"],
-                );
+                assert_eq!(values, vec!["valA1.1", "valA1.2", "valA2.1"],);
             }
         }
 
-        mod lookup_all_with_reset{
+        mod lookup_all_with_reset {
             use super::*;
 
             #[test]
@@ -904,10 +957,7 @@ Key1=valA2.3";
                 let unit = SystemdUnit::load_from_str(input).unwrap();
 
                 let values: Vec<_> = unit.lookup_all_with_reset("secA", "Key1");
-                assert_eq!(
-                    values,
-                    vec!["valA2.2", "valA2.3"],
-                );
+                assert_eq!(values, vec!["valA2.2", "valA2.3"],);
             }
         }
 
@@ -923,10 +973,7 @@ Key1=val1.2";
 
                 let unit = SystemdUnit::load_from_str(input).unwrap();
 
-                assert_eq!(
-                    unit.lookup_last("secA", "Key1"),
-                    Some("val1.2"),
-                );
+                assert_eq!(unit.lookup_last("secA", "Key1"), Some("val1.2"),);
             }
 
             #[test]
@@ -941,10 +988,7 @@ Key2=valA2";
 
                 let unit = SystemdUnit::load_from_str(input).unwrap();
 
-                assert_eq!(
-                    unit.lookup_last("secA", "Key1"),
-                    Some("valA1.2"),
-                );
+                assert_eq!(unit.lookup_last("secA", "Key1"), Some("valA1.2"),);
             }
         }
 
@@ -1049,7 +1093,7 @@ KeyTwo=value 2";
                 let from_section = "Section A";
                 let to_section = "New Section";
                 unit.rename_section(from_section, to_section);
-                assert_eq!(unit.len(), 1);  // shouldn't change the number of sections
+                assert_eq!(unit.len(), 1); // shouldn't change the number of sections
 
                 assert!(!unit.has_section(from_section));
                 let mut iter = unit.section_entries(from_section);
@@ -1076,7 +1120,7 @@ KeyTwo=value 2";
                 let from_section = "Section A";
                 let to_section = "New Section";
                 unit.rename_section(from_section, to_section);
-                assert_eq!(unit.len(), 2);  // shouldn't change the number of sections
+                assert_eq!(unit.len(), 2); // shouldn't change the number of sections
 
                 assert!(!unit.has_section(from_section));
                 let mut iter = unit.section_entries(from_section);
@@ -1104,7 +1148,7 @@ KeyTwo=value 2";
 
                 assert!(!unit.has_section(from_section));
                 unit.rename_section(from_section, to_section);
-                assert_eq!(unit.len(), 1);  // shouldn't change the number of sections
+                assert_eq!(unit.len(), 1); // shouldn't change the number of sections
 
                 assert!(unit.has_section(other_section));
                 let mut iter = unit.section_entries(other_section);
@@ -1200,7 +1244,7 @@ KeyOne=value 1";
                 assert_eq!(unit.len(), 1);
 
                 unit.set_entry("Section B", "KeyTwo", "value 2");
-                assert_eq!(unit.len(), 2);  // should have added new section
+                assert_eq!(unit.len(), 2); // should have added new section
 
                 // unchanged
                 let mut iter = unit.section_entries("Section A");
@@ -1222,7 +1266,7 @@ KeyOne=value 1";
                 assert_eq!(unit.len(), 1);
 
                 unit.set_entry("Section A", "KeyTwo", "value 2");
-                assert_eq!(unit.len(), 1);  // shouldn't change the number of sections
+                assert_eq!(unit.len(), 1); // shouldn't change the number of sections
 
                 let mut iter = unit.section_entries("Section A");
                 assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
@@ -1239,7 +1283,7 @@ KeyOne=value 1";
                 assert_eq!(unit.len(), 1);
 
                 unit.set_entry("Section A", "KeyOne", "new value");
-                assert_eq!(unit.len(), 1);  // shouldn't change the number of sections
+                assert_eq!(unit.len(), 1); // shouldn't change the number of sections
 
                 let mut iter = unit.section_entries("Section A");
                 assert_eq!(iter.next(), Some(("KeyOne", "new value")));
@@ -1257,7 +1301,7 @@ KeyOne=value 3";
                 assert_eq!(unit.len(), 1);
 
                 unit.set_entry("Section A", "KeyOne", "new value");
-                assert_eq!(unit.len(), 1);  // shouldn't change the number of sections
+                assert_eq!(unit.len(), 1); // shouldn't change the number of sections
 
                 let mut iter = unit.section_entries("Section A");
                 assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
@@ -1317,7 +1361,8 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
                     Some("/some/path an arg a;b\nc\td\'e a;b\nc\td a\"b")
                 );
 
-                let mut split_words: Vec<String> = SplitWord::new(exec_start.unwrap().raw()).collect();
+                let mut split_words: Vec<String> =
+                    SplitWord::new(exec_start.unwrap().raw()).collect();
                 let mut split = split_words.iter();
                 assert_eq!(split.next(), Some(&"/some/path".into()));
                 assert_eq!(split.next(), Some(&"an arg".into()));
@@ -1355,10 +1400,7 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
             fn with_empty_unit() {
                 let unit = SystemdUnit::new();
 
-                assert_eq!(
-                    unit.to_string(),
-                    ""
-                );
+                assert_eq!(unit.to_string(), "");
             }
 
             #[test]

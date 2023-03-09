@@ -13,7 +13,7 @@ pub const X_VOLUME_SECTION: &str    = "X-Volume";
 // FIXME: (COMPAT) change to `passthrough` once we can rely on Podman v4.0.0 or newer being present
 // Podman support added in: https://github.com/containers/podman/pull/11390
 // Quadlet default changed in: https://github.com/containers/podman/pull/16237
-pub const DEFAULT_LOG_DRIVER: &str  = "journald";
+pub const DEFAULT_LOG_DRIVER: &str = "journald";
 
 pub static SUPPORTED_CONTAINER_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     let keys = [
