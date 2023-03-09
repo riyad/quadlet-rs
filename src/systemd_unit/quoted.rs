@@ -186,6 +186,7 @@ impl<'a> Quoted<'a> {
     }
 }
 
+#[cfg(test)]
 mod tests {
     mod quote_value {
         use super::super::quote_value;
