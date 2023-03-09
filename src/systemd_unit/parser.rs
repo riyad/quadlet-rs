@@ -291,7 +291,7 @@ mod tests {
             let input = "# foo\n; bar";
             let mut parser = Parser::new(input);
             let old_line = parser.line;
-            let old_col = parser.column;
+            let _old_col = parser.column;
             assert_eq!(parser.parse_comment(), Ok("# foo".into()));
             assert_eq!(parser.line, old_line+1);
             assert_eq!(parser.column, 0);
