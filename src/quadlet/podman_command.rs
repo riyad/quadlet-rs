@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 use crate::systemd_unit::quote_words;
 
+use super::PODMAN_BINARY;
+
 pub(crate) struct PodmanCommand {
     args: Vec<String>,
 }
@@ -64,7 +66,7 @@ impl PodmanCommand {
     pub(crate) fn new_command(command: &str) -> Self {
         let mut podman = Self::_new();
 
-        podman.add("/usr/bin/podman");
+        podman.add(&*PODMAN_BINARY);
         podman.add(command);
 
         podman

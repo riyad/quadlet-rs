@@ -1,5 +1,12 @@
 use once_cell::sync::Lazy;
+use std::env;
 use std::collections::HashSet;
+
+pub(crate) const DEFAULT_PODMAN_BINARY: &str = "/usr/bin/podman";
+pub(crate) static PODMAN_BINARY: Lazy<String> = Lazy::new(|| match env::var("PODMAN") {
+    Ok(p) => p,
+    Err(_) => DEFAULT_PODMAN_BINARY.to_owned(),
+});
 
 pub const CONTAINER_SECTION: &str   = "Container";
 pub const KUBE_SECTION: &str        = "Kube";

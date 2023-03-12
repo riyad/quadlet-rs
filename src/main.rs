@@ -257,7 +257,7 @@ fn convert_container(
     service.append_entry(
         SERVICE_SECTION,
         "ExecStop",
-        "/usr/bin/podman rm -f -i --cidfile=%t/%N.cid",
+        format!("{} rm -f -i --cidfile=%t/%N.cid", *PODMAN_BINARY),
     );
     // The ExecStopPost is needed when the main PID (i.e., conmon) gets killed.
     // In that case, ExecStop is not executed but *Post only.  If both are
@@ -266,7 +266,7 @@ fn convert_container(
     service.append_entry(
         SERVICE_SECTION,
         "ExecStopPost",
-        "-/usr/bin/podman rm -f -i --cidfile=%t/%N.cid",
+        format!("-{} rm -f -i --cidfile=%t/%N.cid", *PODMAN_BINARY),
     );
 
     // FIXME: (COMPAT) remove once we can rely on Podman v4.4.0 or newer being present
