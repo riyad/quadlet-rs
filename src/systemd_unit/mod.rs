@@ -176,6 +176,15 @@ impl SystemdUnit {
         })
     }
 
+
+    pub(crate) fn lookup_bool<'a, S, K>(&'a self, section: S, key: K) -> Option<bool>
+    where
+        S: Into<String>,
+        K: Into<String>,
+    {
+        self.lookup_last_value(section, key)
+            .map(|v| v.to_bool().unwrap_or(false))
+    }
     // Get the last value for `key` in all instances of `section`
     pub(crate) fn lookup_last<'a, S, K>(&'a self, section: S, key: K) -> Option<&'a str>
     where
@@ -958,6 +967,16 @@ Key1=valA2.3";
 
                 let values: Vec<_> = unit.lookup_all_with_reset("secA", "Key1");
                 assert_eq!(values, vec!["valA2.2", "valA2.3"],);
+            }
+        }
+
+        mod lookup_bool {
+            use super::*;
+
+            #[test]
+            #[ignore]
+            fn todo() {
+                todo!()
             }
         }
 

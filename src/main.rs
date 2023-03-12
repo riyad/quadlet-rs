@@ -303,9 +303,7 @@ fn convert_container(
     add_networks(container, CONTAINER_SECTION, &mut service, &mut podman)?;
 
     // Run with a pid1 init to reap zombies by default (as most apps don't do that)
-    let run_init = container
-        .lookup_last(CONTAINER_SECTION, "RunInit")
-        .map(|s| parse_bool(s).unwrap_or(false)); // key found: parse or default
+    let run_init = container.lookup_bool(CONTAINER_SECTION, "RunInit");
     if let Some(run_init) = run_init {
         podman.add_bool("--init", run_init);
     }
@@ -318,9 +316,8 @@ fn convert_container(
             // but we also allow passing it to the container by setting Notify=yes
 
             let notify = container
-                .lookup_last(CONTAINER_SECTION, "Notify")
-                .map(|s| parse_bool(s).unwrap_or(false)) // key found: parse or default
-                .unwrap_or(false); // key not found: use default
+                .lookup_bool(CONTAINER_SECTION, "Notify")
+                .unwrap_or(false);
             if notify {
                 podman.add("--sdnotify=container");
             } else {
@@ -345,17 +342,15 @@ fn convert_container(
 
     // Default to no higher level privileges or caps
     let no_new_privileges = container
-        .lookup_last(CONTAINER_SECTION, "NoNewPrivileges")
-        .map(|s| parse_bool(s).unwrap_or(false)) // key found: parse or default
-        .unwrap_or(false); // key not found: use default
+        .lookup_bool(CONTAINER_SECTION, "NoNewPrivileges")
+        .unwrap_or(false);
     if no_new_privileges {
         podman.add("--security-opt=no-new-privileges");
     }
 
     let security_label_disable = container
-        .lookup_last(CONTAINER_SECTION, "SecurityLabelDisable")
-        .map(|s| parse_bool(s).unwrap_or(false)) // key found: parse or default
-        .unwrap_or(false); // key not found: use default
+        .lookup_bool(CONTAINER_SECTION, "SecurityLabelDisable")
+        .unwrap_or(false);
     if security_label_disable {
         podman.add_slice(&["--security-opt", "label:disable"]);
     }
@@ -415,18 +410,15 @@ fn convert_container(
         podman.add(format!("--cap-add={}", caps.to_ascii_lowercase()))
     }
 
-    let read_only = container
-        .lookup_last(CONTAINER_SECTION, "ReadOnly")
-        .map(|s| parse_bool(s).unwrap_or(false)); // key found: parse or default
+    let read_only = container.lookup_bool(CONTAINER_SECTION, "ReadOnly");
     if let Some(read_only) = read_only {
         podman.add_bool("--read-only", read_only);
     }
     let read_only = read_only.unwrap_or(false); // key not found: use default
 
     let volatile_tmp = container
-        .lookup_last(CONTAINER_SECTION, "VolatileTmp")
-        .map(|s| parse_bool(s).unwrap_or(false)) // key found: parse or default
-        .unwrap_or(false); // key not found: use default
+        .lookup_bool(CONTAINER_SECTION, "VolatileTmp")
+        .unwrap_or(false);
     if volatile_tmp {
         // Read only mode already has a tmpfs by default
         if !read_only {
@@ -548,8 +540,7 @@ fn convert_container(
         );
     }
 
-    if let Some(env_host) = container.lookup_last(CONTAINER_SECTION, "EnvironmentHost") {
-        let env_host = parse_bool(env_host).unwrap_or(false);
+    if let Some(env_host) = container.lookup_bool(CONTAINER_SECTION, "EnvironmentHost") {
         podman.add_bool("--env-host", env_host);
     }
 
@@ -1027,9 +1018,8 @@ fn convert_network(network: &SystemdUnit) -> Result<SystemdUnit, ConversionError
     //podman.add("--ignore");
 
     let disable_dns = network
-        .lookup_last(NETWORK_SECTION, "DisableDNS")
-        .map(|s| parse_bool(s).unwrap_or(false)) // key found: parse or default
-        .unwrap_or(false); // key not found: use default
+        .lookup_bool(NETWORK_SECTION, "DisableDNS")
+        .unwrap_or(false);
     if disable_dns {
         podman.add("--disable-dns")
     }
@@ -1071,9 +1061,8 @@ fn convert_network(network: &SystemdUnit) -> Result<SystemdUnit, ConversionError
     }
 
     let internal = network
-        .lookup_last(NETWORK_SECTION, "Internal")
-        .map(|s| parse_bool(s).unwrap_or(false)) // key found: parse or default
-        .unwrap_or(false); // key not found: use default
+        .lookup_bool(NETWORK_SECTION, "Internal")
+        .unwrap_or(false);
     if internal {
         podman.add("--internal")
     }
@@ -1084,9 +1073,8 @@ fn convert_network(network: &SystemdUnit) -> Result<SystemdUnit, ConversionError
     }
 
     let ipv6 = network
-        .lookup_last(NETWORK_SECTION, "IPv6")
-        .map(|s| parse_bool(s).unwrap_or(false)) // key found: parse or default
-        .unwrap_or(false); // key not found: use default
+        .lookup_bool(NETWORK_SECTION, "IPv6")
+        .unwrap_or(false);
     if ipv6 {
         podman.add("--ipv6")
     }
@@ -1197,11 +1185,7 @@ fn convert_volume(volume: &SystemdUnit) -> Result<SystemdUnit, ConversionError> 
         opts.push(format!("gid={gid}"));
     }
 
-    if let Some(copy) = volume
-        .lookup_last(VOLUME_SECTION, "Copy")
-        .map(|s| parse_bool(s).unwrap_or(false))
-    {
-        // key found: parse or default
+    if let Some(copy) = volume.lookup_bool(VOLUME_SECTION, "Copy") {
         if copy {
             podman.add_slice(&["--opt", "copy"]);
         } else {
