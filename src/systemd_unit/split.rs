@@ -79,7 +79,7 @@ impl<'a> SplitStrv<'a> {
     }
 }
 
-impl<'a> Iterator for SplitStrv<'a> {
+impl Iterator for SplitStrv<'_> {
     type Item = String;
 
     fn next(&mut self) -> Option<Self::Item> {

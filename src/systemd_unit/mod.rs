@@ -131,6 +131,19 @@ impl SystemdUnit {
             .map(|v| v.unquoted().as_str())
     }
 
+    pub(crate) fn lookup_all_strv<S, K>(
+        &self,
+        section: S,
+        key: K,
+    ) -> impl Iterator<Item = String> + '_
+    where
+        S: Into<String>,
+        K: Into<String>,
+    {
+        self.lookup_all_values(section.into(), key.into())
+            .flat_map(|v| SplitStrv::new(v.raw()))
+    }
+
     /// Get an interator of values for all `key`s in all instances of `section`
     pub(crate) fn lookup_all_values<'a, S, K>(
         &'a self,
@@ -376,7 +389,7 @@ mod tests {
         }
 
         #[test]
-        fn false_with_falthy_input() {
+        fn false_with_falsy_input() {
             assert_eq!(parse_bool("0").ok(), Some(false));
             assert_eq!(parse_bool("off").ok(), Some(false));
             assert_eq!(parse_bool("no").ok(), Some(false));
@@ -943,6 +956,16 @@ Key2=valA2";
 
                 let values: Vec<_> = unit.lookup_all("secA", "Key1").collect();
                 assert_eq!(values, vec!["valA1.1", "valA1.2", "valA2.1"],);
+            }
+        }
+
+        mod lookup_all_strv {
+            use super::*;
+
+            #[test]
+            #[ignore]
+            fn todo() {
+                todo!()
             }
         }
 

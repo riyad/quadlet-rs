@@ -380,8 +380,7 @@ fn convert_container(
     }
 
     let devices: Vec<String> = container
-        .lookup_all_values(CONTAINER_SECTION, "AddDevice")
-        .flat_map(|v| SplitStrv::new(v.raw()))
+        .lookup_all_strv(CONTAINER_SECTION, "AddDevice")
         .collect();
     for device in devices {
         podman.add(format!("--device={device}"))
@@ -394,8 +393,7 @@ fn convert_container(
     }
 
     let drop_caps: Vec<String> = container
-        .lookup_all_values(CONTAINER_SECTION, "DropCapability")
-        .flat_map(|v| SplitStrv::new(v.raw()))
+        .lookup_all_strv(CONTAINER_SECTION, "DropCapability")
         .collect();
     for caps in drop_caps {
         podman.add(format!("--cap-drop={}", caps.to_ascii_lowercase()))
@@ -403,8 +401,7 @@ fn convert_container(
 
     // But allow overrides with AddCapability
     let add_caps: Vec<String> = container
-        .lookup_all_values(CONTAINER_SECTION, "AddCapability")
-        .flat_map(|v| SplitStrv::new(v.raw()))
+        .lookup_all_strv(CONTAINER_SECTION, "AddCapability")
         .collect();
     for caps in add_caps {
         podman.add(format!("--cap-add={}", caps.to_ascii_lowercase()))
@@ -615,12 +612,10 @@ fn handle_user_remap(
     support_manual: bool,
 ) -> Result<(), ConversionError> {
     let uid_maps: Vec<String> = unit_file
-        .lookup_all_values(section, "RemapUid")
-        .flat_map(|v| SplitStrv::new(v.raw()))
+        .lookup_all_strv(section, "RemapUid")
         .collect();
     let gid_maps: Vec<String> = unit_file
-        .lookup_all_values(section, "RemapGid")
-        .flat_map(|v| SplitStrv::new(v.raw()))
+        .lookup_all_strv(section, "RemapGid")
         .collect();
     let remap_users = unit_file.lookup_last(section, "RemapUsers");
     match remap_users {
@@ -930,8 +925,7 @@ fn convert_kube(kube: &SystemdUnit, is_user: bool) -> Result<SystemdUnit, Conver
     add_networks(kube, KUBE_SECTION, &mut service, &mut podman_start)?;
 
     let config_maps: Vec<PathBuf> = kube
-        .lookup_all_values(KUBE_SECTION, "ConfigMap")
-        .flat_map(|v| SplitStrv::new(v.raw()))
+        .lookup_all_strv(KUBE_SECTION, "ConfigMap")
         .map(PathBuf::from)
         .collect();
     for config_map in config_maps {
@@ -1284,15 +1278,13 @@ fn enable_service_file(output_path: &Path, service: &SystemdUnit) {
     let service_name = service.path().unwrap().file_name().unwrap();
 
     let mut alias: Vec<PathBuf> = service
-        .lookup_all_values(INSTALL_SECTION, "Alias")
-        .flat_map(|v| SplitStrv::new(v.raw()))
+        .lookup_all_strv(INSTALL_SECTION, "Alias")
         .map(|s| PathBuf::from(s).cleaned())
         .collect();
     symlinks.append(&mut alias);
 
     let mut wanted_by: Vec<PathBuf> = service
-        .lookup_all_values(INSTALL_SECTION, "WantedBy")
-        .flat_map(|v| SplitStrv::new(v.raw()))
+        .lookup_all_strv(INSTALL_SECTION, "WantedBy")
         .filter(|s| !s.contains('/')) // Only allow filenames, not paths
         .map(|wanted_by_unit| {
             let mut path = PathBuf::from(format!("{wanted_by_unit}.wants/"));
@@ -1303,8 +1295,7 @@ fn enable_service_file(output_path: &Path, service: &SystemdUnit) {
     symlinks.append(&mut wanted_by);
 
     let mut required_by: Vec<PathBuf> = service
-        .lookup_all_values(INSTALL_SECTION, "RequiredBy")
-        .flat_map(|v| SplitStrv::new(v.raw()))
+        .lookup_all_strv(INSTALL_SECTION, "RequiredBy")
         .filter(|s| !s.contains('/')) // Only allow filenames, not paths
         .map(|required_by_unit| {
             let mut path = PathBuf::from(format!("{required_by_unit}.requires/"));
