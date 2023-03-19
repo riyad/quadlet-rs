@@ -524,8 +524,7 @@ fn convert_container(
     podman.add_annotations(&annotation_args);
 
     let env_files: Vec<PathBuf> = container
-        .lookup_all_values(CONTAINER_SECTION, "EnvironmentFile")
-        .flat_map(|v| SplitWord::new(v.raw()))
+        .lookup_all_args(CONTAINER_SECTION, "EnvironmentFile")
         .map(|s| PathBuf::from(s).absolute_from_unit(container))
         .collect();
     for env_file in env_files {
@@ -541,13 +540,13 @@ fn convert_container(
         podman.add_bool("--env-host", env_host);
     }
 
-    let secrets = container.lookup_all(CONTAINER_SECTION, "Secret");
+    let secrets = container.lookup_all_args(CONTAINER_SECTION, "Secret");
     for secret in secrets {
         podman.add("--secret");
         podman.add(secret);
     }
 
-    let mounts = container.lookup_all(CONTAINER_SECTION, "Mount");
+    let mounts = container.lookup_all_args(CONTAINER_SECTION, "Mount");
     for mount in mounts {
         let params: Vec<&str> = mount.split(',').collect();
         let mut params_map: HashMap<&str, String> = HashMap::with_capacity(params.len());
@@ -577,8 +576,7 @@ fn convert_container(
     }
 
     let mut podman_args: Vec<String> = container
-        .lookup_all_values(CONTAINER_SECTION, "PodmanArgs")
-        .flat_map(|v| SplitWord::new(v.raw()))
+        .lookup_all_args(CONTAINER_SECTION, "PodmanArgs")
         .collect();
     podman.add_vec(&mut podman_args);
 

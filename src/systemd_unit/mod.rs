@@ -131,6 +131,19 @@ impl SystemdUnit {
             .map(|v| v.unquoted().as_str())
     }
 
+    pub(crate) fn lookup_all_args<S, K>(
+        &self,
+        section: S,
+        key: K,
+    ) -> impl Iterator<Item = String> + '_
+    where
+        S: Into<String>,
+        K: Into<String>,
+    {
+        self.lookup_all_values(section.into(), key.into())
+            .flat_map(|v| SplitWord::new(v.raw()))
+    }
+
     pub(crate) fn lookup_all_strv<S, K>(
         &self,
         section: S,
@@ -956,6 +969,16 @@ Key2=valA2";
 
                 let values: Vec<_> = unit.lookup_all("secA", "Key1").collect();
                 assert_eq!(values, vec!["valA1.1", "valA1.2", "valA2.1"],);
+            }
+        }
+
+        mod lookup_all_args {
+            use super::*;
+
+            #[test]
+            #[ignore]
+            fn todo() {
+                todo!()
             }
         }
 
