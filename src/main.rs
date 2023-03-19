@@ -1078,7 +1078,7 @@ fn convert_network(network: &SystemdUnit) -> Result<SystemdUnit, ConversionError
         SERVICE_SECTION,
         "ExecCondition",
         EntryValue::try_from_raw(format!(
-            "/usr/bin/bash -c \"! /usr/bin/podman network exists {podman_network_name}\""
+            "/usr/bin/bash -c \"! {} network exists {podman_network_name}\"", *PODMAN_BINARY
         ))?,
     );
 
@@ -1213,7 +1213,7 @@ fn convert_volume(volume: &SystemdUnit) -> Result<SystemdUnit, ConversionError> 
         SERVICE_SECTION,
         "ExecCondition",
         EntryValue::try_from_raw(format!(
-            "/usr/bin/bash -c \"! /usr/bin/podman volume exists {podman_volume_name}\""
+            "/usr/bin/bash -c \"! {} volume exists {podman_volume_name}\"", *PODMAN_BINARY
         ))?,
     );
 
