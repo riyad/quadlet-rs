@@ -4,12 +4,15 @@ mod quoted;
 mod split;
 mod value;
 
+use crate::quadlet::quad_parse_kvs;
+
 pub use self::constants::*;
 pub use self::quoted::*;
 pub use self::split::*;
 pub(crate) use self::value::*;
 
 use ordered_multimap::list_ordered_multimap::ListOrderedMultimap;
+use std::collections::HashMap;
 use std::fmt;
 use std::io;
 use std::path::PathBuf;
@@ -131,17 +134,29 @@ impl SystemdUnit {
             .map(|v| v.unquoted().as_str())
     }
 
-    pub(crate) fn lookup_all_args<S, K>(
-        &self,
-        section: S,
-        key: K,
-    ) -> impl Iterator<Item = String> + '_
+    pub(crate) fn lookup_all_args<S, K>(&self, section: S, key: K) -> impl Iterator<Item = String> + '_
     where
         S: Into<String>,
         K: Into<String>,
     {
         self.lookup_all_values(section.into(), key.into())
             .flat_map(|v| SplitWord::new(v.raw()))
+    }
+
+    pub(crate) fn lookup_all_key_val<S, K>(
+        &self,
+        section: S,
+        key: K,
+    ) -> HashMap<String, String>
+    where
+        S: Into<String>,
+        K: Into<String>,
+    {
+        let list = self
+            .lookup_all_values(section.into(), key.into())
+            .map(|v| v.raw().as_str())
+            .collect();
+        quad_parse_kvs(&list)
     }
 
     pub(crate) fn lookup_all_strv<S, K>(
@@ -973,6 +988,16 @@ Key2=valA2";
         }
 
         mod lookup_all_args {
+            use super::*;
+
+            #[test]
+            #[ignore]
+            fn todo() {
+                todo!()
+            }
+        }
+
+        mod lookup_all_key_val {
             use super::*;
 
             #[test]

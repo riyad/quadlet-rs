@@ -243,11 +243,7 @@ fn convert_container(
     }
 
     // Read env early so we can override it below
-    let environments = container
-        .lookup_all_values(CONTAINER_SECTION, "Environment")
-        .map(|v| v.raw().as_str())
-        .collect();
-    let env_args: HashMap<String, String> = quad_parse_kvs(&environments);
+    let podman_env = container.lookup_all_key_val(CONTAINER_SECTION, "Environment");
 
     // Need the containers filesystem mounted to start podman
     service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
@@ -493,7 +489,7 @@ fn convert_container(
 
     handle_publish_ports(container, CONTAINER_SECTION, &mut podman)?;
 
-    podman.add_env(&env_args);
+    podman.add_env(&podman_env);
 
     if let Some(ip) = container.lookup_last(CONTAINER_SECTION, "IP") {
         if !ip.is_empty() {
@@ -509,19 +505,11 @@ fn convert_container(
         }
     }
 
-    let labels: Vec<&str> = container
-        .lookup_all_values(CONTAINER_SECTION, "Label")
-        .map(|v| v.raw().as_str())
-        .collect();
-    let label_args: HashMap<String, String> = quad_parse_kvs(&labels);
-    podman.add_labels(&label_args);
+    let labels = container.lookup_all_key_val(CONTAINER_SECTION, "Label");
+    podman.add_labels(&labels);
 
-    let annotations: Vec<&str> = container
-        .lookup_all_values(CONTAINER_SECTION, "Annotation")
-        .map(|v| v.raw().as_str())
-        .collect();
-    let annotation_args: HashMap<String, String> = quad_parse_kvs(&annotations);
-    podman.add_annotations(&annotation_args);
+    let annotations= container.lookup_all_key_val(CONTAINER_SECTION, "Annotation");
+    podman.add_annotations(&annotations);
 
     let env_files: Vec<PathBuf> = container
         .lookup_all_args(CONTAINER_SECTION, "EnvironmentFile")
@@ -609,12 +597,8 @@ fn handle_user_remap(
     is_user: bool,
     support_manual: bool,
 ) -> Result<(), ConversionError> {
-    let uid_maps: Vec<String> = unit_file
-        .lookup_all_strv(section, "RemapUid")
-        .collect();
-    let gid_maps: Vec<String> = unit_file
-        .lookup_all_strv(section, "RemapGid")
-        .collect();
+    let uid_maps: Vec<String> = unit_file.lookup_all_strv(section, "RemapUid").collect();
+    let gid_maps: Vec<String> = unit_file.lookup_all_strv(section, "RemapGid").collect();
     let remap_users = unit_file.lookup_last(section, "RemapUsers");
     match remap_users {
         None => {
@@ -1071,21 +1055,13 @@ fn convert_network(network: &SystemdUnit) -> Result<SystemdUnit, ConversionError
         podman.add("--ipv6")
     }
 
-    let network_options: Vec<&str> = network
-        .lookup_all_values(NETWORK_SECTION, "Options")
-        .map(|v| v.raw().as_str())
-        .collect();
-    let network_options: HashMap<String, String> = quad_parse_kvs(&network_options);
+    let network_options = network.lookup_all_key_val(NETWORK_SECTION, "Options");
     if !network_options.is_empty() {
         podman.add_keys("--opt", &network_options);
     }
 
-    let labels: Vec<&str> = network
-        .lookup_all_values(NETWORK_SECTION, "Label")
-        .map(|v| v.raw().as_str())
-        .collect();
-    let label_args: HashMap<String, String> = quad_parse_kvs(&labels);
-    podman.add_labels(&label_args);
+    let labels = network.lookup_all_key_val(NETWORK_SECTION, "Label");
+    podman.add_labels(&labels);
 
     podman.add(&podman_network_name);
 
@@ -1148,11 +1124,7 @@ fn convert_volume(volume: &SystemdUnit) -> Result<SystemdUnit, ConversionError> 
     // Need the containers filesystem mounted to start podman
     service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
 
-    let labels: Vec<&str> = volume
-        .lookup_all_values(VOLUME_SECTION, "Label")
-        .map(|v| v.raw().as_str())
-        .collect();
-    let label_args: HashMap<String, String> = quad_parse_kvs(&labels);
+    let labels = volume.lookup_all_key_val(VOLUME_SECTION, "Label");
 
     let mut podman = PodmanCommand::new_command("volume");
     podman.add("create");
@@ -1225,7 +1197,7 @@ fn convert_volume(volume: &SystemdUnit) -> Result<SystemdUnit, ConversionError> 
         podman.add(format!("o={}", opts.join(",")));
     }
 
-    podman.add_labels(&label_args);
+    podman.add_labels(&labels);
     podman.add(&podman_volume_name);
 
     service.append_entry_value(
