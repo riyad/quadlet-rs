@@ -142,21 +142,6 @@ pub(crate) fn quad_is_port_range(port: &str) -> bool {
     return chars.next().is_none();
 }
 
-/// parse `key=value` pairs from given list
-pub(crate) fn quad_parse_kvs<'a>(all_key_vals: &'a Vec<&str>) -> HashMap<String, String> {
-    let mut res = HashMap::new();
-
-    for key_vals in all_key_vals {
-        for assigns in SplitWord::new(key_vals) {
-            if let Some((key, value)) = assigns.split_once("=") {
-                res.insert(key.to_string(), value.to_string());
-            }
-        }
-    }
-
-    res
-}
-
 /// Parses arguments to podman-run's `--publish` option.
 /// see also the documentation for the `PublishPort` field.
 ///

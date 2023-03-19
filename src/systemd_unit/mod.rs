@@ -4,8 +4,6 @@ mod quoted;
 mod split;
 mod value;
 
-use crate::quadlet::quad_parse_kvs;
-
 pub use self::constants::*;
 pub use self::quoted::*;
 pub use self::split::*;
@@ -143,6 +141,7 @@ impl SystemdUnit {
             .flat_map(|v| SplitWord::new(v.raw()))
     }
 
+    /// Look up 'Environment' style key-value keys
     pub(crate) fn lookup_all_key_val<S, K>(
         &self,
         section: S,
@@ -152,11 +151,20 @@ impl SystemdUnit {
         S: Into<String>,
         K: Into<String>,
     {
-        let list = self
-            .lookup_all_values(section.into(), key.into())
-            .map(|v| v.raw().as_str())
-            .collect();
-        quad_parse_kvs(&list)
+        let all_key_vals = self
+            .lookup_all_values(section.into(), key.into());
+
+        let mut res = HashMap::with_capacity(all_key_vals.size_hint().0);
+
+        for key_vals in all_key_vals {
+            for assigns in SplitWord::new(key_vals.raw().as_str()) {
+                if let Some((key, value)) = assigns.split_once("=") {
+                    res.insert(key.to_string(), value.to_string());
+                }
+            }
+        }
+
+        res
     }
 
     pub(crate) fn lookup_all_strv<S, K>(
