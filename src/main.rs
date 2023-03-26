@@ -463,7 +463,7 @@ fn convert_container(
         }
 
         if !source.is_empty() {
-            source = handle_storage_source(&mut service, &source);
+            source = handle_storage_source(container, &mut service, &source);
         }
 
         podman.add("-v");
@@ -545,9 +545,15 @@ fn convert_container(
         if let Some(param_type) = params_map.get("type") {
             if param_type == "volume" || param_type == "bind" {
                 if let Some(param_source) = params_map.get("source") {
-                    params_map.insert("source", handle_storage_source(&mut service, param_source));
+                    params_map.insert(
+                        "source",
+                        handle_storage_source(container, &mut service, param_source),
+                    );
                 } else if let Some(param_source) = params_map.get("src") {
-                    params_map.insert("src", handle_storage_source(&mut service, param_source));
+                    params_map.insert(
+                        "src",
+                        handle_storage_source(container, &mut service, param_source),
+                    );
                 }
             }
         }
@@ -804,11 +810,24 @@ fn handle_log_driver(unit_file: &SystemdUnit, section: &str, podman: &mut Podman
     podman.add_slice(&["--log-driver", log_driver]);
 }
 
-fn handle_storage_source(unit_file: &mut SystemdUnit, source: &str) -> String {
+fn handle_storage_source(
+    quadlet_unit_file: &SystemdUnit,
+    service_unit_file: &mut SystemdUnit,
+    source: &str,
+) -> String {
     let mut source = source.to_owned();
-    if source.starts_with('/') {
+
+    if source.starts_with(".") {
+        source = PathBuf::from(source)
+            .absolute_from_unit(quadlet_unit_file)
+            .to_str()
+            .expect("source ist not valid UTF-8 string")
+            .to_string();
+    }
+
+    if source.starts_with("/") {
         // Absolute path
-        unit_file.append_entry(UNIT_SECTION, "RequiresMountsFor", &source);
+        service_unit_file.append_entry(UNIT_SECTION, "RequiresMountsFor", &source);
     } else if source.ends_with(".volume") {
         // the podman volume name is systemd-$name
         let volume_name = quad_replace_extension(&PathBuf::from(&source), "", "systemd-", "");
@@ -822,12 +841,16 @@ fn handle_storage_source(unit_file: &mut SystemdUnit, source: &str) -> String {
             .expect("volume name ist not valid UTF-8 string")
             .to_string();
 
-        unit_file.append_entry(
+        service_unit_file.append_entry(
             UNIT_SECTION,
             "Requires",
             volume_service_name.to_str().unwrap(),
         );
-        unit_file.append_entry(UNIT_SECTION, "After", volume_service_name.to_str().unwrap());
+        service_unit_file.append_entry(
+            UNIT_SECTION,
+            "After",
+            volume_service_name.to_str().unwrap(),
+        );
     }
 
     source
