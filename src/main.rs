@@ -569,6 +569,8 @@ fn convert_container(
         podman.add(params_array.join(","));
     }
 
+    handle_health(container, CONTAINER_SECTION, &mut podman);
+
     let mut podman_args: Vec<String> = container
         .lookup_all_args(CONTAINER_SECTION, "PodmanArgs")
         .collect();
@@ -854,6 +856,31 @@ fn handle_storage_source(
     }
 
     source
+}
+
+fn handle_health(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {
+    let key_arg_map: [[&str;2];11] = [
+        ["HealthCmd", "cmd"],
+        ["HealthInterval", "interval"],
+        ["HealthOnFailure", "on-failure"],
+        ["HealthRetries", "retries"],
+        ["HealthStartPeriod", "start-period"],
+        ["HealthTimeout", "timeout"],
+        ["HealthStartupCmd", "startup-cmd"],
+        ["HealthStartupInterval", "startup-interval"],
+        ["HealthStartupRetries", "startup-retries"],
+        ["HealthStartupSuccess", "startup-success"],
+        ["HealthStartupTimeout", "startup-timeout"],
+    ];
+
+    for key_arg in key_arg_map {
+        if let Some(val) = unit_file.lookup(section, key_arg[0]) {
+            if !val.is_empty() {
+                podman.add(format!("--health-{}", key_arg[1]));
+                podman.add(val);
+            }
+        }
+    }
 }
 
 fn convert_kube(kube: &SystemdUnit, is_user: bool) -> Result<SystemdUnit, ConversionError> {

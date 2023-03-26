@@ -224,6 +224,13 @@ impl SystemdUnit {
         })
     }
 
+    pub(crate) fn lookup<'a, S, K>(&'a self, section: S, key: K) -> Option<&'a str>
+    where
+        S: Into<String>,
+        K: Into<String>,
+    {
+        self.lookup_last(section, key)
+    }
 
     pub(crate) fn lookup_bool<'a, S, K>(&'a self, section: S, key: K) -> Option<bool>
     where
