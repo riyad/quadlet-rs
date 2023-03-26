@@ -508,7 +508,7 @@ fn convert_container(
     let labels = container.lookup_all_key_val(CONTAINER_SECTION, "Label");
     podman.add_labels(&labels);
 
-    let annotations= container.lookup_all_key_val(CONTAINER_SECTION, "Annotation");
+    let annotations = container.lookup_all_key_val(CONTAINER_SECTION, "Annotation");
     podman.add_annotations(&annotations);
 
     let env_files: Vec<PathBuf> = container
@@ -1101,7 +1101,8 @@ fn convert_network(network: &SystemdUnit) -> Result<SystemdUnit, ConversionError
         SERVICE_SECTION,
         "ExecCondition",
         EntryValue::try_from_raw(format!(
-            "/usr/bin/bash -c \"! {} network exists {podman_network_name}\"", *PODMAN_BINARY
+            "/usr/bin/bash -c \"! {} network exists {podman_network_name}\"",
+            *PODMAN_BINARY
         ))?,
     );
 
@@ -1236,7 +1237,8 @@ fn convert_volume(volume: &SystemdUnit) -> Result<SystemdUnit, ConversionError> 
         SERVICE_SECTION,
         "ExecCondition",
         EntryValue::try_from_raw(format!(
-            "/usr/bin/bash -c \"! {} volume exists {podman_volume_name}\"", *PODMAN_BINARY
+            "/usr/bin/bash -c \"! {} volume exists {podman_volume_name}\"",
+            *PODMAN_BINARY
         ))?,
     );
 

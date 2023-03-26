@@ -132,7 +132,11 @@ impl SystemdUnit {
             .map(|v| v.unquoted().as_str())
     }
 
-    pub(crate) fn lookup_all_args<S, K>(&self, section: S, key: K) -> impl Iterator<Item = String> + '_
+    pub(crate) fn lookup_all_args<S, K>(
+        &self,
+        section: S,
+        key: K,
+    ) -> impl Iterator<Item = String> + '_
     where
         S: Into<String>,
         K: Into<String>,
@@ -142,17 +146,12 @@ impl SystemdUnit {
     }
 
     /// Look up 'Environment' style key-value keys
-    pub(crate) fn lookup_all_key_val<S, K>(
-        &self,
-        section: S,
-        key: K,
-    ) -> HashMap<String, String>
+    pub(crate) fn lookup_all_key_val<S, K>(&self, section: S, key: K) -> HashMap<String, String>
     where
         S: Into<String>,
         K: Into<String>,
     {
-        let all_key_vals = self
-            .lookup_all_values(section.into(), key.into());
+        let all_key_vals = self.lookup_all_values(section.into(), key.into());
 
         let mut res = HashMap::with_capacity(all_key_vals.size_hint().0);
 
