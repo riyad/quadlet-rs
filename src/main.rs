@@ -664,7 +664,30 @@ fn handle_user_remap(
                     "RemapUsers=keep-id is unsupported for system units".into(),
                 ));
             }
-            podman.add("--userns=keep-id");
+
+            let mut keepid_opts: Vec<String> = Vec::new();
+            if !uid_maps.is_empty() {
+                if uid_maps.len() > 1 {
+                    return Err(ConversionError::InvalidRemapUsers(format!(
+                        "RemapUsers=keep-id supports only a single value for UID mapping"
+                    )));
+                }
+                keepid_opts.push(format!("uid={}", uid_maps[0]));
+            }
+            if !gid_maps.is_empty() {
+                if gid_maps.len() > 1 {
+                    return Err(ConversionError::InvalidRemapUsers(format!(
+                        "RemapUsers=keep-id supports only a single value for GID mapping"
+                    )));
+                }
+                keepid_opts.push(format!("gid={}", gid_maps[0]));
+            }
+
+            if keepid_opts.is_empty() {
+                podman.add("--userns=keep-id");
+            } else {
+                podman.add(format!("--userns=keep-id:{}", keepid_opts.join(",")));
+            }
         }
         Some(remap_users) => {
             return Err(ConversionError::InvalidRemapUsers(format!(

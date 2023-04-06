@@ -330,7 +330,7 @@ class QuadletTestCase(unittest.TestCase):
             outdir = os.path.join(basedir, "out")
             os.mkdir(outdir)
             write_file (indir, self.filename, self.data);
-            cmd = [generator_bin, '--no-kmsg-log', '-v', outdir]
+            cmd = [generator_bin, '--user', '--no-kmsg-log', '-v', outdir]
             if use_valgrind:
                 cmd = ["valgrind", "--error-exitcode=1", "--leak-check=full", "--show-possibly-lost=no", "--errors-for-leak-kinds=definite"] + cmd
 
