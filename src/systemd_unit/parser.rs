@@ -70,7 +70,7 @@ impl<'a> Parser<'a> {
         match self.cur {
             Some('#' | ';') => (),
             Some(c) => return Err(self.error(format!("expected comment, but found {c:?}"))),
-            None => return Err(self.error(format!("expected comment, but found EOF"))),
+            None => return Err(self.error("expected comment, but found EOF".into())),
         }
 
         let comment = self.parse_until_any_of(&['\n']);
@@ -86,7 +86,7 @@ impl<'a> Parser<'a> {
         match self.cur {
             Some('=') => self.bump(),
             Some(c) => return Err(self.error(format!("expected '=' after key, but found {c:?}"))),
-            None => return Err(self.error(format!("expected '=' after key, but found EOF"))),
+            None => return Err(self.error("expected '=' after key, but found EOF".into())),
         }
         // skip whitespace after '='
         let _ = self.parse_until_none_of(&[' ', '\t']);
@@ -143,9 +143,9 @@ impl<'a> Parser<'a> {
                 )))
             }
             None => {
-                return Err(self.error(format!(
-                    "expected '[' as start of section header, but found EOF"
-                )))
+                return Err(
+                    self.error("expected '[' as start of section header, but found EOF".into())
+                )
             }
         }
 
@@ -159,9 +159,9 @@ impl<'a> Parser<'a> {
                 )))
             }
             None => {
-                return Err(self.error(format!(
-                    "expected ']' as end of section header, but found EOF"
-                )))
+                return Err(
+                    self.error("expected ']' as end of section header, but found EOF".into())
+                )
             }
         }
 

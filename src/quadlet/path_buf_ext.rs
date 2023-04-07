@@ -81,7 +81,7 @@ impl PathBufExt<PathBuf> for PathBuf {
             }
         }
 
-        return false;
+        false
     }
 }
 

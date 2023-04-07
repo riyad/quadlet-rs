@@ -139,7 +139,7 @@ pub(crate) fn quad_is_port_range(port: &str) -> bool {
     }
 
     // make sure we're at the end of the string
-    return chars.next().is_none();
+    chars.next().is_none()
 }
 
 /// Parses arguments to podman-run's `--publish` option.
@@ -160,9 +160,8 @@ pub(crate) fn quad_split_ports(ports: &str) -> Vec<String> {
                 next_part.push(c);
                 while let Some(c) = chars.next() {
                     next_part.push(c);
-                    match c {
-                        ']' => break,
-                        _ => (),
+                    if c == ']' {
+                        break;
                     }
                 }
             }
@@ -215,7 +214,7 @@ fn is_image_id(image_name: &str) -> bool {
         return false;
     }
 
-    return true;
+    true
 }
 
 fn is_unambiguous_name(image_name: &str) -> bool {
@@ -227,7 +226,7 @@ fn is_unambiguous_name(image_name: &str) -> bool {
     // Otherwise we require a fully qualified name
 
     // What is before the first slash can be a domain or a path
-    if let Some((domain, _)) = image_name.split_once("/") {
+    if let Some((domain, _)) = image_name.split_once('/') {
         // If its a domain (has dot or port or is "localhost") it is considered fq
         if domain.contains(['.', ':']) || domain == "localhost" {
             return true;
@@ -237,7 +236,7 @@ fn is_unambiguous_name(image_name: &str) -> bool {
         return false;
     }
 
-    return false;
+    false
 }
 
 // warns if input is an ambiguous name, i.e. a partial image id or a short

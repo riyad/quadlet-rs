@@ -28,7 +28,7 @@ impl<'a> SplitStrv<'a> {
         s
     }
 
-    pub fn next<'b>(&mut self) -> Option<String> {
+    pub fn next(&mut self) -> Option<String> {
         let separators = &WHITESPACE;
         let mut word = String::new();
 
@@ -113,7 +113,7 @@ impl<'a> SplitWord<'a> {
         s
     }
 
-    pub fn next<'b>(&mut self) -> Option<String> {
+    pub fn next(&mut self) -> Option<String> {
         let separators = &WHITESPACE;
         let mut word = String::new();
 
@@ -209,7 +209,7 @@ impl<'a> SplitWord<'a> {
 
             Ok(r)
         } else {
-            return Err("expecting escape sequence, but found EOF.".into());
+            Err("expecting escape sequence, but found EOF.".into())
         }
     }
 
@@ -251,10 +251,10 @@ impl<'a> SplitWord<'a> {
             return Err("\\0 character not allowed in escape sequence".into());
         }
 
-        return match char::try_from(ucp) {
+        match char::try_from(ucp) {
             Ok(u) => Ok(u),
             Err(e) => Err(format!("invalid unicode character in escape sequence: {e}")),
-        };
+        }
     }
 
     fn parse_until_any_of(&mut self, end: &[char]) -> String {

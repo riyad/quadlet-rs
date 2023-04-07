@@ -10,7 +10,7 @@ pub(crate) struct Entries {
 
 impl Default for &Entries {
     fn default() -> Self {
-        static EMPTY: Lazy<Entries> = Lazy::new(|| Entries::default());
+        static EMPTY: Lazy<Entries> = Lazy::new(Entries::default);
         &EMPTY
     }
 }

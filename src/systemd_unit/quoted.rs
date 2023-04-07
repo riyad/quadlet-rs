@@ -7,11 +7,11 @@ fn char_needs_escaping(c: char) -> bool {
         return false;
     }
 
-    return c.is_ascii_control()
+    c.is_ascii_control()
         || c.is_ascii_whitespace()
         || c == '"'
         || c == '\''
-        || c == '\\';
+        || c == '\\'
 }
 
 pub fn quote_value(value: &str) -> String {
@@ -162,9 +162,9 @@ impl<'a> Quoted<'a> {
 
             Ok(r)
         } else {
-            return Err(Error::Unquoting(
+            Err(Error::Unquoting(
                 "expecting escape sequence, but found EOF.".into(),
-            ));
+            ))
         }
     }
 
@@ -210,12 +210,12 @@ impl<'a> Quoted<'a> {
             ));
         }
 
-        return match char::try_from(ucp) {
+        match char::try_from(ucp) {
             Ok(u) => Ok(u),
             Err(e) => Err(Error::Unquoting(format!(
                 "invalid unicode character in escape sequence: {e}"
             ))),
-        };
+        }
     }
 }
 

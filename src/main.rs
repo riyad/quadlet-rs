@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 use std::process;
 
 static SUPPORTED_EXTENSIONS: Lazy<[&OsStr; 4]> =
-    Lazy::new(|| ["kube", "container", "network", "volume"].map(|ext| OsStr::new(ext)));
+    Lazy::new(|| ["kube", "container", "network", "volume"].map(OsStr::new));
 
 const QUADLET_VERSION: &str = "0.2.0-dev";
 const UNIT_DIR_ADMIN: &str  = "/etc/containers/systemd";
@@ -99,8 +99,7 @@ fn parse_args(args: Vec<String>) -> Result<Config, String> {
 fn unit_search_dirs(is_user: bool) -> Vec<PathBuf> {
     // Allow overdiding source dir, this is mainly for the CI tests
     if let Ok(unit_dirs_env) = std::env::var("QUADLET_UNIT_DIRS") {
-        let unit_dirs_env: Vec<PathBuf> =
-            unit_dirs_env.split(":").map(|s| PathBuf::from(s)).collect();
+        let unit_dirs_env: Vec<PathBuf> = unit_dirs_env.split(':').map(PathBuf::from).collect();
         return unit_dirs_env;
     }
 
@@ -116,7 +115,7 @@ fn unit_search_dirs(is_user: bool) -> Vec<PathBuf> {
 }
 
 fn load_units_from_dir(
-    source_path: &PathBuf,
+    source_path: &Path,
     units: &mut HashMap<OsString, SystemdUnit>,
 ) -> io::Result<()> {
     for entry in source_path.read_dir()? {
@@ -160,7 +159,7 @@ fn load_units_from_dir(
 }
 
 fn quad_replace_extension(
-    file: &PathBuf,
+    file: &Path,
     new_extension: &str,
     extra_prefix: &str,
     extra_suffix: &str,
@@ -197,7 +196,7 @@ fn convert_container(
         );
     }
 
-    check_for_unknown_keys(&container, CONTAINER_SECTION, &*SUPPORTED_CONTAINER_KEYS)?;
+    check_for_unknown_keys(container, CONTAINER_SECTION, &SUPPORTED_CONTAINER_KEYS)?;
 
     service.rename_section(CONTAINER_SECTION, X_CONTAINER_SECTION);
 
@@ -332,7 +331,10 @@ fn convert_container(
         }
     }
 
-    if let None = container.lookup_last(SERVICE_SECTION, "SyslogIdentifier") {
+    if container
+        .lookup_last(SERVICE_SECTION, "SyslogIdentifier")
+        .is_none()
+    {
         service.set_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
     }
 
@@ -442,11 +444,11 @@ fn convert_container(
         }
     }
 
-    handle_user_remap(&container, CONTAINER_SECTION, &mut podman, is_user, true)?;
+    handle_user_remap(container, CONTAINER_SECTION, &mut podman, is_user, true)?;
 
     let volumes: Vec<&str> = container.lookup_all(CONTAINER_SECTION, "Volume").collect();
     for volume in volumes {
-        let parts: Vec<&str> = volume.split(":").collect();
+        let parts: Vec<&str> = volume.split(':').collect();
 
         let mut source = String::new();
         let dest;
@@ -668,17 +670,17 @@ fn handle_user_remap(
             let mut keepid_opts: Vec<String> = Vec::new();
             if !uid_maps.is_empty() {
                 if uid_maps.len() > 1 {
-                    return Err(ConversionError::InvalidRemapUsers(format!(
-                        "RemapUsers=keep-id supports only a single value for UID mapping"
-                    )));
+                    return Err(ConversionError::InvalidRemapUsers(
+                        "RemapUsers=keep-id supports only a single value for UID mapping".into(),
+                    ));
                 }
                 keepid_opts.push(format!("uid={}", uid_maps[0]));
             }
             if !gid_maps.is_empty() {
                 if gid_maps.len() > 1 {
-                    return Err(ConversionError::InvalidRemapUsers(format!(
-                        "RemapUsers=keep-id supports only a single value for GID mapping"
-                    )));
+                    return Err(ConversionError::InvalidRemapUsers(
+                        "RemapUsers=keep-id supports only a single value for GID mapping".into(),
+                    ));
                 }
                 keepid_opts.push(format!("gid={}", gid_maps[0]));
             }
@@ -842,7 +844,7 @@ fn handle_storage_source(
 ) -> String {
     let mut source = source.to_owned();
 
-    if source.starts_with(".") {
+    if source.starts_with('.') {
         source = PathBuf::from(source)
             .absolute_from_unit(quadlet_unit_file)
             .to_str()
@@ -850,7 +852,7 @@ fn handle_storage_source(
             .to_string();
     }
 
-    if source.starts_with("/") {
+    if source.starts_with('/') {
         // Absolute path
         service_unit_file.append_entry(UNIT_SECTION, "RequiresMountsFor", &source);
     } else if source.ends_with(".volume") {
@@ -882,7 +884,7 @@ fn handle_storage_source(
 }
 
 fn handle_health(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {
-    let key_arg_map: [[&str;2];11] = [
+    let key_arg_map: [[&str; 2]; 11] = [
         ["HealthCmd", "cmd"],
         ["HealthInterval", "interval"],
         ["HealthOnFailure", "on-failure"],

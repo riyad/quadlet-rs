@@ -119,11 +119,11 @@ impl SystemdUnit {
     }
 
     /// Get an interator of values for all `key`s in all instances of `section`
-    pub(crate) fn lookup_all<'a, S, K>(
-        &'a self,
+    pub(crate) fn lookup_all<S, K>(
+        &self,
         section: S,
         key: K,
-    ) -> impl DoubleEndedIterator<Item = &'a str>
+    ) -> impl DoubleEndedIterator<Item = &str>
     where
         S: Into<String>,
         K: Into<String>,
@@ -157,7 +157,7 @@ impl SystemdUnit {
 
         for key_vals in all_key_vals {
             for assigns in SplitWord::new(key_vals.raw().as_str()) {
-                if let Some((key, value)) = assigns.split_once("=") {
+                if let Some((key, value)) = assigns.split_once('=') {
                     res.insert(key.to_string(), value.to_string());
                 }
             }
@@ -180,8 +180,8 @@ impl SystemdUnit {
     }
 
     /// Get an interator of values for all `key`s in all instances of `section`
-    pub(crate) fn lookup_all_values<'a, S, K>(
-        &'a self,
+    pub(crate) fn lookup_all_values<S, K>(
+        &self,
         section: S,
         key: K,
     ) -> impl DoubleEndedIterator<Item = &EntryValue>
@@ -194,12 +194,11 @@ impl SystemdUnit {
             .unwrap_or_default()
             .data
             .get_all(&key.into())
-            .map(|v| v)
     }
 
     /// Get a Vec of values for all `key`s in all instances of `section`
     /// This mimics quadlet's behavior in that empty values reset the list.
-    pub(crate) fn lookup_all_with_reset<'a, S, K>(&'a self, section: S, key: K) -> Vec<&'a str>
+    pub(crate) fn lookup_all_with_reset<S, K>(&self, section: S, key: K) -> Vec<&str>
     where
         S: Into<String>,
         K: Into<String>,
@@ -224,7 +223,7 @@ impl SystemdUnit {
         })
     }
 
-    pub(crate) fn lookup<'a, S, K>(&'a self, section: S, key: K) -> Option<&'a str>
+    pub(crate) fn lookup<S, K>(&self, section: S, key: K) -> Option<&str>
     where
         S: Into<String>,
         K: Into<String>,
@@ -232,7 +231,7 @@ impl SystemdUnit {
         self.lookup_last(section, key)
     }
 
-    pub(crate) fn lookup_bool<'a, S, K>(&'a self, section: S, key: K) -> Option<bool>
+    pub(crate) fn lookup_bool<S, K>(&self, section: S, key: K) -> Option<bool>
     where
         S: Into<String>,
         K: Into<String>,
@@ -240,8 +239,14 @@ impl SystemdUnit {
         self.lookup_last_value(section, key)
             .map(|v| v.to_bool().unwrap_or(false))
     }
+
+    //TODO: lookup_int() == lookup_i64()
+    //TODO: lookup_u32()
+    //TODO: lookup_uid()
+    //TODO: lookup_gid()
+
     // Get the last value for `key` in all instances of `section`
-    pub(crate) fn lookup_last<'a, S, K>(&'a self, section: S, key: K) -> Option<&'a str>
+    pub(crate) fn lookup_last<S, K>(&self, section: S, key: K) -> Option<&str>
     where
         S: Into<String>,
         K: Into<String>,
@@ -250,8 +255,10 @@ impl SystemdUnit {
             .map(|v| v.unquoted().as_str())
     }
 
+    // TODO: lookup_last_args()
+
     // Get the last value for `key` in all instances of `section`
-    pub(crate) fn lookup_last_value<'a, S, K>(&'a self, section: S, key: K) -> Option<&EntryValue>
+    pub(crate) fn lookup_last_value<S, K>(&self, section: S, key: K) -> Option<&EntryValue>
     where
         S: Into<String>,
         K: Into<String>,
@@ -304,18 +311,18 @@ impl SystemdUnit {
         }
     }
 
-    pub(crate) fn section_entries<'a, S: Into<String>>(
-        &'a self,
+    pub(crate) fn section_entries<S: Into<String>>(
+        &self,
         name: S,
-    ) -> impl DoubleEndedIterator<Item = (&'a str, &'a str)> {
+    ) -> impl DoubleEndedIterator<Item = (&str, &str)> {
         self.section_entry_values(name)
             .map(|(k, v)| (k, v.unquoted().as_str()))
     }
 
-    pub(crate) fn section_entry_values<'a, S: Into<String>>(
-        &'a self,
+    pub(crate) fn section_entry_values<S: Into<String>>(
+        &self,
         name: S,
-    ) -> impl DoubleEndedIterator<Item = (&'a str, &EntryValue)> {
+    ) -> impl DoubleEndedIterator<Item = (&str, &EntryValue)> {
         self.sections
             .get(&name.into())
             .unwrap_or_default()
@@ -372,17 +379,17 @@ impl SystemdUnit {
         }
 
         // ... and append a "new" last value
-        entries.data.append(key.into(), value);
+        entries.data.append(key, value);
     }
 
     /// Write to a writer
     pub(crate) fn write_to<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
         for (section, entries) in &self.sections {
-            write!(writer, "[{}]\n", section)?;
+            writeln!(writer, "[{}]", section)?;
             for (k, v) in &entries.data {
-                write!(writer, "{}={}\n", k, v.raw())?;
+                writeln!(writer, "{}={}", k, v.raw())?;
             }
-            write!(writer, "\n")?;
+            writeln!(writer)?;
         }
 
         Ok(())
@@ -394,16 +401,16 @@ impl ToString for SystemdUnit {
         let mut res = String::new();
 
         for (section, entries) in &self.sections {
-            res.push_str("[");
+            res.push('[');
             res.push_str(section);
             res.push_str("]\n");
             for (k, v) in &entries.data {
                 res.push_str(k);
-                res.push_str("=");
+                res.push('=');
                 res.push_str(v.raw());
-                res.push_str("\n");
+                res.push('\n');
             }
-            res.push_str("\n");
+            res.push('\n');
         }
 
         res

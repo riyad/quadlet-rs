@@ -72,7 +72,7 @@ impl PodmanCommand {
         podman
     }
 
-    pub(crate) fn to_escaped_string(&mut self) -> String {
+    pub(crate) fn to_escaped_string(&self) -> String {
         quote_words(self.args.iter().map(|s| s.as_str()))
     }
 }
