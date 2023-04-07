@@ -1,4 +1,5 @@
 use std::env;
+use std::os::unix::prelude::OsStrExt;
 use std::path::{Path, PathBuf};
 
 use crate::systemd_unit::SystemdUnit;
@@ -7,11 +8,13 @@ pub(crate) trait PathBufExt<T> {
     fn absolute_from(&self, new_root: &Path) -> T;
     fn absolute_from_unit(&self, unit_file: &SystemdUnit) -> T;
     fn cleaned(&self) -> T;
+    fn starts_with_systemd_specifier(&self) -> bool;
 }
 
 impl PathBufExt<PathBuf> for PathBuf {
     fn absolute_from(&self, new_root: &Path) -> PathBuf {
-        if !self.is_absolute() {
+        // When the path starts with a Systemd specifier do not resolve what looks like a relative address
+        if !self.starts_with_systemd_specifier() && !self.is_absolute() {
             if !new_root.as_os_str().is_empty() {
                 return new_root.join(self).cleaned();
             } else {
@@ -60,6 +63,25 @@ impl PathBufExt<PathBuf> for PathBuf {
         }
 
         normalized
+    }
+
+    /// Systemd Specifiers start with % with the exception of %%
+    fn starts_with_systemd_specifier(&self) -> bool {
+        if self.as_os_str().len() <= 1 {
+            return false;
+        }
+        // self has length of at least 2
+
+        // if first component has length of 2, starts with %, but is not %%
+        if self.components().next().unwrap().as_os_str().len() == 2 {
+            if self.as_os_str().as_bytes().starts_with("%%".as_bytes()) {
+                return false;
+            } else if self.as_os_str().as_bytes().starts_with("%".as_bytes()) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
 
@@ -359,5 +381,30 @@ mod tests {
 
         // TODO: test cases from https://pkg.go.dev/path/filepath#Dir
         // TODO: test cases from https://pkg.go.dev/path/filepath#Clean
+    }
+
+    mod starts_with_systemd_specifier {
+        use super::*;
+
+        #[test]
+        fn test_cases() {
+            let inputs = vec![
+                ("", false),
+                ("/", false),
+                ("%", false),
+                ("%%", false),
+                ("%h", true),
+                ("%%/", false),
+                ("%t/todo.txt", true),
+                ("%abc/todo.txt", false),
+                ("/foo/bar/baz.js", false),
+                ("../todo.txt", false),
+            ];
+
+            for input in inputs {
+                let path = PathBuf::from(input.0);
+                assert_eq!(path.starts_with_systemd_specifier(), input.1, "{path:?}");
+            }
+        }
     }
 }
