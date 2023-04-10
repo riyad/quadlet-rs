@@ -446,6 +446,8 @@ fn convert_container(
 
     handle_user_remap(container, CONTAINER_SECTION, &mut podman, is_user, true)?;
 
+    handle_user_ns(container, CONTAINER_SECTION, &mut podman);
+
     let volumes: Vec<&str> = container.lookup_all(CONTAINER_SECTION, "Volume").collect();
     for volume in volumes {
         let parts: Vec<&str> = volume.split(':').collect();
@@ -607,6 +609,11 @@ fn handle_user_remap(
     is_user: bool,
     support_manual: bool,
 ) -> Result<(), ConversionError> {
+    // ignore Remap keys if UserNS is set
+    if unit_file.lookup(section, "UserNS").is_some() {
+        return Ok(());
+    }
+
     let uid_maps: Vec<String> = unit_file.lookup_all_strv(section, "RemapUid").collect();
     let gid_maps: Vec<String> = unit_file.lookup_all_strv(section, "RemapGid").collect();
     let remap_users = unit_file.lookup_last(section, "RemapUsers");
@@ -699,6 +706,15 @@ fn handle_user_remap(
     }
 
     Ok(())
+}
+
+fn handle_user_ns(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {
+    if let Some(userns) = unit_file.lookup(section, "UserNS") {
+        if !userns.is_empty() {
+            podman.add("--userns");
+            podman.add(userns);
+        }
+    }
 }
 
 fn add_networks(
@@ -978,6 +994,8 @@ fn convert_kube(kube: &SystemdUnit, is_user: bool) -> Result<SystemdUnit, Conver
     handle_log_driver(kube, KUBE_SECTION, &mut podman_start);
 
     handle_user_remap(kube, KUBE_SECTION, &mut podman_start, is_user, false)?;
+
+    handle_user_ns(kube, KUBE_SECTION, &mut podman_start);
 
     add_networks(kube, KUBE_SECTION, &mut service, &mut podman_start)?;
 

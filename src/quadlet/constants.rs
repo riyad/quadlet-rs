@@ -58,10 +58,10 @@ pub static SUPPORTED_CONTAINER_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| 
         "PodmanArgs",
         "PublishPort",
         "ReadOnly",
-        "RemapGid",
-        "RemapUid",
-        "RemapUidSize",
-        "RemapUsers",
+        "RemapGid",     // deprecated, use UserNS instead
+        "RemapUid",     // deprecated, use UserNS instead
+        "RemapUidSize", // deprecated, use UserNS instead
+        "RemapUsers",   // deprecated, use UserNS instead
         "Rootfs",
         "RunInit",
         "SeccompProfile",
@@ -72,6 +72,7 @@ pub static SUPPORTED_CONTAINER_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| 
         "Secret",
         "Timezone",
         "User",
+        "UserNS",
         "VolatileTmp",
         "Volume",
     ];
@@ -89,10 +90,11 @@ pub static SUPPORTED_KUBE_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
         "LogDriver",
         "Network",
         "PublishPort",
-        "RemapGid",
-        "RemapUid",
-        "RemapUidSize",
-        "RemapUsers",
+        "RemapGid",     // deprecated, use UserNS instead
+        "RemapUid",     // deprecated, use UserNS instead
+        "RemapUidSize", // deprecated, use UserNS instead
+        "RemapUsers",   // deprecated, use UserNS instead
+        "UserNS",
         "Yaml",
     ];
 
