@@ -5,13 +5,12 @@ mod podman_command;
 
 use self::logger::*;
 use crate::systemd_unit;
-use crate::systemd_unit::{SplitWord, SystemdUnit};
+use crate::systemd_unit::SystemdUnit;
 
 pub(crate) use self::constants::*;
 pub(crate) use self::path_buf_ext::*;
 pub(crate) use self::podman_command::*;
 
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::io;

@@ -57,7 +57,7 @@ impl<'a> Parser<'a> {
         ParseError {
             line: self.line,
             col: self.column,
-            msg: msg,
+            msg,
         }
     }
 

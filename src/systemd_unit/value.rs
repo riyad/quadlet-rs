@@ -60,7 +60,7 @@ impl EntryValue {
         let raw = raw.into();
         Ok(Self {
             unquoted: unquote_value(raw.as_str())?,
-            raw: raw,
+            raw,
         })
     }
 
