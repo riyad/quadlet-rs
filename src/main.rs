@@ -46,7 +46,8 @@ Options:
     --dry-run      Run in dry-run mode printing debug information
     --no-kmsg-log  Don't log to kmsg
     --user         Run as systemd user
-    -v,--verbose   Print debug information"
+    -v,--verbose   Print debug information
+    --version      Print version information and exit"
     );
 }
 
@@ -1415,17 +1416,17 @@ fn main() {
         }
     };
 
+    // short circuit
+    if cfg.version {
+        println!("quadlet-rs {}", QUADLET_VERSION);
+        process::exit(0);
+    }
+
     if cfg.verbose || cfg.dry_run {
         logger::enable_debug();
     }
     if cfg.no_kmsg || cfg.dry_run {
         logger::disable_kmsg();
-    }
-
-    // short circuit
-    if cfg.version {
-        println!("quadlet-rs {}", QUADLET_VERSION);
-        process::exit(0);
     }
 
     if !cfg.dry_run {
