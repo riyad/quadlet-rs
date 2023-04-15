@@ -847,11 +847,9 @@ fn handle_publish_ports(
 }
 
 fn handle_log_driver(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {
-    let log_driver = unit_file
-        .lookup_last(section, "LogDriver")
-        .unwrap_or(DEFAULT_LOG_DRIVER);
-
-    podman.add_slice(&["--log-driver", log_driver]);
+    if let Some(log_driver) = unit_file.lookup_last(section, "LogDriver") {
+        podman.add_slice(&["--log-driver", log_driver]);
+    }
 }
 
 fn handle_storage_source(

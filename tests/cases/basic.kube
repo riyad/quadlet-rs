@@ -3,9 +3,6 @@
 ## assert-podman-final-args-regex .*/podman_test.*/quadlet/deployment.yml
 ## assert-podman-args "--replace"
 ## assert-podman-args "--service-container=true"
-# FIXME: use `passthrough` once we can rely on Podman v4.0.0 or newer being present
-## assert-podman-args "--log-driver" "journald"
-# assert-podman-args "--log-driver" "passthrough"
 ## assert-podman-stop-args "kube"
 ## assert-podman-stop-args "down"
 ## assert-podman-stop-final-args-regex .*/podman_test.*/quadlet/deployment.yml
