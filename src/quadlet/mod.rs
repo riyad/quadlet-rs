@@ -27,6 +27,7 @@ pub(crate) enum ConversionError {
     InvalidRemapUsers(String),
     InvalidServiceType(String),
     InvalidSubnet(String),
+    InvalidTmpfs(String),
     Io(io::Error),
     Parsing(systemd_unit::Error),
     UnknownKey(String),
@@ -45,6 +46,7 @@ impl Display for ConversionError {
             | ConversionError::InvalidRemapUsers(msg)
             | ConversionError::InvalidServiceType(msg)
             | ConversionError::InvalidSubnet(msg)
+            | ConversionError::InvalidTmpfs(msg)
             | ConversionError::UnknownKey(msg)
             | ConversionError::YamlMissing(msg) => {
                 write!(f, "{msg}")

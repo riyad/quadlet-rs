@@ -449,6 +449,15 @@ fn convert_container(
 
     handle_user_ns(container, CONTAINER_SECTION, &mut podman);
 
+    for tmpfs in container.lookup_all(CONTAINER_SECTION, "Tmpfs") {
+        if tmpfs.chars().filter(|c| *c == ':').count() > 1 {
+            return Err(ConversionError::InvalidTmpfs(format!("invalid tmpfs format {tmpfs:?}")))
+        }
+
+        podman.add("--tmpfs");
+        podman.add(tmpfs);
+    }
+
     let volumes: Vec<&str> = container.lookup_all(CONTAINER_SECTION, "Volume").collect();
     for volume in volumes {
         let parts: Vec<&str> = volume.split(':').collect();

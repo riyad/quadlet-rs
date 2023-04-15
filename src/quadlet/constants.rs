@@ -66,6 +66,7 @@ pub static SUPPORTED_CONTAINER_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| 
         "SecurityLabelType",
         "Secret",
         "Timezone",
+        "Tmpfs",
         "User",
         "UserNS",
         "VolatileTmp",
