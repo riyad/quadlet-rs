@@ -9,6 +9,7 @@ edition = "2021"
 dirs = "5.0"
 once_cell = "1.17.1"
 ordered-multimap = "0.6"
+users = { version = "0.11", default_features = false }  # otherwise pulls in `log`
 
 # optimize with tipps from https://github.com/johnthagen/min-sized-rust
 [profile.release]

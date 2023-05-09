@@ -18,6 +18,7 @@ use std::io::{self, BufWriter, Write};
 use std::os;
 use std::path::{Path, PathBuf};
 use std::process;
+use users;
 
 static SUPPORTED_EXTENSIONS: Lazy<[&OsStr; 4]> =
     Lazy::new(|| ["kube", "container", "network", "volume"].map(OsStr::new));
@@ -96,17 +97,26 @@ fn parse_args(args: Vec<String>) -> Result<Config, String> {
 // This returns the directories where we read quadlet-supported unit files from
 // For system generators these are in /usr/share/containers/systemd (for distro files)
 // and /etc/containers/systemd (for sysadmin files).
-// For user generators these live in $XDG_CONFIG_HOME/containers/systemd
-fn unit_search_dirs(is_user: bool) -> Vec<PathBuf> {
+// For user generators these can live in /etc/containers/systemd/users, /etc/containers/systemd/users/$UID, and $XDG_CONFIG_HOME/containers/systemd
+fn unit_search_dirs(rootless: bool) -> Vec<PathBuf> {
     // Allow overdiding source dir, this is mainly for the CI tests
     if let Ok(unit_dirs_env) = std::env::var("QUADLET_UNIT_DIRS") {
-        let unit_dirs_env: Vec<PathBuf> = unit_dirs_env.split(':').map(PathBuf::from).collect();
+        let unit_dirs_env: Vec<PathBuf> = env::split_paths(&unit_dirs_env)
+            .map(PathBuf::from)
+            .collect();
         return unit_dirs_env;
     }
 
-    let mut dirs: Vec<PathBuf> = vec![];
-    if is_user {
-        dirs.push(dirs::config_dir().unwrap().join("containers/systemd"))
+    let mut dirs: Vec<PathBuf> = Vec::with_capacity(3);
+    if rootless {
+        let config_dir = dirs::config_dir().expect("could not determine config dir");
+        dirs.push(config_dir.join("containers/systemd"));
+        dirs.push(
+            PathBuf::from(UNIT_DIR_ADMIN)
+                .join("users")
+                .join(users::get_current_uid().to_string()),
+        );
+        dirs.push(PathBuf::from(UNIT_DIR_ADMIN).join("users"));
     } else {
         dirs.push(PathBuf::from(UNIT_DIR_ADMIN));
         dirs.push(PathBuf::from(UNIT_DIR_DISTRO));
@@ -451,7 +461,9 @@ fn convert_container(
 
     for tmpfs in container.lookup_all(CONTAINER_SECTION, "Tmpfs") {
         if tmpfs.chars().filter(|c| *c == ':').count() > 1 {
-            return Err(ConversionError::InvalidTmpfs(format!("invalid tmpfs format {tmpfs:?}")))
+            return Err(ConversionError::InvalidTmpfs(format!(
+                "invalid tmpfs format {tmpfs:?}"
+            )));
         }
 
         podman.add("--tmpfs");
@@ -1729,6 +1741,42 @@ mod tests {
                     ..Default::default()
                 })
             );
+        }
+    }
+
+    mod unit_search_dirs {
+        use super::*;
+
+        #[test]
+        fn rootful() {
+            assert_eq!(
+                unit_search_dirs(false),
+                [
+                    "/etc/containers/systemd",
+                    "/usr/share/containers/systemd",
+                ].iter().map(PathBuf::from).collect::<Vec<_>>()
+            )
+        }
+
+        #[test]
+        fn rootless() {
+            assert_eq!(
+                unit_search_dirs(true),
+                [
+                    format!(
+                        "{}/containers/systemd",
+                        dirs::config_dir()
+                            .expect("could not determine config dir")
+                            .to_str()
+                            .expect("home dir ist not valid UTF-8 string")
+                    ),
+                    format!("/etc/containers/systemd/users/{}", users::get_current_uid()),
+                    format!("/etc/containers/systemd/users"),
+                ]
+                .iter()
+                .map(PathBuf::from)
+                .collect::<Vec<_>>()
+            )
         }
     }
 }
