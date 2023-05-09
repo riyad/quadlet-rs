@@ -391,7 +391,18 @@ fn convert_container(
     let devices: Vec<String> = container
         .lookup_all_strv(CONTAINER_SECTION, "AddDevice")
         .collect();
-    for device in devices {
+    for mut device in devices {
+        if device.starts_with('-') {
+            // ignore device if it doesn't exist
+            device = device.strip_prefix('-').unwrap().into();
+            let path = match device.split_once(':') {
+                Some((path, _)) => path,
+                None => &device,
+            };
+            if !PathBuf::from(path).exists() {
+                continue;
+            }
+        }
         podman.add(format!("--device={device}"))
     }
 
