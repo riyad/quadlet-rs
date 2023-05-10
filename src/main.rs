@@ -608,6 +608,11 @@ fn convert_container(
 
     handle_health(container, CONTAINER_SECTION, &mut podman);
 
+    if let Some(hostname) = container.lookup(CONTAINER_SECTION, "HostName") {
+        podman.add("--hostname");
+        podman.add(hostname);
+    }
+
     let mut podman_args: Vec<String> = container
         .lookup_all_args(CONTAINER_SECTION, "PodmanArgs")
         .collect();

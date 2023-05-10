@@ -41,6 +41,7 @@ pub static SUPPORTED_CONTAINER_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| 
         "HealthStartupSuccess",
         "HealthStartupTimeout",
         "HealthTimeout",
+        "HostName",
         "Image",
         "IP",
         "IP6",
