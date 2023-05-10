@@ -1,6 +1,6 @@
 [Container]
 Image=localhost/imagename
-## assert-podman-args "--health-cmd" "\"hello world\""
+## assert-podman-args "--health-cmd" "hello world"
 HealthCmd="hello world"
 ## assert-podman-args "--health-interval" "1m"
 HealthInterval=1m
@@ -12,7 +12,7 @@ HealthRetries=9
 HealthStartPeriod=2m3s
 ## assert-podman-args "--health-timeout" "20s"
 HealthTimeout=20s
-## assert-podman-args "--health-startup-cmd" "'[\"hello\", world]'"
+## assert-podman-args "--health-startup-cmd" "[\"hello\", world]"
 HealthStartupCmd='["hello", world]'
 ## assert-podman-args "--health-startup-interval" "5m"
 HealthStartupInterval=5m
