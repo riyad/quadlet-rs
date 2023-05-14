@@ -1,7 +1,8 @@
 mod constants;
+pub(crate) mod convert;
 pub(crate) mod logger;
 mod path_buf_ext;
-mod podman_command;
+pub(crate) mod podman_command;
 
 use self::logger::*;
 use crate::systemd_unit;
@@ -9,7 +10,6 @@ use crate::systemd_unit::SystemdUnit;
 
 pub(crate) use self::constants::*;
 pub(crate) use self::path_buf_ext::*;
-pub(crate) use self::podman_command::*;
 
 use std::collections::HashSet;
 use std::fmt::Display;
@@ -69,118 +69,6 @@ impl From<systemd_unit::Error> for ConversionError {
     fn from(e: systemd_unit::Error) -> Self {
         ConversionError::Parsing(e)
     }
-}
-
-pub(crate) fn quad_is_port_range(port: &str) -> bool {
-    // NOTE: We chose to implement a parser ouselves, because pulling in the regex crate just for this
-    // increases the binary size by at least 0.5M. :/
-    // But if we were to use the regex crate, all this function does is this:
-    // const RE: Lazy<Regex> = Lazy::new(|| Regex::new("\\d+(-\\d+)?(/udp|/tcp)?$").unwrap());
-    // return RE.is_match(port)
-
-    if port.is_empty() {
-        return false;
-    }
-
-    let mut chars = port.chars();
-    let mut cur: Option<char>;
-    let mut digits; // count how many digits we've read
-
-    // necessary "\\d+" part
-    digits = 0;
-    loop {
-        cur = chars.next();
-        match cur {
-            Some(c) if c.is_ascii_digit() => digits += 1,
-            // start of next part
-            Some('-' | '/') => break,
-            // illegal character
-            Some(_) => return false,
-            // string has ended, just make sure we've seen at least one digit
-            None => return digits > 0,
-        }
-    }
-
-    // parse optional "(-\\d+)?" part
-    if cur.unwrap() == '-' {
-        digits = 0;
-        loop {
-            cur = chars.next();
-            match cur {
-                Some(c) if c.is_ascii_digit() => digits += 1,
-                // start of next part
-                Some('/') => break,
-                // illegal character
-                Some(_) => return false,
-                // string has ended, just make sure we've seen at least one digit
-                None => return digits > 0,
-            }
-        }
-    }
-
-    // parse optional "(/udp|/tcp)?" part
-    let mut tcp = 0; // count how many characters we've read
-    let mut udp = 0; // count how many characters we've read
-    loop {
-        cur = chars.next();
-        match cur {
-            // parse "tcp"
-            Some('t') if tcp == 0 && udp == 0 => tcp += 1,
-            Some('c') if tcp == 1 => tcp += 1,
-            Some('p') if tcp == 2 => break,
-            // parse "udp"
-            Some('u') if udp == 0 && tcp == 0 => udp += 1,
-            Some('d') if udp == 1 => udp += 1,
-            Some('p') if udp == 2 => break,
-            // illegal character
-            Some(_) => return false,
-            // string has ended, just after '/' or in the middle of "tcp" or "udp"
-            None => return false,
-        }
-    }
-
-    // make sure we're at the end of the string
-    chars.next().is_none()
-}
-
-/// Parses arguments to podman-run's `--publish` option.
-/// see also the documentation for the `PublishPort` field.
-///
-/// NOTE: the last part will also include the protocol if specified
-pub(crate) fn quad_split_ports(ports: &str) -> Vec<String> {
-    let mut parts: Vec<String> = Vec::new();
-
-    let mut next_part = String::new();
-    let mut chars = ports.chars();
-    while let Some(c) = chars.next() {
-        let c = c;
-        match c {
-            '[' => {
-                // IPv6 contain ':' characters, hence they are enclosed with '[...]'
-                // so we consume all characters until ']' (including ':') for this part
-                next_part.push(c);
-                while let Some(c) = chars.next() {
-                    next_part.push(c);
-                    if c == ']' {
-                        break;
-                    }
-                }
-            }
-            ':' => {
-                // assume all ':' characters are boundaries that start a new part
-                parts.push(next_part);
-                next_part = String::new();
-                continue;
-            }
-            _ => {
-                next_part.push(c);
-            }
-        }
-    }
-    // don't forget the last part
-    parts.push(next_part);
-
-    parts
 }
 
 pub(crate) fn check_for_unknown_keys(
@@ -262,59 +150,6 @@ pub(crate) fn warn_if_ambiguous_image_name(container: &SystemdUnit) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    mod quad_split_ports {
-        use super::*;
-
-        #[test]
-        fn with_empty() {
-            let input = "";
-
-            assert_eq!(quad_split_ports(input), vec![""],);
-        }
-
-        #[test]
-        fn with_only_port() {
-            let input = "123";
-
-            assert_eq!(quad_split_ports(input), vec!["123"],);
-        }
-
-        #[test]
-        fn with_ipv4_and_port() {
-            let input = "1.2.3.4:567";
-
-            assert_eq!(quad_split_ports(input), vec!["1.2.3.4", "567"],);
-        }
-
-        #[test]
-        fn with_ipv6_and_port() {
-            let input = "[::]:567";
-
-            assert_eq!(quad_split_ports(input), vec!["[::]", "567"],);
-        }
-
-        #[test]
-        fn with_host_and_container_ports() {
-            let input = "123:567";
-
-            assert_eq!(quad_split_ports(input), vec!["123", "567"],);
-        }
-
-        #[test]
-        fn with_ipv4_host_and_container_ports() {
-            let input = "0.0.0.0:123:567";
-
-            assert_eq!(quad_split_ports(input), vec!["0.0.0.0", "123", "567"],);
-        }
-
-        #[test]
-        fn with_ipv6_empty_host_container_port_and_protocol() {
-            let input = "[1:2:3:4::]::567/tcp";
-
-            assert_eq!(quad_split_ports(input), vec!["[1:2:3:4::]", "", "567/tcp"],);
-        }
-    }
 
     mod is_unambiguous_name {
         use super::*;

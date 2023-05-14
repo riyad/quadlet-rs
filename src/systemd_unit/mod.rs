@@ -1423,8 +1423,6 @@ KeyOne=value 3";
         }
 
         mod round_trip {
-            use crate::quadlet::PodmanCommand;
-
             use super::*;
 
             #[test]
@@ -1457,6 +1455,8 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
 
             #[test]
             fn with_word_splitting_and_setting_constructed_command() {
+                use crate::quadlet::podman_command::PodmanCommand;
+
                 let input = "[Service]
 ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
 
