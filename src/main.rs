@@ -72,11 +72,11 @@ fn parse_args(args: Vec<String>) -> Result<Config, String> {
         iter.next();
         loop {
             match iter.next().map(String::as_str) {
-                Some("--dry-run") => cfg.dry_run = true,
-                Some("--no-kmsg-log") => cfg.no_kmsg = true,
-                Some("--user") => cfg.is_user = true,
-                Some("--verbose" | "-v") => cfg.verbose = true,
-                Some("--version") => {
+                Some("-dry-run" | "--dry-run") => cfg.dry_run = true,
+                Some("-no-kmsg-log" | "--no-kmsg-log") => cfg.no_kmsg = true,
+                Some("-user" | "--user") => cfg.is_user = true,
+                Some("-verbose" | "--verbose" | "-v") => cfg.verbose = true,
+                Some("-version" | "--version") => {
                     cfg.version = true;
                     // short circuit
                     break;
@@ -1631,11 +1631,10 @@ mod tests {
         }
 
         #[test]
-        #[ignore = "hopefully this doesn't need to make it into a release"]
-        fn accepts_borked_dry_run_for_quadlet_compat() {
+        fn accepts_single_dash_dry_run_for_quadlet_compat() {
             let args: Vec<String> = vec![
                 "./quadlet-rs".into(),
-                "-dryrun".into(),
+                "-dry-run".into(),
                 "./output_dir".into(),
             ];
 
@@ -1668,6 +1667,24 @@ mod tests {
         }
 
         #[test]
+        fn accepts_single_dash_no_kmsg_log_for_quadlet_compat() {
+            let args: Vec<String> = vec![
+                "./quadlet-rs".into(),
+                "-no-kmsg-log".into(),
+                "./output_dir".into(),
+            ];
+
+            assert_eq!(
+                parse_args(args),
+                Ok(Config {
+                    no_kmsg: true,
+                    output_path: "./output_dir".into(),
+                    ..Default::default()
+                })
+            );
+        }
+
+        #[test]
         fn accepts_user() {
             let args: Vec<String> = vec![
                 "./quadlet-rs".into(),
@@ -1686,10 +1703,46 @@ mod tests {
         }
 
         #[test]
+        fn accepts_single_dash_user_for_quadlet_compat() {
+            let args: Vec<String> = vec![
+                "./quadlet-rs".into(),
+                "-user".into(),
+                "./output_dir".into(),
+            ];
+
+            assert_eq!(
+                parse_args(args),
+                Ok(Config {
+                    is_user: true,
+                    output_path: "./output_dir".into(),
+                    ..Default::default()
+                })
+            );
+        }
+
+        #[test]
         fn accepts_verbose() {
             let args: Vec<String> = vec![
                 "./quadlet-rs".into(),
                 "--verbose".into(),
+                "./output_dir".into(),
+            ];
+
+            assert_eq!(
+                parse_args(args),
+                Ok(Config {
+                    verbose: true,
+                    output_path: "./output_dir".into(),
+                    ..Default::default()
+                })
+            );
+        }
+
+        #[test]
+        fn accepts_single_dash_verbose_for_quadlet_compat() {
+            let args: Vec<String> = vec![
+                "./quadlet-rs".into(),
+                "-verbose".into(),
                 "./output_dir".into(),
             ];
 
