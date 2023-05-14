@@ -334,9 +334,12 @@ class QuadletTestCase(unittest.TestCase):
             if use_valgrind:
                 cmd = ["valgrind", "--error-exitcode=1", "--leak-check=full", "--show-possibly-lost=no", "--errors-for-leak-kinds=definite"] + cmd
 
-            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env = {
+            env = {
                 "QUADLET_UNIT_DIRS": indir
-            })
+            }
+            if os.getenv('PODMAN') is not None:
+                env['PODMAN'] = os.getenv('PODMAN')
+            res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
 
             self.stdout = res.stdout.decode('utf8')
             # The generator should never fail, just log warnings
