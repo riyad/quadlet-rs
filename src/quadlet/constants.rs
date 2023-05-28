@@ -84,6 +84,7 @@ pub static SUPPORTED_CONTAINER_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| 
 pub static SUPPORTED_KUBE_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     let keys = [
         "ConfigMap",
+        "ExitCodePropagation",
         "LogDriver",
         "Network",
         "PodmanArgs",

@@ -532,6 +532,12 @@ pub(crate) fn from_kube_unit(
         "--service-container=true",
     ]);
 
+    if let Some(ecp) = kube.lookup(KUBE_SECTION, "ExitCodePropagation") {
+        if !ecp.is_empty() {
+            podman_start.add(format!("--service-exit-code-propagation={ecp}"));
+        }
+    }
+
     handle_log_driver(kube, KUBE_SECTION, &mut podman_start);
 
     handle_user_remap(kube, KUBE_SECTION, &mut podman_start, is_user, false)?;
