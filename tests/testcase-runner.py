@@ -251,6 +251,15 @@ class QuadletTestCase(unittest.TestCase):
         def assert_stop_podman_final_args_regex(*args):
             return assert_podman_final_args_regex(*args, '_Service_ExecStop')
 
+        def assert_stop_post_podman_args(*args):
+            return assert_podman_args(*args, '_Service_ExecStopPost')
+
+        def assert_stop_post_podman_final_args(*args):
+            return assert_podman_final_args(*args, '_Service_ExecStopPost')
+
+        def assert_stop_post_podman_final_args_regex(*args):
+            return assert_podman_final_args_regex(*args, '_Service_ExecStopPost')
+
         def assert_symlink(args, testcase):
             if len(args) != 2:
                 return False
@@ -283,6 +292,9 @@ class QuadletTestCase(unittest.TestCase):
             "assert-podman-stop-args": assert_stop_podman_args,
             "assert-podman-stop-final-args": assert_stop_podman_final_args,
             "assert-podman-stop-final-args-regex": assert_stop_podman_final_args_regex,
+            "assert-podman-stop-post-args": assert_stop_post_podman_args,
+            "assert-podman-stop-post-final-args": assert_stop_post_podman_final_args,
+            "assert-podman-stop-post-final-args-regex": assert_stop_post_podman_final_args_regex,
         }
 
         servicepath = os.path.join(outdir, self.servicename)
@@ -298,6 +310,7 @@ class QuadletTestCase(unittest.TestCase):
         self.sections = parse_unitfile(canonicalize_unitfile(self.outdata))
         self._Service_ExecStart = shlex.split(self.sections.get("Service", {}).get("ExecStart", ["podman"])[0])
         self._Service_ExecStop = shlex.split(self.sections.get("Service", {}).get("ExecStop", ["podman"])[0])
+        self._Service_ExecStopPost = shlex.split(self.sections.get("Service", {}).get("ExecStopPost", ["podman"])[0])
         self.expect_file(self.servicename)
 
         for check in self.checks:

@@ -585,7 +585,7 @@ pub(crate) fn from_kube_unit(
     );
     service.append_entry_value(
         SERVICE_SECTION,
-        "ExecStop",
+        "ExecStopPost",
         EntryValue::try_from_raw(podman_stop.to_escaped_string().as_str())?,
     );
 
