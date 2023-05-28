@@ -86,6 +86,7 @@ pub static SUPPORTED_KUBE_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
         "ConfigMap",
         "LogDriver",
         "Network",
+        "PodmanArgs",
         "PublishPort",
         "RemapGid",     // deprecated, use UserNS instead
         "RemapUid",     // deprecated, use UserNS instead
@@ -113,6 +114,7 @@ pub static SUPPORTED_NETWORK_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
         "IPv6",
         "Label",
         "Options",
+        "PodmanArgs",
         "Subnet",
     ];
 
@@ -130,6 +132,7 @@ pub static SUPPORTED_VOLUME_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
         "Group",
         "Label",
         "Options",
+        "PodmanArgs",
         "Type",
         "User",
     ];

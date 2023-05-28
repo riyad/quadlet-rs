@@ -438,10 +438,7 @@ pub(crate) fn from_container_unit(
         podman.add(hostname);
     }
 
-    let mut podman_args: Vec<String> = container
-        .lookup_all_args(CONTAINER_SECTION, "PodmanArgs")
-        .collect();
-    podman.add_vec(&mut podman_args);
+    handle_podman_args(container, CONTAINER_SECTION, &mut podman);
 
     if !image.is_empty() {
         podman.add(image);
@@ -558,6 +555,8 @@ pub(crate) fn from_kube_unit(
     }
 
     handle_publish_ports(kube, KUBE_SECTION, &mut podman_start)?;
+
+    handle_podman_args(kube, KUBE_SECTION, &mut podman_start);
 
     podman_start.add(
         yaml_path
@@ -700,6 +699,8 @@ pub(crate) fn from_network_unit(network: &SystemdUnit) -> Result<SystemdUnit, Co
     let labels = network.lookup_all_key_val(NETWORK_SECTION, "Label");
     podman.add_labels(&labels);
 
+    handle_podman_args(network, NETWORK_SECTION, &mut podman);
+
     podman.add(&podman_network_name);
 
     service.append_entry_value(
@@ -833,6 +834,9 @@ pub(crate) fn from_volume_unit(volume: &SystemdUnit) -> Result<SystemdUnit, Conv
     }
 
     podman.add_labels(&labels);
+
+    handle_podman_args(volume, VOLUME_SECTION, &mut podman);
+
     podman.add(&podman_volume_name);
 
     service.append_entry_value(
@@ -943,6 +947,16 @@ fn handle_networks(
     }
 
     Ok(())
+}
+
+fn handle_podman_args(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {
+    let mut podman_args: Vec<String> = unit_file
+        .lookup_all_args(section, "PodmanArgs")
+        .collect();
+
+    if !podman_args.is_empty() {
+        podman.add_vec(&mut podman_args);
+    }
 }
 
 fn handle_publish_ports(
