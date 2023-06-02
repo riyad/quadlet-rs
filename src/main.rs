@@ -7,7 +7,6 @@ use self::quadlet::*;
 
 use self::systemd_unit::*;
 
-use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::env;
 use std::ffi::OsStr;
@@ -20,11 +19,10 @@ use std::path::{Path, PathBuf};
 use std::process;
 use users;
 
-static SUPPORTED_EXTENSIONS: Lazy<[&OsStr; 4]> =
-    Lazy::new(|| ["container", "kube", "network", "volume"].map(OsStr::new));
+static SUPPORTED_EXTENSIONS: [&str; 4] = ["container", "kube", "network", "volume"];
 
 const QUADLET_VERSION: &str = "0.2.0-dev";
-const UNIT_DIR_ADMIN: &str  = "/etc/containers/systemd";
+const UNIT_DIR_ADMIN:  &str = "/etc/containers/systemd";
 const UNIT_DIR_DISTRO: &str = "/usr/share/containers/systemd";
 
 #[derive(Debug, Default, PartialEq)]
@@ -134,7 +132,11 @@ fn load_units_from_dir(
         let path = entry.path();
         let name = entry.file_name();
 
-        let extension = path.extension().unwrap_or(OsStr::new(""));
+        let extension = path
+            .extension()
+            .unwrap_or(OsStr::new(""))
+            .to_str()
+            .expect("extension is not valid UTF-8 string");
         if !SUPPORTED_EXTENSIONS.contains(&extension) {
             continue;
         }

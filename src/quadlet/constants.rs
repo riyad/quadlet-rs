@@ -1,13 +1,9 @@
-use std::collections::HashSet;
 use std::env;
 
 use once_cell::sync::Lazy;  // TODO: replace with std::sync::LazyLock once it's stable
 
 pub(crate) const DEFAULT_PODMAN_BINARY: &str = "/usr/bin/podman";
-pub(crate) static PODMAN_BINARY: Lazy<String> = Lazy::new(|| match env::var("PODMAN") {
-    Ok(p) => p,
-    Err(_) => DEFAULT_PODMAN_BINARY.to_owned(),
-});
+pub(crate) static PODMAN_BINARY: Lazy<String> = Lazy::new(|| env::var("PODMAN").unwrap_or(DEFAULT_PODMAN_BINARY.to_owned()));
 
 pub const CONTAINER_SECTION: &str   = "Container";
 pub const KUBE_SECTION: &str        = "Kube";
@@ -18,134 +14,98 @@ pub const X_KUBE_SECTION: &str      = "X-Kube";
 pub const X_NETWORK_SECTION: &str   = "X-Network";
 pub const X_VOLUME_SECTION: &str    = "X-Volume";
 
-pub static SUPPORTED_CONTAINER_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
-    let keys = [
-        "AddCapability",
-        "AddDevice",
-        "Annotation",
-        "ContainerName",
-        "DropCapability",
-        "Environment",
-        "EnvironmentFile",
-        "EnvironmentHost",
-        "Exec",
-        "ExposeHostPort",
-        "Group",
-        "HealthCmd",
-        "HealthInterval",
-        "HealthOnFailure",
-        "HealthRetries",
-        "HealthStartPeriod",
-        "HealthStartupCmd",
-        "HealthStartupInterval",
-        "HealthStartupRetries",
-        "HealthStartupSuccess",
-        "HealthStartupTimeout",
-        "HealthTimeout",
-        "HostName",
-        "Image",
-        "IP",
-        "IP6",
-        "Label",
-        "LogDriver",
-        "Mount",
-        "Network",
-        "NoNewPrivileges",
-        "Notify",
-        "PodmanArgs",
-        "PublishPort",
-        "ReadOnly",
-        "RemapGid",     // deprecated, use UserNS instead
-        "RemapUid",     // deprecated, use UserNS instead
-        "RemapUidSize", // deprecated, use UserNS instead
-        "RemapUsers",   // deprecated, use UserNS instead
-        "Rootfs",
-        "RunInit",
-        "SeccompProfile",
-        "SecurityLabelDisable",
-        "SecurityLabelFileType",
-        "SecurityLabelLevel",
-        "SecurityLabelType",
-        "Secret",
-        "Timezone",
-        "Tmpfs",
-        "User",
-        "UserNS",
-        "VolatileTmp",
-        "Volume",
-    ];
+pub static SUPPORTED_CONTAINER_KEYS: [&str; 53] = [
+    "AddCapability",
+    "AddDevice",
+    "Annotation",
+    "ContainerName",
+    "DropCapability",
+    "Environment",
+    "EnvironmentFile",
+    "EnvironmentHost",
+    "Exec",
+    "ExposeHostPort",
+    "Group",
+    "HealthCmd",
+    "HealthInterval",
+    "HealthOnFailure",
+    "HealthRetries",
+    "HealthStartPeriod",
+    "HealthStartupCmd",
+    "HealthStartupInterval",
+    "HealthStartupRetries",
+    "HealthStartupSuccess",
+    "HealthStartupTimeout",
+    "HealthTimeout",
+    "HostName",
+    "Image",
+    "IP",
+    "IP6",
+    "Label",
+    "LogDriver",
+    "Mount",
+    "Network",
+    "NoNewPrivileges",
+    "Notify",
+    "PodmanArgs",
+    "PublishPort",
+    "ReadOnly",
+    "RemapGid",     // deprecated, use UserNS instead
+    "RemapUid",     // deprecated, use UserNS instead
+    "RemapUidSize", // deprecated, use UserNS instead
+    "RemapUsers",   // deprecated, use UserNS instead
+    "Rootfs",
+    "RunInit",
+    "SeccompProfile",
+    "SecurityLabelDisable",
+    "SecurityLabelFileType",
+    "SecurityLabelLevel",
+    "SecurityLabelType",
+    "Secret",
+    "Timezone",
+    "Tmpfs",
+    "User",
+    "UserNS",
+    "VolatileTmp",
+    "Volume",
+];
 
-    let mut set = HashSet::with_capacity(keys.len());
-    for k in keys {
-        set.insert(k);
-    }
-    set.shrink_to_fit();
-    set
-});
+pub static SUPPORTED_KUBE_KEYS: [&str; 12] = [
+    "ConfigMap",
+    "ExitCodePropagation",
+    "LogDriver",
+    "Network",
+    "PodmanArgs",
+    "PublishPort",
+    "RemapGid",     // deprecated, use UserNS instead
+    "RemapUid",     // deprecated, use UserNS instead
+    "RemapUidSize", // deprecated, use UserNS instead
+    "RemapUsers",   // deprecated, use UserNS instead
+    "UserNS",
+    "Yaml",
+];
 
-pub static SUPPORTED_KUBE_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
-    let keys = [
-        "ConfigMap",
-        "ExitCodePropagation",
-        "LogDriver",
-        "Network",
-        "PodmanArgs",
-        "PublishPort",
-        "RemapGid",     // deprecated, use UserNS instead
-        "RemapUid",     // deprecated, use UserNS instead
-        "RemapUidSize", // deprecated, use UserNS instead
-        "RemapUsers",   // deprecated, use UserNS instead
-        "UserNS",
-        "Yaml",
-    ];
+pub static SUPPORTED_NETWORK_KEYS: [&str; 11] = [
+    "DisableDNS",
+    "Driver",
+    "Gateway",
+    "Internal",
+    "IPAMDriver",
+    "IPRange",
+    "IPv6",
+    "Label",
+    "Options",
+    "PodmanArgs",
+    "Subnet",
+];
 
-    let mut set = HashSet::with_capacity(keys.len());
-    for k in keys {
-        set.insert(k);
-    }
-    set.shrink_to_fit();
-    set
-});
-
-pub static SUPPORTED_NETWORK_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
-    let keys = [
-        "DisableDNS",
-        "Driver",
-        "Gateway",
-        "Internal",
-        "IPAMDriver",
-        "IPRange",
-        "IPv6",
-        "Label",
-        "Options",
-        "PodmanArgs",
-        "Subnet",
-    ];
-
-    let mut set = HashSet::with_capacity(keys.len());
-    for k in keys {
-        set.insert(k);
-    }
-    set.shrink_to_fit();
-    set
-});
-
-pub static SUPPORTED_VOLUME_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
-    let keys = [
-        "Copy",
-        "Device",
-        "Group",
-        "Label",
-        "Options",
-        "PodmanArgs",
-        "Type",
-        "User",
-    ];
-
-    let mut set = HashSet::with_capacity(keys.len());
-    for k in keys {
-        set.insert(k);
-    }
-    set.shrink_to_fit();
-    set
-});
+pub static SUPPORTED_VOLUME_KEYS: [&str; 8] = [
+    "Copy",
+    "Device",
+    "Group",
+    "Label",
+    "Options",
+    "PodmanArgs",
+    "Type",
+    "User",
+];

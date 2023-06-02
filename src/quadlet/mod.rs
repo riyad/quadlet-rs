@@ -11,7 +11,6 @@ use crate::systemd_unit::SystemdUnit;
 pub(crate) use self::constants::*;
 pub(crate) use self::path_buf_ext::*;
 
-use std::collections::HashSet;
 use std::fmt::Display;
 use std::io;
 
@@ -74,10 +73,10 @@ impl From<systemd_unit::Error> for ConversionError {
 pub(crate) fn check_for_unknown_keys(
     unit: &SystemdUnit,
     group_name: &str,
-    supported_keys: &HashSet<&'static str>,
+    supported_keys: &[&str],
 ) -> Result<(), ConversionError> {
     for (key, _) in unit.section_entries(group_name) {
-        if !supported_keys.contains(key) {
+        if !supported_keys.contains(&key) {
             return Err(ConversionError::UnknownKey(format!(
                 "unsupported key '{key}' in group '{group_name}' in {:?}",
                 unit.path()
