@@ -11,6 +11,7 @@ use crate::systemd_unit::SystemdUnit;
 pub(crate) use self::constants::*;
 pub(crate) use self::path_buf_ext::*;
 
+use std::env;
 use std::fmt::Display;
 use std::io;
 
@@ -85,6 +86,10 @@ pub(crate) fn check_for_unknown_keys(
     }
 
     Ok(())
+}
+
+pub fn get_podman_binary() -> String {
+    env::var("PODMAN").unwrap_or(DEFAULT_PODMAN_BINARY.to_owned())
 }
 
 fn is_image_id(image_name: &str) -> bool {

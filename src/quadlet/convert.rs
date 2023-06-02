@@ -88,7 +88,7 @@ pub(crate) fn from_container_unit(
     service.append_entry(
         SERVICE_SECTION,
         "ExecStop",
-        format!("{} rm -f -i --cidfile=%t/%N.cid", *PODMAN_BINARY),
+        format!("{} rm -f -i --cidfile=%t/%N.cid", get_podman_binary()),
     );
     // The ExecStopPost is needed when the main PID (i.e., conmon) gets killed.
     // In that case, ExecStop is not executed but *Post only.  If both are
@@ -97,7 +97,7 @@ pub(crate) fn from_container_unit(
     service.append_entry(
         SERVICE_SECTION,
         "ExecStopPost",
-        format!("-{} rm -f -i --cidfile=%t/%N.cid", *PODMAN_BINARY),
+        format!("-{} rm -f -i --cidfile=%t/%N.cid", get_podman_binary()),
     );
 
     // FIXME: (COMPAT) remove once we can rely on Podman v4.4.0 or newer being present
@@ -723,7 +723,7 @@ pub(crate) fn from_network_unit(network: &SystemdUnit) -> Result<SystemdUnit, Co
         "ExecCondition",
         EntryValue::try_from_raw(format!(
             "/usr/bin/bash -c \"! {} network exists {podman_network_name}\"",
-            *PODMAN_BINARY
+            get_podman_binary()
         ))?,
     );
 
@@ -859,7 +859,7 @@ pub(crate) fn from_volume_unit(volume: &SystemdUnit) -> Result<SystemdUnit, Conv
         "ExecCondition",
         EntryValue::try_from_raw(format!(
             "/usr/bin/bash -c \"! {} volume exists {podman_volume_name}\"",
-            *PODMAN_BINARY
+            get_podman_binary()
         ))?,
     );
 

@@ -1,9 +1,4 @@
-use std::env;
-
-use once_cell::sync::Lazy;  // TODO: replace with std::sync::LazyLock once it's stable
-
 pub(crate) const DEFAULT_PODMAN_BINARY: &str = "/usr/bin/podman";
-pub(crate) static PODMAN_BINARY: Lazy<String> = Lazy::new(|| env::var("PODMAN").unwrap_or(DEFAULT_PODMAN_BINARY.to_owned()));
 
 pub const CONTAINER_SECTION: &str   = "Container";
 pub const KUBE_SECTION: &str        = "Kube";
