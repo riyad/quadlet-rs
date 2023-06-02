@@ -1,7 +1,7 @@
 use super::{parse_bool, quote_value, unquote_value, Error};
-use once_cell::sync::Lazy;
 use ordered_multimap::ListOrderedMultimap;
 use std::str::FromStr;
+use std::sync::OnceLock;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct Entries {
@@ -10,8 +10,8 @@ pub(crate) struct Entries {
 
 impl Default for &Entries {
     fn default() -> Self {
-        static EMPTY: Lazy<Entries> = Lazy::new(Entries::default);
-        &EMPTY
+        static EMPTY: OnceLock<Entries> = OnceLock::new();
+        EMPTY.get_or_init(|| Entries::default())
     }
 }
 
