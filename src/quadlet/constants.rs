@@ -1,6 +1,7 @@
-use once_cell::sync::Lazy;
 use std::collections::HashSet;
 use std::env;
+
+use once_cell::sync::Lazy;  // TODO: replace with std::sync::LazyLock once it's stable
 
 pub(crate) const DEFAULT_PODMAN_BINARY: &str = "/usr/bin/podman";
 pub(crate) static PODMAN_BINARY: Lazy<String> = Lazy::new(|| match env::var("PODMAN") {
@@ -78,6 +79,7 @@ pub static SUPPORTED_CONTAINER_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| 
     for k in keys {
         set.insert(k);
     }
+    set.shrink_to_fit();
     set
 });
 
@@ -101,6 +103,7 @@ pub static SUPPORTED_KUBE_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     for k in keys {
         set.insert(k);
     }
+    set.shrink_to_fit();
     set
 });
 
@@ -123,6 +126,7 @@ pub static SUPPORTED_NETWORK_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     for k in keys {
         set.insert(k);
     }
+    set.shrink_to_fit();
     set
 });
 
@@ -142,5 +146,6 @@ pub static SUPPORTED_VOLUME_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     for k in keys {
         set.insert(k);
     }
+    set.shrink_to_fit();
     set
 });

@@ -21,7 +21,7 @@ use std::process;
 use users;
 
 static SUPPORTED_EXTENSIONS: Lazy<[&OsStr; 4]> =
-    Lazy::new(|| ["kube", "container", "network", "volume"].map(OsStr::new));
+    Lazy::new(|| ["container", "kube", "network", "volume"].map(OsStr::new));
 
 const QUADLET_VERSION: &str = "0.2.0-dev";
 const UNIT_DIR_ADMIN: &str  = "/etc/containers/systemd";
