@@ -438,6 +438,13 @@ pub(crate) fn from_container_unit(
         podman.add(hostname);
     }
 
+    if let Some(pull) = container.lookup(CONTAINER_SECTION, "Pull") {
+        if !pull.is_empty() {
+            podman.add("--pull");
+            podman.add(pull);
+        }
+    }
+
     handle_podman_args(container, CONTAINER_SECTION, &mut podman);
 
     if !image.is_empty() {

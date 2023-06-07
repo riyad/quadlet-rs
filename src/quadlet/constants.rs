@@ -9,7 +9,7 @@ pub const X_KUBE_SECTION: &str      = "X-Kube";
 pub const X_NETWORK_SECTION: &str   = "X-Network";
 pub const X_VOLUME_SECTION: &str    = "X-Volume";
 
-pub static SUPPORTED_CONTAINER_KEYS: [&str; 53] = [
+pub static SUPPORTED_CONTAINER_KEYS: [&str; 54] = [
     "AddCapability",
     "AddDevice",
     "Annotation",
@@ -44,6 +44,7 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 53] = [
     "Notify",
     "PodmanArgs",
     "PublishPort",
+    "Pull",
     "ReadOnly",
     "RemapGid",     // deprecated, use UserNS instead
     "RemapUid",     // deprecated, use UserNS instead
