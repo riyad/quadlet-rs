@@ -9,7 +9,7 @@ pub const X_KUBE_SECTION: &str      = "X-Kube";
 pub const X_NETWORK_SECTION: &str   = "X-Network";
 pub const X_VOLUME_SECTION: &str    = "X-Volume";
 
-pub static SUPPORTED_CONTAINER_KEYS: [&str; 54] = [
+pub static SUPPORTED_CONTAINER_KEYS: [&str; 55] = [
     "AddCapability",
     "AddDevice",
     "Annotation",
@@ -56,6 +56,7 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 54] = [
     "SecurityLabelDisable",
     "SecurityLabelFileType",
     "SecurityLabelLevel",
+    "SecurityLabelNested",
     "SecurityLabelType",
     "Secret",
     "Timezone",

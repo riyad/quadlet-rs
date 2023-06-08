@@ -189,6 +189,13 @@ pub(crate) fn from_container_unit(
         podman.add_slice(&["--security-opt", "label:disable"]);
     }
 
+    let security_label_nested = container
+        .lookup_bool(CONTAINER_SECTION, "SecurityLabelNested")
+        .unwrap_or(false);
+    if security_label_nested {
+        podman.add_slice(&["--security-opt", "label:nested"]);
+    }
+
     let security_label_type = container
         .lookup_last(CONTAINER_SECTION, "SecurityLabelType")
         .unwrap_or_default();
