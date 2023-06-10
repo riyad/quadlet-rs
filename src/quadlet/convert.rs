@@ -259,6 +259,10 @@ pub(crate) fn from_container_unit(
         podman.add(format!("--cap-add={}", caps.to_ascii_lowercase()))
     }
 
+    for sysctl in container.lookup_all_strv(CONTAINER_SECTION, "Sysctl") {
+        podman.add(format!("--sysctl={sysctl}"))
+    }
+
     let read_only = container.lookup_bool(CONTAINER_SECTION, "ReadOnly");
     if let Some(read_only) = read_only {
         podman.add_bool("--read-only", read_only);
