@@ -124,8 +124,7 @@ pub(crate) fn from_container_unit(
     service.append_entry(SERVICE_SECTION, "Delegate", "yes");
     podman.add_slice(&["--cgroups=split"]);
 
-    let timezone = container.lookup_last(CONTAINER_SECTION, "Timezone");
-    if let Some(timezone) = timezone {
+    if let Some(timezone) = container.lookup_last(CONTAINER_SECTION, "Timezone") {
         if !timezone.is_empty() {
             podman.add(format!("--tz={}", timezone));
         }
@@ -134,8 +133,7 @@ pub(crate) fn from_container_unit(
     handle_networks(container, CONTAINER_SECTION, &mut service, &mut podman)?;
 
     // Run with a pid1 init to reap zombies by default (as most apps don't do that)
-    let run_init = container.lookup_bool(CONTAINER_SECTION, "RunInit");
-    if let Some(run_init) = run_init {
+    if let Some(run_init) = container.lookup_bool(CONTAINER_SECTION, "RunInit") {
         podman.add_bool("--init", run_init);
     }
 
@@ -220,10 +218,7 @@ pub(crate) fn from_container_unit(
         podman.add(format!("label=level:{security_label_level}"));
     }
 
-    let devices: Vec<String> = container
-        .lookup_all_strv(CONTAINER_SECTION, "AddDevice")
-        .collect();
-    for mut device in devices {
+    for mut device in container.lookup_all_strv(CONTAINER_SECTION, "AddDevice") {
         if device.starts_with('-') {
             // ignore device if it doesn't exist
             device = device.strip_prefix('-').unwrap().into();
@@ -239,23 +234,16 @@ pub(crate) fn from_container_unit(
     }
 
     // Default to no higher level privileges or caps
-    let seccomp_profile = container.lookup_last(CONTAINER_SECTION, "SeccompProfile");
-    if let Some(seccomp_profile) = seccomp_profile {
+    if let Some(seccomp_profile) = container.lookup_last(CONTAINER_SECTION, "SeccompProfile") {
         podman.add_slice(&["--security-opt", &format!("seccomp={seccomp_profile}")])
     }
 
-    let drop_caps: Vec<String> = container
-        .lookup_all_strv(CONTAINER_SECTION, "DropCapability")
-        .collect();
-    for caps in drop_caps {
+    for caps in container.lookup_all_strv(CONTAINER_SECTION, "DropCapability") {
         podman.add(format!("--cap-drop={}", caps.to_ascii_lowercase()))
     }
 
     // But allow overrides with AddCapability
-    let add_caps: Vec<String> = container
-        .lookup_all_strv(CONTAINER_SECTION, "AddCapability")
-        .collect();
-    for caps in add_caps {
+    for caps in container.lookup_all_strv(CONTAINER_SECTION, "AddCapability") {
         podman.add(format!("--cap-add={}", caps.to_ascii_lowercase()))
     }
 
@@ -317,8 +305,7 @@ pub(crate) fn from_container_unit(
         podman.add(tmpfs);
     }
 
-    let volumes: Vec<&str> = container.lookup_all(CONTAINER_SECTION, "Volume").collect();
-    for volume in volumes {
+    for volume in container.lookup_all(CONTAINER_SECTION, "Volume") {
         let parts: Vec<&str> = volume.split(':').collect();
 
         let mut source = String::new();
@@ -347,8 +334,7 @@ pub(crate) fn from_container_unit(
         }
     }
 
-    let exposed_ports = container.lookup_all(CONTAINER_SECTION, "ExposeHostPort");
-    for exposed_port in exposed_ports {
+    for exposed_port in container.lookup_all(CONTAINER_SECTION, "ExposeHostPort") {
         let exposed_port = exposed_port.trim(); // Allow whitespaces before and after
 
         if !is_port_range(exposed_port) {
@@ -401,14 +387,12 @@ pub(crate) fn from_container_unit(
         podman.add_bool("--env-host", env_host);
     }
 
-    let secrets = container.lookup_all_args(CONTAINER_SECTION, "Secret");
-    for secret in secrets {
+    for secret in container.lookup_all_args(CONTAINER_SECTION, "Secret") {
         podman.add("--secret");
         podman.add(secret);
     }
 
-    let mounts = container.lookup_all_args(CONTAINER_SECTION, "Mount");
-    for mount in mounts {
+    for mount in container.lookup_all_args(CONTAINER_SECTION, "Mount") {
         let params: Vec<&str> = mount.split(',').collect();
         let mut params_map: HashMap<&str, String> = HashMap::with_capacity(params.len());
         for param in &params {
@@ -703,8 +687,7 @@ pub(crate) fn from_network_unit(network: &SystemdUnit) -> Result<SystemdUnit, Co
         podman.add("--internal")
     }
 
-    let ipam_driver = network.lookup_last(NETWORK_SECTION, "IPAMDriver");
-    if let Some(ipam_driver) = ipam_driver {
+    if let Some(ipam_driver) = network.lookup_last(NETWORK_SECTION, "IPAMDriver") {
         podman.add(format!("--ipam-driver={ipam_driver}"));
     }
 
