@@ -290,6 +290,10 @@ pub(crate) fn from_container_unit(
         }
     }
 
+    if let Some(workdir) = container.lookup(CONTAINER_SECTION, "WorkingDir") {
+        podman.add(format!("-w={workdir}"));
+    }
+
     handle_user_remap(container, CONTAINER_SECTION, &mut podman, is_user, true)?;
 
     handle_user_ns(container, CONTAINER_SECTION, &mut podman);
