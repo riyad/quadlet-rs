@@ -9,7 +9,7 @@ pub const X_KUBE_SECTION: &str      = "X-Kube";
 pub const X_NETWORK_SECTION: &str   = "X-Network";
 pub const X_VOLUME_SECTION: &str    = "X-Volume";
 
-pub static SUPPORTED_CONTAINER_KEYS: [&str; 57] = [
+pub static SUPPORTED_CONTAINER_KEYS: [&str; 59] = [
     "AddCapability",
     "AddDevice",
     "Annotation",
@@ -38,6 +38,7 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 57] = [
     "IP6",
     "Label",
     "LogDriver",
+    "Mask",
     "Mount",
     "Network",
     "NoNewPrivileges",
@@ -62,6 +63,7 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 57] = [
     "Sysctl",
     "Timezone",
     "Tmpfs",
+    "Unmask",
     "User",
     "UserNS",
     "VolatileTmp",

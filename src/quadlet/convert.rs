@@ -374,6 +374,16 @@ pub(crate) fn from_container_unit(
     let annotations = container.lookup_all_key_val(CONTAINER_SECTION, "Annotation");
     podman.add_annotations(&annotations);
 
+    for mask in container.lookup_all_args(CONTAINER_SECTION, "Mask") {
+        podman.add("--security-opt");
+        podman.add(format!("mask={mask}"));
+    }
+
+    for unmask in container.lookup_all_args(CONTAINER_SECTION, "Unmask") {
+        podman.add("--security-opt");
+        podman.add(format!("unmask={unmask}"));
+    }
+
     let env_files: Vec<PathBuf> = container
         .lookup_all_args(CONTAINER_SECTION, "EnvironmentFile")
         .map(|s| PathBuf::from(s).absolute_from_unit(container))
