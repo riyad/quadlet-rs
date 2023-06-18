@@ -338,6 +338,14 @@ pub(crate) fn from_container_unit(
         }
     }
 
+    if let Some(update) = container.lookup(CONTAINER_SECTION, "AutoUpdate") {
+        if !update.is_empty() {
+            let mut labels: HashMap<String, String> = HashMap::new();
+            labels.insert("io.containers.autoupdate".to_string(), update.to_string());
+            podman.add_labels(&labels);
+        }
+    }
+
     for exposed_port in container.lookup_all(CONTAINER_SECTION, "ExposeHostPort") {
         let exposed_port = exposed_port.trim(); // Allow whitespaces before and after
 
