@@ -335,7 +335,6 @@ class QuadletTestCase(unittest.TestCase):
 
     def runTest(self):
         res = None
-        outdata = {}
         with tempfile.TemporaryDirectory(prefix="podman_test") as basedir:
             indir = os.path.join(basedir, "quadlet")
             os.mkdir(indir)
@@ -343,8 +342,6 @@ class QuadletTestCase(unittest.TestCase):
             os.mkdir(outdir)
             write_file (indir, self.filename, self.data);
             cmd = [generator_bin, '--user', '--no-kmsg-log', '-v', outdir]
-            if use_valgrind:
-                cmd = ["valgrind", "--error-exitcode=1", "--leak-check=full", "--show-possibly-lost=no", "--errors-for-leak-kinds=definite"] + cmd
 
             env = {
                 "QUADLET_UNIT_DIRS": indir
@@ -413,11 +410,6 @@ def load_test_suite():
         sys.exit(1)
     global generator_bin
     generator_bin = sys.argv[2]
-
-    global use_valgrind
-    use_valgrind = False
-    if len(sys.argv) >= 4 and sys.argv[3] == '--valgrind':
-        use_valgrind = True
 
     test_suite = unittest.TestSuite()
     for de in os.scandir(testcases_dir):
