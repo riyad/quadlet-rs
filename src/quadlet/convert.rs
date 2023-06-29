@@ -341,7 +341,7 @@ pub(crate) fn from_container_unit(
     if let Some(update) = container.lookup(CONTAINER_SECTION, "AutoUpdate") {
         if !update.is_empty() {
             let mut labels: HashMap<String, String> = HashMap::new();
-            labels.insert("io.containers.autoupdate".to_string(), update.to_string());
+            labels.insert(AUTO_UPDATE_LABEL.to_string(), update.to_string());
             podman.add_labels(&labels);
         }
     }
@@ -569,6 +569,20 @@ pub(crate) fn from_kube_unit(
     handle_user_ns(kube, KUBE_SECTION, &mut podman_start);
 
     handle_networks(kube, KUBE_SECTION, &mut service, &mut podman_start)?;
+
+    for update in kube.lookup_all_strv(KUBE_SECTION, "AutoUpdate") {
+        let annotation_suffix;
+        let update_type;
+        if let Some(val) = update.split_once('/') {
+            annotation_suffix = format!("/{}", val.0);
+            update_type = val.1;
+        } else {
+            annotation_suffix = "".to_string();
+            update_type = &update;
+        }
+        podman_start.add("--annotation");
+        podman_start.add(format!("{AUTO_UPDATE_LABEL}{annotation_suffix}={update_type}"));
+    }
 
     let config_maps: Vec<PathBuf> = kube
         .lookup_all_strv(KUBE_SECTION, "ConfigMap")

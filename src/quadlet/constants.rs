@@ -9,6 +9,8 @@ pub const X_KUBE_SECTION: &str      = "X-Kube";
 pub const X_NETWORK_SECTION: &str   = "X-Network";
 pub const X_VOLUME_SECTION: &str    = "X-Volume";
 
+pub const AUTO_UPDATE_LABEL: &str = "io.containers.autoupdate";
+
 pub static SUPPORTED_CONTAINER_KEYS: [&str; 60] = [
     "AddCapability",
     "AddDevice",
@@ -72,7 +74,8 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 60] = [
     "WorkingDir",
 ];
 
-pub static SUPPORTED_KUBE_KEYS: [&str; 12] = [
+pub static SUPPORTED_KUBE_KEYS: [&str; 13] = [
+    "AutoUpdate",
     "ConfigMap",
     "ExitCodePropagation",
     "LogDriver",
