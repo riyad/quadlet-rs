@@ -1,5 +1,5 @@
 ## assert-failed
-## assert-stderr-contains "cannot set more ranges than subnets"
+## assert-stderr-contains "Converting \"range.less-subnet.network\": cannot set more ranges than subnets"
 
 [Network]
 Subnet=192.168.1.0/24

@@ -1,5 +1,5 @@
 ## assert-failed
-## assert-stderr-contains "cannot set gateway or range without subnet"
+## assert-stderr-contains "Converting \"range.no-subnet.network\": cannot set Gateway or IPRange without Subnet"
 
 [Network]
 IPRange=192.168.1.0/32

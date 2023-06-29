@@ -1,5 +1,5 @@
 ## assert-failed
-## assert-stderr-contains "cannot set more gateways than subnets"
+## assert-stderr-contains "Converting \"gateway.less-subnet.network\": cannot set more gateways than subnets"
 
 [Network]
 Subnet=192.168.1.0/24
