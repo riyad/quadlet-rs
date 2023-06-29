@@ -83,9 +83,7 @@ class QuadletTestCase(unittest.TestCase):
         self.servicename = to_service(filename)
         self.data = read_file(testcases_dir, filename)
         self.checks = get_checks_from_data(self.data)
-        self.expect_fail = False
-        if find_check(self.checks, "assert-failed"):
-            self.expect_fail = True
+        self.expect_fail = find_check(self.checks, "assert-failed") is not None
         self.outdata = ""
         self.unit = {}
         self.expected_files = set()
@@ -115,9 +113,10 @@ class QuadletTestCase(unittest.TestCase):
 
     def check(self, outdir):
         def assert_failed(args, testcase):
-            return True # We already handled this specially after running
+            return True # We already handled this specially in runTest() and check()
 
         def assert_stderr_contains(args, testcase):
+            # We've combined STDOUT and STDERR when running the test
             return args[0] in testcase.stdout
 
         def assert_key_is(args, testcase):
@@ -301,17 +300,17 @@ class QuadletTestCase(unittest.TestCase):
         if self.expect_fail:
             if os.path.isfile(servicepath):
                 raise RuntimeError(self._err_msg("Unexpected success"))
-            return # Successfully failed checks done
 
-        if not os.path.isfile(servicepath):
+        if not os.path.isfile(servicepath) and not self.expect_fail:
             raise FileNotFoundError(self._err_msg(f"Unexpected failure, can't find {servicepath}\n" + self.stdout))
 
-        self.outdata = read_file(outdir, self.servicename)
-        self.sections = parse_unitfile(canonicalize_unitfile(self.outdata))
-        self._Service_ExecStart = shlex.split(self.sections.get("Service", {}).get("ExecStart", ["podman"])[0])
-        self._Service_ExecStop = shlex.split(self.sections.get("Service", {}).get("ExecStop", ["podman"])[0])
-        self._Service_ExecStopPost = shlex.split(self.sections.get("Service", {}).get("ExecStopPost", ["podman"])[0])
-        self.expect_file(self.servicename)
+        if not self.expect_fail:
+            self.outdata = read_file(outdir, self.servicename)
+            self.sections = parse_unitfile(canonicalize_unitfile(self.outdata))
+            self._Service_ExecStart = shlex.split(self.sections.get("Service", {}).get("ExecStart", ["podman"])[0])
+            self._Service_ExecStop = shlex.split(self.sections.get("Service", {}).get("ExecStop", ["podman"])[0])
+            self._Service_ExecStopPost = shlex.split(self.sections.get("Service", {}).get("ExecStopPost", ["podman"])[0])
+            self.expect_file(self.servicename)
 
         for check in self.checks:
             op = check[0]
@@ -354,9 +353,11 @@ class QuadletTestCase(unittest.TestCase):
                 env['PODMAN'] = os.getenv('PODMAN')
             res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
 
+            # NOTE: STDOUT includes STDERR
             self.stdout = res.stdout.decode('utf8')
+
             # The generator should never fail, just log warnings
-            if res.returncode != 0:
+            if res.returncode != 0 and not self.expect_fail:
                 raise RuntimeError(self._err_msg(f"Unexpected generator failure\n" + self.stdout))
 
             self.check(outdir)
