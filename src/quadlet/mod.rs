@@ -16,6 +16,29 @@ use std::fmt::Display;
 use std::io;
 
 #[derive(Debug)]
+pub(crate) enum RuntimeError {
+    CliMissingOutputDirectory(crate::CliOptions),
+    Io(String, io::Error),
+    Conversion(String, ConversionError),
+}
+
+impl Display for RuntimeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            RuntimeError::CliMissingOutputDirectory(_) => {
+                write!(f, "Missing output directory argument")
+            }
+            RuntimeError::Io(ctx,e) => {
+                write!(f, "{ctx}: {e}")
+            },
+            RuntimeError::Conversion(ctx, e) => {
+                write!(f, "{ctx}: {e}")
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
 #[non_exhaustive]
 pub(crate) enum ConversionError {
     InvalidDeviceOptions(String),

@@ -26,7 +26,7 @@ const UNIT_DIR_ADMIN:  &str = "/etc/containers/systemd";
 const UNIT_DIR_DISTRO: &str = "/usr/share/containers/systemd";
 
 #[derive(Debug, Default, PartialEq)]
-struct Config {
+pub(crate) struct CliOptions {
     dry_run: bool,
     is_user: bool,
     no_kmsg: bool,
@@ -50,8 +50,8 @@ Options:
     );
 }
 
-fn parse_args(args: Vec<String>) -> Result<Config, String> {
-    let mut cfg = Config {
+fn parse_args(args: Vec<String>) -> Result<CliOptions, RuntimeError> {
+    let mut cfg = CliOptions {
         dry_run: false,
         is_user: false,
         no_kmsg: false,
@@ -63,7 +63,7 @@ fn parse_args(args: Vec<String>) -> Result<Config, String> {
     cfg.is_user = args[0].contains("user");
 
     if args.len() < 2 {
-        return Err("Missing output directory argument".into());
+        return Err(RuntimeError::CliMissingOutputDirectory(cfg));
     } else {
         let mut iter = args.iter();
         // skip $0
@@ -84,7 +84,7 @@ fn parse_args(args: Vec<String>) -> Result<Config, String> {
                     // we only need the first path
                     break;
                 }
-                None => return Err("Missing output directory argument".into()),
+                None => return Err(RuntimeError::CliMissingOutputDirectory(cfg)),
             }
         }
     }
@@ -96,7 +96,7 @@ fn parse_args(args: Vec<String>) -> Result<Config, String> {
 // For system generators these are in /usr/share/containers/systemd (for distro files)
 // and /etc/containers/systemd (for sysadmin files).
 // For user generators these can live in /etc/containers/systemd/users, /etc/containers/systemd/users/$UID, and $XDG_CONFIG_HOME/containers/systemd
-fn unit_search_dirs(rootless: bool) -> Vec<PathBuf> {
+fn get_unit_search_dirs(rootless: bool) -> Vec<PathBuf> {
     // Allow overdiding source dir, this is mainly for the CI tests
     if let Ok(unit_dirs_env) = std::env::var("QUADLET_UNIT_DIRS") {
         let unit_dirs_env: Vec<PathBuf> = env::split_paths(&unit_dirs_env)
@@ -126,11 +126,28 @@ fn unit_search_dirs(rootless: bool) -> Vec<PathBuf> {
 fn load_units_from_dir(
     source_path: &Path,
     units: &mut HashMap<OsString, SystemdUnit>,
-) -> io::Result<()> {
-    for entry in source_path.read_dir()? {
-        let entry = entry?;
-        let path = entry.path();
-        let name = entry.file_name();
+) -> Vec<RuntimeError> {
+    let mut prev_errors = Vec::new();
+
+    let files = match source_path.read_dir() {
+        Ok(entries) => entries,
+        Err(e) => {
+            prev_errors.push(RuntimeError::Io(format!("Can't read {source_path:?}"), e));
+            return prev_errors
+        },
+    };
+
+    for file in files {
+        let file = match file {
+            Ok(file) => file,
+            Err(e) => {
+                prev_errors.push(RuntimeError::Io(format!("Can't read {source_path:?}"), e));
+                continue;
+            },
+        };
+
+        let path = file.path();
+        let name = file.file_name();
 
         let extension = path
             .extension()
@@ -149,7 +166,7 @@ fn load_units_from_dir(
         let buf = match fs::read_to_string(&path) {
             Ok(buf) => buf,
             Err(e) => {
-                log!("Error loading {path:?}, ignoring: {e}");
+                prev_errors.push(RuntimeError::Io(format!("Error loading {path:?}"), e));
                 continue;
             }
         };
@@ -160,7 +177,7 @@ fn load_units_from_dir(
                 unit
             }
             Err(e) => {
-                log!("Error loading {path:?}, ignoring: {e}");
+                prev_errors.push(RuntimeError::Conversion(format!("Error loading {path:?}"), ConversionError::Parsing(e)));
                 continue;
             }
         };
@@ -168,7 +185,7 @@ fn load_units_from_dir(
         units.insert(name, unit);
     }
 
-    Ok(())
+    return prev_errors;
 }
 
 fn generate_service_file(service: &mut SystemdUnit) -> io::Result<()> {
@@ -256,33 +273,56 @@ fn enable_service_file(output_path: &Path, service: &SystemdUnit) {
 }
 
 fn main() {
-    let exit_code = 0;
+    let errs = process();
+    if !errs.is_empty() {
+        for e in errs {
+            log!("{e}");
+        }
+        process::exit(1);
+    }
+    process::exit(0);
+}
+
+fn process() -> Vec<RuntimeError> {
+    let mut prev_errors: Vec<RuntimeError> = Vec::new();
+
     let args: Vec<String> = env::args().collect();
 
     let cfg = match parse_args(args) {
-        Ok(cfg) => cfg,
-        Err(msg) => {
-            println!("Error: {}", msg);
+        Ok(cfg) => {
+            // short circuit
+            if cfg.version {
+                println!("quadlet-rs {}", QUADLET_VERSION);
+                return prev_errors;
+            }
+
+            if cfg.dry_run {
+                logger::enable_dry_run();
+            }
+            if cfg.verbose || cfg.dry_run {
+                logger::enable_debug();
+            }
+            if cfg.no_kmsg || cfg.dry_run {
+                logger::disable_kmsg();
+            }
+
+            cfg
+        },
+        Err(RuntimeError::CliMissingOutputDirectory(cfg)) => {
+            if !cfg.dry_run {
+                help();
+                prev_errors.push(RuntimeError::CliMissingOutputDirectory(cfg));
+                return prev_errors;
+            }
+
+            cfg
+        },
+        Err(e) => {
             help();
-            process::exit(1)
+            prev_errors.push(e);
+            return prev_errors;
         }
     };
-
-    // short circuit
-    if cfg.version {
-        println!("quadlet-rs {}", QUADLET_VERSION);
-        process::exit(0);
-    }
-
-    if cfg.dry_run {
-        logger::enable_dry_run();
-    }
-    if cfg.verbose || cfg.dry_run {
-        logger::enable_debug();
-    }
-    if cfg.no_kmsg || cfg.dry_run {
-        logger::disable_kmsg();
-    }
 
     if !cfg.dry_run {
         debug!(
@@ -291,29 +331,24 @@ fn main() {
         );
     }
 
-    let source_paths = unit_search_dirs(cfg.is_user);
+    let source_paths = get_unit_search_dirs(cfg.is_user);
 
     let mut units: HashMap<OsString, SystemdUnit> = HashMap::default();
     for dir in &source_paths {
-        if let Err(e) = load_units_from_dir(dir, &mut units) {
-            log!("Can't read {dir:?}: {e}");
-        }
+        prev_errors.extend(load_units_from_dir(dir, &mut units));
     }
 
     if units.is_empty() {
         // containers/podman/issues/17374: exit cleanly but log that we
         // had nothing to do
-        debug!("No files to parse from {source_paths:?}");
-        process::exit(0);
+        debug!("No files parsed from {source_paths:?}");
+        return prev_errors;
     }
 
     if !cfg.dry_run {
         if let Err(e) = fs::create_dir_all(&cfg.output_path) {
-            log!(
-                "Can't create dir {:?}: {e}",
-                cfg.output_path.to_str().unwrap()
-            );
-            process::exit(1);
+            prev_errors.push(RuntimeError::Io(format!("Can't create dir {:?}", cfg.output_path), e));
+            return prev_errors;
         }
     }
 
@@ -336,7 +371,7 @@ fn main() {
         let mut service = match service_result {
             Ok(service_unit) => service_unit,
             Err(e) => {
-                log!("Error converting {name:?}, ignoring: {e}");
+                prev_errors.push(RuntimeError::Conversion(format!("Converting {name:?}"), e));
                 continue;
             }
         };
@@ -363,23 +398,24 @@ fn main() {
                     println!("---{:?}---\n{data}", service.path.expect("should have a path"));
                 },
                 Err(e) => {
-                    debug!("Error parsing {:?}\n---\n", service.path().expect("should have a path"));
-                    exit_code = 1;
+                    prev_errors.push(RuntimeError::Io(format!("Parsing {:?}", service.path().expect("should have a path")), e))
+                    continue;
                 }
             }*/
-        } else {
-            if let Err(e) = generate_service_file(&mut service) {
-                log!(
-                    "Error writing {:?}, ignoring: {e}",
-                    service.path().expect("should have a path")
-                );
-                continue;
-            }
-            enable_service_file(&cfg.output_path, &service);
+            continue;
         }
+
+        if let Err(e) = generate_service_file(&mut service) {
+            prev_errors.push(RuntimeError::Io(
+                format!("Generatring service file {:?}", service.path().expect("should have a path")),
+                e,
+            ));
+            continue; // NOTE: Go Quadlet doesn't do this, but it probably should
+        }
+        enable_service_file(&cfg.output_path, &service);
     }
 
-    process::exit(exit_code);
+    prev_errors
 }
 
 #[cfg(test)]
@@ -393,10 +429,10 @@ mod tests {
         fn fails_with_no_arguments() {
             let args: Vec<String> = vec!["./quadlet-rs".into()];
 
-            assert_eq!(
+            assert!(matches!(
                 parse_args(args),
-                Err("Missing output directory argument".into())
-            );
+                Err(RuntimeError::CliMissingOutputDirectory(_))
+            ));
         }
 
         #[test]
@@ -409,11 +445,11 @@ mod tests {
             ];
 
             assert_eq!(
-                parse_args(args),
-                Ok(Config {
+                parse_args(args).ok().unwrap(),
+                CliOptions {
                     version: true,
                     ..Default::default()
-                })
+                }
             );
         }
 
@@ -423,12 +459,12 @@ mod tests {
                 vec!["./quadlet-rs-user-generator".into(), "./output_dir".into()];
 
             assert_eq!(
-                parse_args(args),
-                Ok(Config {
+                parse_args(args).ok().unwrap(),
+                CliOptions {
                     is_user: true,
                     output_path: "./output_dir".into(),
                     ..Default::default()
-                })
+                }
             );
         }
 
@@ -441,12 +477,12 @@ mod tests {
             ];
 
             assert_eq!(
-                parse_args(args),
-                Ok(Config {
+                parse_args(args).ok().unwrap(),
+                CliOptions {
                     dry_run: true,
                     output_path: "./output_dir".into(),
                     ..Default::default()
-                })
+                }
             );
         }
 
@@ -459,12 +495,12 @@ mod tests {
             ];
 
             assert_eq!(
-                parse_args(args),
-                Ok(Config {
+                parse_args(args).ok().unwrap(),
+                CliOptions {
                     dry_run: true,
                     output_path: "./output_dir".into(),
                     ..Default::default()
-                })
+                }
             );
         }
 
@@ -477,12 +513,12 @@ mod tests {
             ];
 
             assert_eq!(
-                parse_args(args),
-                Ok(Config {
+                parse_args(args).ok().unwrap(),
+                CliOptions {
                     no_kmsg: true,
                     output_path: "./output_dir".into(),
                     ..Default::default()
-                })
+                }
             );
         }
 
@@ -495,12 +531,12 @@ mod tests {
             ];
 
             assert_eq!(
-                parse_args(args),
-                Ok(Config {
+                parse_args(args).ok().unwrap(),
+                CliOptions {
                     no_kmsg: true,
                     output_path: "./output_dir".into(),
                     ..Default::default()
-                })
+                }
             );
         }
 
@@ -513,12 +549,12 @@ mod tests {
             ];
 
             assert_eq!(
-                parse_args(args),
-                Ok(Config {
+                parse_args(args).ok().unwrap(),
+                CliOptions {
                     is_user: true,
                     output_path: "./output_dir".into(),
                     ..Default::default()
-                })
+                }
             );
         }
 
@@ -531,12 +567,12 @@ mod tests {
             ];
 
             assert_eq!(
-                parse_args(args),
-                Ok(Config {
+                parse_args(args).ok().unwrap(),
+                CliOptions {
                     is_user: true,
                     output_path: "./output_dir".into(),
                     ..Default::default()
-                })
+                }
             );
         }
 
@@ -549,12 +585,12 @@ mod tests {
             ];
 
             assert_eq!(
-                parse_args(args),
-                Ok(Config {
+                parse_args(args).ok().unwrap(),
+                CliOptions {
                     verbose: true,
                     output_path: "./output_dir".into(),
                     ..Default::default()
-                })
+                }
             );
         }
 
@@ -567,12 +603,12 @@ mod tests {
             ];
 
             assert_eq!(
-                parse_args(args),
-                Ok(Config {
+                parse_args(args).ok().unwrap(),
+                CliOptions {
                     verbose: true,
                     output_path: "./output_dir".into(),
                     ..Default::default()
-                })
+                }
             );
         }
 
@@ -581,12 +617,12 @@ mod tests {
             let args: Vec<String> = vec!["./quadlet-rs".into(), "-v".into(), "./output_dir".into()];
 
             assert_eq!(
-                parse_args(args),
-                Ok(Config {
+                parse_args(args).ok().unwrap(),
+                CliOptions {
                     verbose: true,
                     output_path: "./output_dir".into(),
                     ..Default::default()
-                })
+                }
             );
         }
 
@@ -595,11 +631,11 @@ mod tests {
             let args: Vec<String> = vec!["./quadlet-rs".into(), "./output_dir".into()];
 
             assert_eq!(
-                parse_args(args),
-                Ok(Config {
+                parse_args(args).ok().unwrap(),
+                CliOptions {
                     output_path: "./output_dir".into(),
                     ..Default::default()
-                })
+                }
             );
         }
 
@@ -607,10 +643,10 @@ mod tests {
         fn requires_output_dir() {
             let args: Vec<String> = vec!["./quadlet-rs".into(), "-v".into()];
 
-            assert_eq!(
+            assert!(matches!(
                 parse_args(args),
-                Err("Missing output directory argument".into())
-            );
+                Err(RuntimeError::CliMissingOutputDirectory(_))
+            ));
         }
 
         #[test]
@@ -624,11 +660,11 @@ mod tests {
             ];
 
             assert_eq!(
-                parse_args(args),
-                Ok(Config {
+                parse_args(args).ok().unwrap(),
+                CliOptions {
                     output_path: "./output_dir1".into(),
                     ..Default::default()
-                })
+                }
             );
         }
     }
@@ -639,7 +675,7 @@ mod tests {
         #[test]
         fn rootful() {
             assert_eq!(
-                unit_search_dirs(false),
+                get_unit_search_dirs(false),
                 [
                     "/etc/containers/systemd",
                     "/usr/share/containers/systemd",
@@ -650,7 +686,7 @@ mod tests {
         #[test]
         fn rootless() {
             assert_eq!(
-                unit_search_dirs(true),
+                get_unit_search_dirs(true),
                 [
                     format!(
                         "{}/containers/systemd",
