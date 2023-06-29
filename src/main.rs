@@ -70,7 +70,7 @@ fn parse_args(args: Vec<String>) -> Result<Config, String> {
         iter.next();
         loop {
             match iter.next().map(String::as_str) {
-                Some("-dry-run" | "--dry-run") => cfg.dry_run = true,
+                Some("-dryrun" | "--dry-run") => cfg.dry_run = true,
                 Some("-no-kmsg-log" | "--no-kmsg-log") => cfg.no_kmsg = true,
                 Some("-user" | "--user") => cfg.is_user = true,
                 Some("-verbose" | "--verbose" | "-v") => cfg.verbose = true,
@@ -451,7 +451,7 @@ mod tests {
         fn accepts_single_dash_dry_run_for_quadlet_compat() {
             let args: Vec<String> = vec![
                 "./quadlet-rs".into(),
-                "-dry-run".into(),
+                "-dryrun".into(),
                 "./output_dir".into(),
             ];
 
