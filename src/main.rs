@@ -46,7 +46,8 @@ Options:
     --no-kmsg-log  Don't log to kmsg
     --user         Run as systemd user
     -v,--verbose   Print debug information
-    --version      Print version information and exit"
+    --version      Print version information and exit
+"
     );
 }
 
