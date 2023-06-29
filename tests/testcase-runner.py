@@ -365,6 +365,8 @@ class QuadletTestCase(unittest.TestCase):
 
     def _err_msg(self, msg):
         err_msg = msg
+        if self.stdout:
+            err_msg += f"\n--- STDOUT/ERR ---\n{self.stdout}"
         if self.outdata:
             err_msg += f"\n---------- contents of {self.servicename} ----------\n{self.outdata}"
         return err_msg
