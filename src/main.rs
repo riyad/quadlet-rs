@@ -74,11 +74,7 @@ fn parse_args(args: Vec<String>) -> Result<CliOptions, RuntimeError> {
                 Some("-no-kmsg-log" | "--no-kmsg-log") => cfg.no_kmsg = true,
                 Some("-user" | "--user") => cfg.is_user = true,
                 Some("-verbose" | "--verbose" | "-v") => cfg.verbose = true,
-                Some("-version" | "--version") => {
-                    cfg.version = true;
-                    // short circuit
-                    break;
-                }
+                Some("-version" | "--version") => cfg.version = true,
                 Some(path) => {
                     cfg.output_path = path.into();
                     // we only need the first path
@@ -436,24 +432,6 @@ mod tests {
         }
 
         #[test]
-        fn short_circuits_with_version() {
-            let args: Vec<String> = vec![
-                "./quadlet-rs".into(),
-                "--version".into(),
-                "--verbose".into(),
-                "./output_dir".into(),
-            ];
-
-            assert_eq!(
-                parse_args(args).ok().unwrap(),
-                CliOptions {
-                    version: true,
-                    ..Default::default()
-                }
-            );
-        }
-
-        #[test]
         fn parses_user_invocation_from_arg_0() {
             let args: Vec<String> =
                 vec!["./quadlet-rs-user-generator".into(), "./output_dir".into()];
@@ -588,6 +566,24 @@ mod tests {
                 parse_args(args).ok().unwrap(),
                 CliOptions {
                     verbose: true,
+                    output_path: "./output_dir".into(),
+                    ..Default::default()
+                }
+            );
+        }
+
+        #[test]
+        fn accepts_version() {
+            let args: Vec<String> = vec![
+                "./quadlet-rs".into(),
+                "--version".into(),
+                "./output_dir".into(),
+            ];
+
+            assert_eq!(
+                parse_args(args).ok().unwrap(),
+                CliOptions {
+                    version: true,
                     output_path: "./output_dir".into(),
                     ..Default::default()
                 }
