@@ -8,6 +8,7 @@ use std::sync::Mutex;
 // although we're using AtomicBool, all accesses have to be wrapped with
 // `unsafe { }` because it is `static mut`
 static mut DEBUG: AtomicBool = AtomicBool::new(false);
+static mut DRY_RUN: AtomicBool = AtomicBool::new(false);
 static mut NO_KMSG: AtomicBool = AtomicBool::new(false);
 static KMSG_FILE: Mutex<Option<File>> = Mutex::new(None);
 
@@ -28,8 +29,16 @@ pub(crate) fn enable_debug() {
     unsafe { *DEBUG.get_mut() = true };
 }
 
+pub(crate) fn enable_dry_run() {
+    unsafe { *DRY_RUN.get_mut() = true };
+}
+
 pub(crate) fn is_debug_enabled() -> bool {
     unsafe { *DEBUG.get_mut() }
+}
+
+pub(crate) fn is_dry_run_enabled() -> bool {
+    unsafe { *DRY_RUN.get_mut() }
 }
 
 macro_rules! log {
@@ -43,8 +52,7 @@ pub(crate) use log;
 pub(crate) fn __log(msg: String) {
     let line = format!("quadlet-rs-generator[{}]: {}", process::id(), msg);
 
-    if !__log_to_kmsg(&line) {
-        // If we can't log, print to stderr
+    if !__log_to_kmsg(&line) || is_dry_run_enabled() {
         eprintln!("{line}");
         stderr().flush().unwrap();
     }

@@ -274,6 +274,9 @@ fn main() {
         process::exit(0);
     }
 
+    if cfg.dry_run {
+        logger::enable_dry_run();
+    }
     if cfg.verbose || cfg.dry_run {
         logger::enable_debug();
     }
