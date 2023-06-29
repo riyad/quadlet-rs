@@ -306,6 +306,22 @@ fn process() -> Vec<RuntimeError> {
             cfg
         },
         Err(RuntimeError::CliMissingOutputDirectory(cfg)) => {
+            // short circuit
+            if cfg.version {
+                println!("quadlet-rs {}", QUADLET_VERSION);
+                return prev_errors;
+            }
+
+            if cfg.dry_run {
+                logger::enable_dry_run();
+            }
+            if cfg.verbose || cfg.dry_run {
+                logger::enable_debug();
+            }
+            if cfg.no_kmsg || cfg.dry_run {
+                logger::disable_kmsg();
+            }
+
             if !cfg.dry_run {
                 help();
                 prev_errors.push(RuntimeError::CliMissingOutputDirectory(cfg));
