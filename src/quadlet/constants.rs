@@ -74,7 +74,7 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 60] = [
     "WorkingDir",
 ];
 
-pub static SUPPORTED_KUBE_KEYS: [&str; 13] = [
+pub static SUPPORTED_KUBE_KEYS: [&str; 14] = [
     "AutoUpdate",
     "ConfigMap",
     "ExitCodePropagation",
@@ -86,6 +86,7 @@ pub static SUPPORTED_KUBE_KEYS: [&str; 13] = [
     "RemapUid",     // deprecated, use UserNS instead
     "RemapUidSize", // deprecated, use UserNS instead
     "RemapUsers",   // deprecated, use UserNS instead
+    "SetWorkingDirectory",
     "UserNS",
     "Yaml",
 ];
@@ -102,6 +103,11 @@ pub static SUPPORTED_NETWORK_KEYS: [&str; 11] = [
     "Options",
     "PodmanArgs",
     "Subnet",
+];
+
+
+pub static SUPPORTED_SERVICE_KEYS: [&str; 1] = [
+    "WorkingDirectory",
 ];
 
 pub static SUPPORTED_VOLUME_KEYS: [&str; 8] = [

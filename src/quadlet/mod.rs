@@ -29,8 +29,10 @@ pub(crate) enum ConversionError {
     InvalidSubnet(String),
     InvalidTmpfs(String),
     Io(io::Error),
+    NoYamlKeySpecified(),
     Parsing(systemd_unit::Error),
     UnknownKey(String),
+    UnsupportedValueForKey(String, String),
     YamlMissing(String),
 }
 
@@ -52,8 +54,14 @@ impl Display for ConversionError {
                 write!(f, "{msg}")
             }
             ConversionError::Io(e) => e.fmt(f),
+            ConversionError::NoYamlKeySpecified() => {
+                write!(f, "no Yaml key specified")
+            },
             ConversionError::Parsing(e) => {
                 write!(f, "Failed parsing unit file: {e}")
+            },
+            ConversionError::UnsupportedValueForKey(key, value) => {
+                write!(f, "unsupported value for {key}: {value}")
             }
         }
     }

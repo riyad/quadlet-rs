@@ -627,6 +627,8 @@ pub(crate) fn from_kube_unit(
         EntryValue::try_from_raw(podman_stop.to_escaped_string().as_str())?,
     );
 
+    handle_set_working_directory(kube, &mut service)?;
+
     Ok(service)
 }
 
@@ -993,9 +995,7 @@ fn handle_networks(
 }
 
 fn handle_podman_args(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {
-    let mut podman_args: Vec<String> = unit_file
-        .lookup_all_args(section, "PodmanArgs")
-        .collect();
+    let mut podman_args: Vec<String> = unit_file.lookup_all_args(section, "PodmanArgs").collect();
 
     if !podman_args.is_empty() {
         podman.add_vec(&mut podman_args);
@@ -1071,6 +1071,59 @@ fn handle_publish_ports(
             podman.add(container_port);
         }
     }
+
+    Ok(())
+}
+
+fn handle_set_working_directory(
+    kube: &SystemdUnit,
+    service_unit_file: &mut SystemdUnit,
+) -> Result<(), ConversionError> {
+    // If WorkingDirectory is already set in the Service section do not change it
+    if let Some(working_dir) = kube.lookup(SERVICE_SECTION, "WorkingDirectory") {
+        if !working_dir.is_empty() {
+            return Ok(());
+        }
+    }
+
+    let set_working_directory;
+    if let Some(set_working_dir) = kube.lookup(KUBE_SECTION, "SetWorkingDirectory") {
+        if set_working_dir.is_empty() {
+            return Ok(());
+        }
+        set_working_directory = set_working_dir;
+    } else {
+        return Ok(());
+    }
+
+    let relative_to_file = match set_working_directory.to_ascii_lowercase().as_str() {
+        "yaml" => {
+            if let Some(yaml) = kube.lookup(KUBE_SECTION, "Yaml") {
+                PathBuf::from(yaml)
+            } else {
+                return Err(ConversionError::NoYamlKeySpecified());
+            }
+        }
+        "unit" => kube.path().expect("should have a path").clone(),
+        v => {
+            return Err(ConversionError::UnsupportedValueForKey(
+                "WorkingDirectory".to_string(),
+                v.to_string(),
+            ))
+        }
+    };
+
+    let file_in_workingdir = relative_to_file.absolute_from_unit(kube);
+
+    service_unit_file.append_entry(
+        SERVICE_SECTION,
+        "WorkingDirectory",
+        file_in_workingdir
+            .parent()
+            .expect("should have a parent directory")
+            .display()
+            .to_string(),
+    );
 
     Ok(())
 }
