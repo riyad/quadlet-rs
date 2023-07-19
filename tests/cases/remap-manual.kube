@@ -1,5 +1,5 @@
 ## assert-failed
-## assert-stderr-contains "Converting \"remap-manual.kube\": RemapUsers=manual is not supported"
+## assert-stderr-contains "RemapUsers=manual is not supported"
 
 [Kube]
 Yaml=/opt/k8s/deployment.yml
