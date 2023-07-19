@@ -296,7 +296,7 @@ impl<'a> Parser<'a> {
             self.bump();
         }
 
-        Ok(value)
+        Ok(value.trim_end().to_string())
     }
 }
 
@@ -688,6 +688,15 @@ mod tests {
         }
 
         #[test]
+        fn test_last_line_with_spaces_at_the_end_gets_trimmed() {
+            let input = "this is \\\nsome \\\ntext   \t";
+            let mut parser = Parser::new(input);
+            let old_pos = parser.column;
+            assert_eq!(parser.parse_value(), Ok("this is  some  text".trim_end().into()),);
+            assert_eq!(parser.column, old_pos + 7);
+        }
+
+        #[test]
         fn test_turn_continuation_into_space() {
             let input = "this is some text\\\nmore text";
             let mut parser = Parser::new(input);
@@ -732,7 +741,7 @@ mod tests {
             let mut parser = Parser::new(input);
             let old_line = parser.line;
             let old_col = parser.column;
-            assert_eq!(parser.parse_value(), Ok("text ".into()),);
+            assert_eq!(parser.parse_value(), Ok("text".into()),);
             assert_eq!(parser.line, old_line + 2);
             assert_eq!(parser.column, old_col + 4);
         }
@@ -743,7 +752,7 @@ mod tests {
             let mut parser = Parser::new(input);
             let old_line = parser.line;
             let old_col = parser.column;
-            assert_eq!(parser.parse_value(), Ok("text ".into()),);
+            assert_eq!(parser.parse_value(), Ok("text".into()),);
             assert_eq!(parser.line, old_line + 1);
             assert_eq!(parser.column, old_col + 0);
         }

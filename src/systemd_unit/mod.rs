@@ -760,7 +760,7 @@ KeyTwo\t=\tvalue 2\t";
 
                 let mut iter = unit.section_entries("Section A");
                 assert_eq!(iter.next().unwrap(), ("KeyOne", "value 1"));
-                assert_eq!(iter.next().unwrap(), ("KeyTwo", "value 2\t"));
+                assert_eq!(iter.next().unwrap(), ("KeyTwo", "value 2"));
                 assert_eq!(iter.next(), None);
             }
 
