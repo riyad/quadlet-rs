@@ -422,7 +422,7 @@ pub(crate) fn from_container_unit(
             params_map.insert(kv[0], kv[1].to_string());
         }
         if let Some(param_type) = params_map.get("type") {
-            if param_type == "volume" || param_type == "bind" {
+            if param_type == "volume" || param_type == "bind" || param_type == "glob" {
                 if let Some(param_source) = params_map.get("source") {
                     params_map.insert(
                         "source",
