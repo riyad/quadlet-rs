@@ -11,7 +11,7 @@ pub const X_VOLUME_SECTION: &str    = "X-Volume";
 
 pub const AUTO_UPDATE_LABEL: &str = "io.containers.autoupdate";
 
-pub static SUPPORTED_CONTAINER_KEYS: [&str; 60] = [
+pub static SUPPORTED_CONTAINER_KEYS: [&str; 61] = [
     "AddCapability",
     "AddDevice",
     "Annotation",
@@ -63,6 +63,7 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 60] = [
     "SecurityLabelNested",
     "SecurityLabelType",
     "Secret",
+    "ShmSize",
     "Sysctl",
     "Timezone",
     "Tmpfs",

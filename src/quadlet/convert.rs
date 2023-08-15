@@ -247,6 +247,10 @@ pub(crate) fn from_container_unit(
         podman.add(format!("--cap-add={}", caps.to_ascii_lowercase()))
     }
 
+    if let Some(shm_size) = container.lookup(CONTAINER_SECTION, "ShmSize") {
+        podman.add(format!("--shm-size={shm_size}"))
+    }
+
     for sysctl in container.lookup_all_strv(CONTAINER_SECTION, "Sysctl") {
         podman.add(format!("--sysctl={sysctl}"))
     }
