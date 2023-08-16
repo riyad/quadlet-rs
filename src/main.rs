@@ -160,21 +160,17 @@ fn load_units_from_dir(
 
         debug!("Loading source unit file {path:?}");
 
-        let buf = match fs::read_to_string(&path) {
-            Ok(buf) => buf,
+        let unit = match SystemdUnitFile::load_from_path(&path) {
+            Ok(mut unit) => unit,
             Err(e) => {
-                prev_errors.push(RuntimeError::Io(format!("Error loading {path:?}"), e));
-                continue;
-            }
-        };
-
-        let unit = match SystemdUnit::load_from_str(buf.as_str()) {
-            Ok(mut unit) => {
-                unit.path = Some(path);
-                unit
-            }
-            Err(e) => {
-                prev_errors.push(RuntimeError::Conversion(format!("Error loading {path:?}"), ConversionError::Parsing(e)));
+                match e {
+                    IoError::Io(e) => {
+                        prev_errors.push(RuntimeError::Io(format!("Error loading {path:?}"), e));
+                    },
+                    IoError::Unit(e) => {
+                        prev_errors.push(RuntimeError::Conversion(format!("Error loading {path:?}"), ConversionError::Parsing(e)));
+                    },
+                }
                 continue;
             }
         };
@@ -205,9 +201,9 @@ fn generate_service_file(service: &mut SystemdUnit) -> io::Result<()> {
 // symlinks to get systemd to start the newly generated file as needed.
 // In a traditional setup this is done by "systemctl enable", but that doesn't
 // work for auto-generated files like these.
-fn enable_service_file(output_path: &Path, service: &SystemdUnit) {
+fn enable_service_file(output_path: &Path, service: &SystemdUnitFile) {
     let mut symlinks: Vec<PathBuf> = Vec::new();
-    let service_name = service.path().unwrap().file_name().unwrap();
+    let service_name = service.path().file_name().expect("should have a file name");
 
     let mut alias: Vec<PathBuf> = service
         .lookup_all_strv(INSTALL_SECTION, "Alias")
@@ -365,26 +361,26 @@ fn process() -> Vec<RuntimeError> {
         }
     }
 
-    for (name, unit) in units {
-        let name = name.into_string().unwrap();
+    for unit in units {
+        let ext = unit.path().extension().expect("should have file extension");
 
-        let service_result = if name.ends_with(".container") {
+        let service_result = if ext == "container" {
             warn_if_ambiguous_image_name(&unit);
             convert::from_container_unit(&unit, cfg.is_user)
-        } else if name.ends_with(".kube") {
+        } else if ext == "kube" {
             convert::from_kube_unit(&unit, cfg.is_user)
-        } else if name.ends_with(".network") {
+        } else if ext == "network" {
             convert::from_network_unit(&unit)
-        } else if name.ends_with(".volume") {
+        } else if ext == "volume" {
             convert::from_volume_unit(&unit)
         } else {
-            log!("Unsupported file type {name:?}");
+            log!("Unsupported file type {:?}", unit.path());
             continue;
         };
         let mut service = match service_result {
             Ok(service_unit) => service_unit,
             Err(e) => {
-                prev_errors.push(RuntimeError::Conversion(format!("Converting {name:?}"), e));
+                prev_errors.push(RuntimeError::Conversion(format!("Converting {:?}", unit.path()), e));
                 continue;
             }
         };
@@ -393,14 +389,13 @@ fn process() -> Vec<RuntimeError> {
         service_output_path.push(
             service
                 .path()
-                .expect("should have a path")
                 .file_name()
                 .unwrap(),
         );
-        service.path = Some(service_output_path);
+        service.path = service_output_path;
 
         if cfg.dry_run {
-            println!("---{:?}---", service.path().expect("should have a path"));
+            println!("---{:?}---", service.path());
             _ = io::stdout()
                 .write(service.to_string().as_bytes())
                 .expect("should write to STDOUT");
@@ -408,10 +403,10 @@ fn process() -> Vec<RuntimeError> {
             // TODO: revisit this decision, then we could use the following code ...
             /*match service.to_string() {
                 Ok(data) => {
-                    println!("---{:?}---\n{data}", service.path.expect("should have a path"));
+                    println!("---{:?}---\n{data}", service.path);
                 },
                 Err(e) => {
-                    prev_errors.push(RuntimeError::Io(format!("Parsing {:?}", service.path().expect("should have a path")), e))
+                    prev_errors.push(RuntimeError::Io(format!("Parsing {:?}", service.path()), e))
                     continue;
                 }
             }*/
@@ -420,7 +415,7 @@ fn process() -> Vec<RuntimeError> {
 
         if let Err(e) = generate_service_file(&mut service) {
             prev_errors.push(RuntimeError::Io(
-                format!("Generatring service file {:?}", service.path().expect("should have a path")),
+                format!("Generatring service file {:?}", service.path()),
                 e,
             ));
             continue; // NOTE: Go Quadlet doesn't do this, but it probably should

@@ -11,24 +11,24 @@ use super::*;
 // service file (unit file with Service group) based on the options in the Container group.
 // The original Container group is kept around as X-Container.
 pub(crate) fn from_container_unit(
-    container: &SystemdUnit,
+    container: &SystemdUnitFile,
     is_user: bool,
-) -> Result<SystemdUnit, ConversionError> {
-    let mut service = SystemdUnit::new();
+) -> Result<SystemdUnitFile, ConversionError> {
+    let mut service = SystemdUnitFile::new();
 
     service.merge_from(container);
-    service.path = Some(quad_replace_extension(
-        container.path().unwrap(),
+    service.path = quad_replace_extension(
+        container.path(),
         ".service",
         "",
         "",
-    ));
+    );
 
-    if container.path().is_some() {
+    if !container.path().as_os_str().is_empty() {
         service.append_entry(
             UNIT_SECTION,
             "SourcePath",
-            container.path().unwrap().to_str().unwrap(),
+            container.path().to_str().expect("EnvironmentFile path is not a valid UTF-8 string"),
         );
     }
 
@@ -491,23 +491,23 @@ pub(crate) fn from_container_unit(
 }
 
 pub(crate) fn from_kube_unit(
-    kube: &SystemdUnit,
+    kube: &SystemdUnitFile,
     is_user: bool,
-) -> Result<SystemdUnit, ConversionError> {
-    let mut service = SystemdUnit::new();
+) -> Result<SystemdUnitFile, ConversionError> {
+    let mut service = SystemdUnitFile::new();
     service.merge_from(kube);
-    service.path = Some(quad_replace_extension(
-        kube.path().unwrap(),
+    service.path = quad_replace_extension(
+        kube.path(),
         ".service",
         "",
         "",
-    ));
+    );
 
-    if kube.path().is_some() {
+    if !kube.path().as_os_str().is_empty() {
         service.append_entry(
             UNIT_SECTION,
             "SourcePath",
-            kube.path().unwrap().to_str().unwrap(),
+            kube.path().to_str().expect("EnvironmentFile path is not a valid UTF-8 string"),
         );
     }
 
@@ -639,21 +639,21 @@ pub(crate) fn from_kube_unit(
 // Convert a quadlet network file (unit file with a Network group) to a systemd
 // service file (unit file with Service group) based on the options in the Network group.
 // The original Network group is kept around as X-Network.
-pub(crate) fn from_network_unit(network: &SystemdUnit) -> Result<SystemdUnit, ConversionError> {
-    let mut service = SystemdUnit::new();
+pub(crate) fn from_network_unit(network: &SystemdUnitFile) -> Result<SystemdUnitFile, ConversionError> {
+    let mut service = SystemdUnitFile::new();
     service.merge_from(network);
-    service.path = Some(quad_replace_extension(
-        network.path().unwrap(),
+    service.path = quad_replace_extension(
+        network.path(),
         ".service",
         "",
         "-network",
-    ));
+    );
 
-    if network.path().is_some() {
+    if !network.path().as_os_str().is_empty() {
         service.append_entry(
             UNIT_SECTION,
             "SourcePath",
-            network.path().unwrap().to_str().unwrap(),
+            network.path().to_str().expect("EnvironmentFile path is not a valid UTF-8 string"),
         );
     }
 
@@ -662,7 +662,7 @@ pub(crate) fn from_network_unit(network: &SystemdUnit) -> Result<SystemdUnit, Co
     // Rename old Network group to x-Network so that systemd ignores it
     service.rename_section(NETWORK_SECTION, X_NETWORK_SECTION);
 
-    let podman_network_name = quad_replace_extension(network.path().unwrap(), "", "systemd-", "")
+    let podman_network_name = quad_replace_extension(network.path(), "", "systemd-", "")
         .file_name()
         .unwrap()
         .to_str()
@@ -776,21 +776,21 @@ pub(crate) fn from_network_unit(network: &SystemdUnit) -> Result<SystemdUnit, Co
     Ok(service)
 }
 
-pub(crate) fn from_volume_unit(volume: &SystemdUnit) -> Result<SystemdUnit, ConversionError> {
-    let mut service = SystemdUnit::new();
+pub(crate) fn from_volume_unit(volume: &SystemdUnitFile) -> Result<SystemdUnitFile, ConversionError> {
+    let mut service = SystemdUnitFile::new();
     service.merge_from(volume);
-    service.path = Some(quad_replace_extension(
-        volume.path().unwrap(),
+    service.path = quad_replace_extension(
+        volume.path(),
         ".service",
         "",
         "-volume",
-    ));
+    );
 
-    if volume.path().is_some() {
+    if !volume.path().as_os_str().is_empty() {
         service.append_entry(
             UNIT_SECTION,
             "SourcePath",
-            volume.path().unwrap().to_str().unwrap(),
+            volume.path().to_str().expect("EnvironmentFile path is not a valid UTF-8 string"),
         );
     }
 
@@ -799,7 +799,7 @@ pub(crate) fn from_volume_unit(volume: &SystemdUnit) -> Result<SystemdUnit, Conv
     // Rename old Volume group to x-Volume so that systemd ignores it
     service.rename_section(VOLUME_SECTION, X_VOLUME_SECTION);
 
-    let podman_volume_name = quad_replace_extension(volume.path().unwrap(), "", "systemd-", "")
+    let podman_volume_name = quad_replace_extension(volume.path(), "", "systemd-", "")
         .file_name()
         .unwrap()
         .to_str()
@@ -1080,8 +1080,8 @@ fn handle_publish_ports(
 }
 
 fn handle_set_working_directory(
-    kube: &SystemdUnit,
-    service_unit_file: &mut SystemdUnit,
+    kube: &SystemdUnitFile,
+    service_unit_file: &mut SystemdUnitFile,
 ) -> Result<(), ConversionError> {
     // If WorkingDirectory is already set in the Service section do not change it
     if let Some(working_dir) = kube.lookup(SERVICE_SECTION, "WorkingDirectory") {
@@ -1108,7 +1108,7 @@ fn handle_set_working_directory(
                 return Err(ConversionError::NoYamlKeySpecified());
             }
         }
-        "unit" => kube.path().expect("should have a path").clone(),
+        "unit" => kube.path().clone(),
         v => {
             return Err(ConversionError::UnsupportedValueForKey(
                 "WorkingDirectory".to_string(),
@@ -1133,8 +1133,8 @@ fn handle_set_working_directory(
 }
 
 fn handle_storage_source(
-    quadlet_unit_file: &SystemdUnit,
-    service_unit_file: &mut SystemdUnit,
+    quadlet_unit_file: &SystemdUnitFile,
+    service_unit_file: &mut SystemdUnitFile,
     source: &str,
 ) -> String {
     let mut source = source.to_owned();

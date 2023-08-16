@@ -2,11 +2,11 @@ use std::env;
 use std::os::unix::prelude::OsStrExt;
 use std::path::{Path, PathBuf};
 
-use crate::systemd_unit::SystemdUnit;
+use crate::systemd_unit::SystemdUnitFile;
 
 pub(crate) trait PathBufExt<T> {
     fn absolute_from(&self, new_root: &Path) -> T;
-    fn absolute_from_unit(&self, unit_file: &SystemdUnit) -> T;
+    fn absolute_from_unit(&self, unit_file: &SystemdUnitFile) -> T;
     fn cleaned(&self) -> T;
     fn starts_with_systemd_specifier(&self) -> bool;
 }
@@ -28,12 +28,9 @@ impl PathBufExt<PathBuf> for PathBuf {
         self.cleaned()
     }
 
-    fn absolute_from_unit(&self, unit_file: &SystemdUnit) -> Self {
+    fn absolute_from_unit(&self, unit_file: &SystemdUnitFile) -> Self {
         let current_dir = env::current_dir().expect("current dir");
-        let unit_file_dir = unit_file.path().map_or_else(
-            || current_dir.as_path(),
-            |p| p.parent().unwrap_or(current_dir.as_path()),
-        );
+        let unit_file_dir = unit_file.path().parent().unwrap_or(current_dir.as_path());
 
         self.absolute_from(unit_file_dir)
     }
@@ -205,8 +202,7 @@ mod tests {
             ];
             let target_path = env::current_dir().expect("current dir");
 
-            let mut unit = SystemdUnit::new();
-            unit.path = None;
+            let mut unit = SystemdUnitFile::new();
 
             for input in inputs {
                 let base_path = PathBuf::from(input);
@@ -237,8 +233,8 @@ mod tests {
             ];
             let target_path = env::current_dir().expect("current dir");
 
-            let mut unit = SystemdUnit::new();
-            unit.path = Some(PathBuf::from(""));
+            let mut unit = SystemdUnitFile::new();
+            unit.path = PathBuf::from("");
 
             for input in inputs {
                 let base_path = PathBuf::from(input);
@@ -269,8 +265,8 @@ mod tests {
             ];
             let target_path = env::current_dir().expect("current dir");
 
-            let mut unit = SystemdUnit::new();
-            unit.path = Some(PathBuf::from("z.service"));
+            let mut unit = SystemdUnitFile::new();
+            unit.path = PathBuf::from("z.service");
 
             for input in inputs {
                 let base_path = PathBuf::from(input);
@@ -301,8 +297,8 @@ mod tests {
             ];
             let target_path = PathBuf::from("/x/y");
 
-            let mut unit = SystemdUnit::new();
-            unit.path = Some(PathBuf::from("/x/y/z.service"));
+            let mut unit = SystemdUnitFile::new();
+            unit.path = PathBuf::from("/x/y/z.service");
 
             for input in inputs {
                 let base_path = PathBuf::from(input);
@@ -333,8 +329,8 @@ mod tests {
             ];
             let target_path = PathBuf::from("x/y");
 
-            let mut unit = SystemdUnit::new();
-            unit.path = Some(PathBuf::from("x/y/z.service"));
+            let mut unit = SystemdUnitFile::new();
+            unit.path = PathBuf::from("x/y/z.service");
 
             for input in inputs {
                 let base_path = PathBuf::from(input);

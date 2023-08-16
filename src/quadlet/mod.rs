@@ -6,7 +6,7 @@ pub(crate) mod podman_command;
 
 use self::logger::*;
 use crate::systemd_unit;
-use crate::systemd_unit::SystemdUnit;
+use crate::systemd_unit::SystemdUnitFile;
 
 pub(crate) use self::constants::*;
 pub(crate) use self::path_buf_ext::*;
@@ -102,8 +102,17 @@ impl From<systemd_unit::Error> for ConversionError {
     }
 }
 
+impl From<systemd_unit::IoError> for ConversionError {
+    fn from(e: systemd_unit::IoError) -> Self {
+        match e {
+            systemd_unit::IoError::Io(e) => ConversionError::Io(e),
+            systemd_unit::IoError::Unit(e) => ConversionError::Parsing(e),
+        }
+    }
+}
+
 pub(crate) fn check_for_unknown_keys(
-    unit: &SystemdUnit,
+    unit: &SystemdUnitFile,
     group_name: &str,
     supported_keys: &[&str],
 ) -> Result<(), ConversionError> {
@@ -173,10 +182,10 @@ fn is_unambiguous_name(image_name: &str) -> bool {
 //
 // We implement a simple version of this from scratch here to avoid
 // a huge dependency in the generator just for a warning.
-pub(crate) fn warn_if_ambiguous_image_name(container: &SystemdUnit) {
+pub(crate) fn warn_if_ambiguous_image_name(container: &SystemdUnitFile) {
     if let Some(image_name) = container.lookup_last(CONTAINER_SECTION, "Image") {
         if !is_unambiguous_name(image_name) {
-            let file_name = container.path().unwrap().file_name().unwrap();
+            let file_name = container.path().file_name().unwrap();
             log!("Warning: {file_name:?} specifies the image {image_name:?} which not a fully qualified image name. This is not ideal for performance and security reasons. See the podman-pull manpage discussion of short-name-aliases.conf for details.");
         }
     }
