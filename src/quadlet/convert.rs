@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use crate::systemd_unit::*;
@@ -12,6 +13,7 @@ use super::*;
 // The original Container group is kept around as X-Container.
 pub(crate) fn from_container_unit(
     container: &SystemdUnitFile,
+    names: &HashMap<OsString, OsString>,
     is_user: bool,
 ) -> Result<SystemdUnitFile, ConversionError> {
     let mut service = SystemdUnitFile::new();
@@ -130,7 +132,7 @@ pub(crate) fn from_container_unit(
         }
     }
 
-    handle_networks(container, CONTAINER_SECTION, &mut service, &mut podman)?;
+    handle_networks(container, CONTAINER_SECTION, &mut service, names, &mut podman)?;
 
     // Run with a pid1 init to reap zombies by default (as most apps don't do that)
     if let Some(run_init) = container.lookup_bool(CONTAINER_SECTION, "RunInit") {
@@ -331,7 +333,7 @@ pub(crate) fn from_container_unit(
         }
 
         if !source.is_empty() {
-            source = handle_storage_source(container, &mut service, &source);
+            source = handle_storage_source(container, &mut service, &source, names);
         }
 
         podman.add("-v");
@@ -430,12 +432,12 @@ pub(crate) fn from_container_unit(
                 if let Some(param_source) = params_map.get("source") {
                     params_map.insert(
                         "source",
-                        handle_storage_source(container, &mut service, param_source),
+                        handle_storage_source(container, &mut service, param_source,names),
                     );
                 } else if let Some(param_source) = params_map.get("src") {
                     params_map.insert(
                         "src",
-                        handle_storage_source(container, &mut service, param_source),
+                        handle_storage_source(container, &mut service, param_source, names),
                     );
                 }
             }
@@ -492,6 +494,7 @@ pub(crate) fn from_container_unit(
 
 pub(crate) fn from_kube_unit(
     kube: &SystemdUnitFile,
+    names: &HashMap<OsString, OsString>,
     is_user: bool,
 ) -> Result<SystemdUnitFile, ConversionError> {
     let mut service = SystemdUnitFile::new();
@@ -572,7 +575,7 @@ pub(crate) fn from_kube_unit(
 
     handle_user_ns(kube, KUBE_SECTION, &mut podman_start);
 
-    handle_networks(kube, KUBE_SECTION, &mut service, &mut podman_start)?;
+    handle_networks(kube, KUBE_SECTION, &mut service, names, &mut podman_start)?;
 
     for update in kube.lookup_all_strv(KUBE_SECTION, "AutoUpdate") {
         let annotation_suffix;
@@ -639,7 +642,9 @@ pub(crate) fn from_kube_unit(
 // Convert a quadlet network file (unit file with a Network group) to a systemd
 // service file (unit file with Service group) based on the options in the Network group.
 // The original Network group is kept around as X-Network.
-pub(crate) fn from_network_unit(network: &SystemdUnitFile) -> Result<SystemdUnitFile, ConversionError> {
+// Also returns the canonical network name, either auto-generated or user-defined via the
+// NetworkName key-value.
+pub(crate) fn from_network_unit(network: &SystemdUnitFile) -> Result<(SystemdUnitFile, String), ConversionError> {
     let mut service = SystemdUnitFile::new();
     service.merge_from(network);
     service.path = quad_replace_extension(
@@ -662,12 +667,18 @@ pub(crate) fn from_network_unit(network: &SystemdUnitFile) -> Result<SystemdUnit
     // Rename old Network group to x-Network so that systemd ignores it
     service.rename_section(NETWORK_SECTION, X_NETWORK_SECTION);
 
-    let podman_network_name = quad_replace_extension(network.path(), "", "systemd-", "")
-        .file_name()
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .to_string();
+    // Derive network name from unit name (with added prefix), or use user-provided name.
+    let podman_network_name = network.lookup(NETWORK_SECTION, "NetworkName").unwrap_or_default();
+    let podman_network_name = if podman_network_name.is_empty() {
+        quad_replace_extension(network.path(), "", "systemd-", "")
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string()
+    } else {
+        podman_network_name.to_string()
+    };
 
     // Need the containers filesystem mounted to start podman
     service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
@@ -773,10 +784,16 @@ pub(crate) fn from_network_unit(network: &SystemdUnitFile) -> Result<SystemdUnit
     // The default syslog identifier is the exec basename (podman) which isn't very useful here
     service.append_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
 
-    Ok(service)
+    Ok((service, podman_network_name))
 }
 
-pub(crate) fn from_volume_unit(volume: &SystemdUnitFile) -> Result<SystemdUnitFile, ConversionError> {
+// Convert a quadlet volume file (unit file with a Volume group) to a systemd
+// service file (unit file with Service group) based on the options in the
+// Volume group.
+// The original Volume group is kept around as X-Volume.
+// Also returns the canonical volume name, either auto-generated or user-defined via the VolumeName
+// key-value.
+pub(crate) fn from_volume_unit(volume: &SystemdUnitFile) -> Result<(SystemdUnitFile, String), ConversionError> {
     let mut service = SystemdUnitFile::new();
     service.merge_from(volume);
     service.path = quad_replace_extension(
@@ -799,12 +816,18 @@ pub(crate) fn from_volume_unit(volume: &SystemdUnitFile) -> Result<SystemdUnitFi
     // Rename old Volume group to x-Volume so that systemd ignores it
     service.rename_section(VOLUME_SECTION, X_VOLUME_SECTION);
 
-    let podman_volume_name = quad_replace_extension(volume.path(), "", "systemd-", "")
-        .file_name()
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .to_string();
+    // Derive volume name from unit name (with added prefix), or use user-provided name.
+    let podman_volume_name = volume.lookup(VOLUME_SECTION, "VolumeName").unwrap_or_default();
+    let podman_volume_name = if podman_volume_name.is_empty() {
+        quad_replace_extension(volume.path(), "", "systemd-", "")
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string()
+    } else {
+        podman_volume_name.to_string()
+    };
 
     // Need the containers filesystem mounted to start podman
     service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
@@ -909,7 +932,7 @@ pub(crate) fn from_volume_unit(volume: &SystemdUnitFile) -> Result<SystemdUnitFi
     // The default syslog identifier is the exec basename (podman) which isn't very useful here
     service.append_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
 
-    Ok(service)
+    Ok((service, podman_volume_name))
 }
 
 fn handle_health(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {
@@ -947,27 +970,31 @@ fn handle_networks(
     quadlet_unit_file: &SystemdUnit,
     section: &str,
     service_unit_file: &mut SystemdUnit,
+    names: &HashMap<OsString, OsString>,
     podman: &mut PodmanCommand,
 ) -> Result<(), ConversionError> {
     let networks = quadlet_unit_file.lookup_all(section, "Network");
     for network in networks {
         if !network.is_empty() {
-            let mut network_name = network;
+            let mut network_name = network.to_string();
             let mut options: Option<&str> = None;
             if let Some((_network_name, _options)) = network.split_once(':') {
-                network_name = _network_name;
+                network_name = _network_name.to_string();
                 options = Some(_options);
             }
 
-            let podman_network_name;
             if network_name.ends_with(".network") {
-                // the podman network name is systemd-$name
-                podman_network_name =
-                    quad_replace_extension(&PathBuf::from(network_name), "", "systemd-", "");
+                // the podman network name is systemd-$name if none is specified by the user.
+                let podman_network_name = names.get(&OsString::from(&network_name)).map(|s| s.to_os_string()).unwrap_or_default();
+                let podman_network_name = if podman_network_name.is_empty() {
+                    quad_replace_extension(&PathBuf::from(&network_name), "", "systemd-", "").as_os_str().to_os_string()
+                } else {
+                    podman_network_name
+                };
 
                 // the systemd unit name is $name-network.service
                 let network_service_name = quad_replace_extension(
-                    &PathBuf::from(network_name),
+                    &PathBuf::from(&network_name),
                     ".service",
                     "",
                     "-network",
@@ -984,7 +1011,7 @@ fn handle_networks(
                     network_service_name.to_str().unwrap(),
                 );
 
-                network_name = podman_network_name.to_str().unwrap();
+                network_name = podman_network_name.to_str().unwrap().to_string();
             }
 
             if options.is_some() {
@@ -1136,6 +1163,7 @@ fn handle_storage_source(
     quadlet_unit_file: &SystemdUnitFile,
     service_unit_file: &mut SystemdUnitFile,
     source: &str,
+    names: &HashMap<OsString, OsString>,
 ) -> String {
     let mut source = source.to_owned();
 
@@ -1151,8 +1179,13 @@ fn handle_storage_source(
         // Absolute path
         service_unit_file.append_entry(UNIT_SECTION, "RequiresMountsFor", &source);
     } else if source.ends_with(".volume") {
-        // the podman volume name is systemd-$name
-        let volume_name = quad_replace_extension(&PathBuf::from(&source), "", "systemd-", "");
+        // the podman volume name is systemd-$name if none has been provided by the user.
+        let volume_name = names.get(&OsString::from(&source)).map(|s| PathBuf::from(s)).unwrap_or_default();
+        let volume_name = if volume_name.as_os_str().is_empty() {
+            quad_replace_extension(&PathBuf::from(&source), "", "systemd-", "")
+        } else {
+            volume_name
+        };
 
         // the systemd unit name is $name-volume.service
         let volume_service_name =

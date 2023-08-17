@@ -92,7 +92,7 @@ pub static SUPPORTED_KUBE_KEYS: [&str; 14] = [
     "Yaml",
 ];
 
-pub static SUPPORTED_NETWORK_KEYS: [&str; 11] = [
+pub static SUPPORTED_NETWORK_KEYS: [&str; 12] = [
     "DisableDNS",
     "Driver",
     "Gateway",
@@ -101,6 +101,7 @@ pub static SUPPORTED_NETWORK_KEYS: [&str; 11] = [
     "IPRange",
     "IPv6",
     "Label",
+    "NetworkName",
     "Options",
     "PodmanArgs",
     "Subnet",
@@ -111,7 +112,7 @@ pub static SUPPORTED_SERVICE_KEYS: [&str; 1] = [
     "WorkingDirectory",
 ];
 
-pub static SUPPORTED_VOLUME_KEYS: [&str; 8] = [
+pub static SUPPORTED_VOLUME_KEYS: [&str; 9] = [
     "Copy",
     "Device",
     "Group",
@@ -120,4 +121,5 @@ pub static SUPPORTED_VOLUME_KEYS: [&str; 8] = [
     "PodmanArgs",
     "Type",
     "User",
+    "VolumeName",
 ];

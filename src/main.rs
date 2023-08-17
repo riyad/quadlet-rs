@@ -7,10 +7,11 @@ use self::quadlet::*;
 
 use self::systemd_unit::*;
 
+use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::env;
 use std::ffi::OsStr;
-use std::ffi::OsString;
 use std::fs;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
@@ -122,15 +123,17 @@ fn get_unit_search_dirs(rootless: bool) -> Vec<PathBuf> {
 
 fn load_units_from_dir(
     source_path: &Path,
-    units: &mut HashMap<OsString, SystemdUnit>,
-) -> Vec<RuntimeError> {
+) -> (Vec<SystemdUnitFile>, Vec<RuntimeError>) {
     let mut prev_errors = Vec::new();
+
+    let mut units = Vec::new();
+    let mut seen = HashSet::new();
 
     let files = match source_path.read_dir() {
         Ok(entries) => entries,
         Err(e) => {
             prev_errors.push(RuntimeError::Io(format!("Can't read {source_path:?}"), e));
-            return prev_errors
+            return (units, prev_errors)
         },
     };
 
@@ -154,14 +157,14 @@ fn load_units_from_dir(
         if !SUPPORTED_EXTENSIONS.contains(&extension) {
             continue;
         }
-        if units.contains_key(&name) {
+        if seen.contains(&name) {
             continue;
         }
 
         debug!("Loading source unit file {path:?}");
 
         let unit = match SystemdUnitFile::load_from_path(&path) {
-            Ok(mut unit) => unit,
+            Ok(unit) => unit,
             Err(e) => {
                 match e {
                     IoError::Io(e) => {
@@ -175,14 +178,15 @@ fn load_units_from_dir(
             }
         };
 
-        units.insert(name, unit);
+        seen.insert(name);
+        units.push(unit);
     }
 
-    return prev_errors;
+    (units, prev_errors)
 }
 
-fn generate_service_file(service: &mut SystemdUnit) -> io::Result<()> {
-    let out_filename = service.path().unwrap();
+fn generate_service_file(service: &mut SystemdUnitFile) -> io::Result<()> {
+    let out_filename = service.path();
 
     debug!("Writing {out_filename:?}");
 
@@ -342,9 +346,11 @@ fn process() -> Vec<RuntimeError> {
 
     let source_paths = get_unit_search_dirs(cfg.is_user);
 
-    let mut units: HashMap<OsString, SystemdUnit> = HashMap::default();
+    let mut units = Vec::new();
     for dir in &source_paths {
-        prev_errors.extend(load_units_from_dir(dir, &mut units));
+        let (new_units, new_errors) = load_units_from_dir(dir);
+        units.extend(new_units);
+        prev_errors.extend(new_errors);
     }
 
     if units.is_empty() {
@@ -361,21 +367,43 @@ fn process() -> Vec<RuntimeError> {
         }
     }
 
+    // Sort unit files according to potential inter-dependencies, with Volume and Network units
+	// taking precedence over all others.
+    units.sort_unstable_by(|a, _| {
+        match a.path().extension() {
+            Some(ext) if ext == "volume" || ext == "network" => Ordering::Less,
+            _ => Ordering::Greater,
+        }
+    });
+
+    // A map of network/volume unit file-names, against their calculated names, as needed by Podman.
+	let mut resource_names = HashMap::with_capacity(units.len());
+
     for unit in units {
         let ext = unit.path().extension().expect("should have file extension");
 
         let service_result = if ext == "container" {
             warn_if_ambiguous_image_name(&unit);
-            convert::from_container_unit(&unit, cfg.is_user)
+            convert::from_container_unit(&unit, &resource_names, cfg.is_user)
         } else if ext == "kube" {
-            convert::from_kube_unit(&unit, cfg.is_user)
-        } else if ext == "network" {
-            convert::from_network_unit(&unit)
-        } else if ext == "volume" {
-            convert::from_volume_unit(&unit)
+            convert::from_kube_unit(&unit, &resource_names, cfg.is_user)
         } else {
-            log!("Unsupported file type {:?}", unit.path());
-            continue;
+            // this is an ugly hack
+            let named_service_result = if ext == "network" {
+                convert::from_network_unit(&unit)
+            } else if ext == "volume" {
+                convert::from_volume_unit(&unit)
+            } else {
+                log!("Unsupported file type {:?}", unit.path());
+                continue;
+            };
+            match named_service_result {
+                Ok((service, name)) => {
+                    resource_names.insert(service.path().as_os_str().to_os_string(), name.into());
+                    Ok(service)
+                },
+                Err(e) => Err(e),
+            }
         };
         let mut service = match service_result {
             Ok(service_unit) => service_unit,

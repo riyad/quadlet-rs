@@ -202,7 +202,7 @@ mod tests {
             ];
             let target_path = env::current_dir().expect("current dir");
 
-            let mut unit = SystemdUnitFile::new();
+            let unit = SystemdUnitFile::new();
 
             for input in inputs {
                 let base_path = PathBuf::from(input);
