@@ -644,7 +644,7 @@ pub(crate) fn from_kube_unit(
 // The original Network group is kept around as X-Network.
 // Also returns the canonical network name, either auto-generated or user-defined via the
 // NetworkName key-value.
-pub(crate) fn from_network_unit(network: &SystemdUnitFile) -> Result<(SystemdUnitFile, String), ConversionError> {
+pub(crate) fn from_network_unit(network: &SystemdUnitFile, names: &mut HashMap<OsString, OsString>,) -> Result<SystemdUnitFile, ConversionError> {
     let mut service = SystemdUnitFile::new();
     service.merge_from(network);
     service.path = quad_replace_extension(
@@ -784,7 +784,9 @@ pub(crate) fn from_network_unit(network: &SystemdUnitFile) -> Result<(SystemdUni
     // The default syslog identifier is the exec basename (podman) which isn't very useful here
     service.append_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
 
-    Ok((service, podman_network_name))
+    names.insert(service.path().as_os_str().to_os_string(), podman_network_name.into());
+
+    Ok(service)
 }
 
 // Convert a quadlet volume file (unit file with a Volume group) to a systemd
@@ -793,7 +795,7 @@ pub(crate) fn from_network_unit(network: &SystemdUnitFile) -> Result<(SystemdUni
 // The original Volume group is kept around as X-Volume.
 // Also returns the canonical volume name, either auto-generated or user-defined via the VolumeName
 // key-value.
-pub(crate) fn from_volume_unit(volume: &SystemdUnitFile) -> Result<(SystemdUnitFile, String), ConversionError> {
+pub(crate) fn from_volume_unit(volume: &SystemdUnitFile, names: &mut HashMap<OsString, OsString>,) -> Result<SystemdUnitFile, ConversionError> {
     let mut service = SystemdUnitFile::new();
     service.merge_from(volume);
     service.path = quad_replace_extension(
@@ -932,7 +934,9 @@ pub(crate) fn from_volume_unit(volume: &SystemdUnitFile) -> Result<(SystemdUnitF
     // The default syslog identifier is the exec basename (podman) which isn't very useful here
     service.append_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
 
-    Ok((service, podman_volume_name))
+    names.insert(service.path().as_os_str().to_os_string(), podman_volume_name.into());
+
+    Ok(service)
 }
 
 fn handle_health(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {

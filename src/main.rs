@@ -387,23 +387,13 @@ fn process() -> Vec<RuntimeError> {
             convert::from_container_unit(&unit, &resource_names, cfg.is_user)
         } else if ext == "kube" {
             convert::from_kube_unit(&unit, &resource_names, cfg.is_user)
+        } else if ext == "network" {
+            convert::from_network_unit(&unit, &mut resource_names)
+        } else if ext == "volume" {
+            convert::from_volume_unit(&unit, &mut resource_names)
         } else {
-            // this is an ugly hack
-            let named_service_result = if ext == "network" {
-                convert::from_network_unit(&unit)
-            } else if ext == "volume" {
-                convert::from_volume_unit(&unit)
-            } else {
-                log!("Unsupported file type {:?}", unit.path());
-                continue;
-            };
-            match named_service_result {
-                Ok((service, name)) => {
-                    resource_names.insert(service.path().as_os_str().to_os_string(), name.into());
-                    Ok(service)
-                },
-                Err(e) => Err(e),
-            }
+            log!("Unsupported file type {:?}", unit.path());
+            continue;
         };
         let mut service = match service_result {
             Ok(service_unit) => service_unit,
