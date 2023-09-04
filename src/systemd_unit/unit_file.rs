@@ -43,7 +43,6 @@ impl DerefMut for SystemdUnitFile {
 }
 
 impl SystemdUnitFile {
-
     pub fn load_from_path(path: &Path) -> Result<Self, IoError> {
         let buf = fs::read_to_string(&path)?;
 

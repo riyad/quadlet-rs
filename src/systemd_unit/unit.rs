@@ -1342,7 +1342,8 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
 
                 let unit = SystemdUnit::load_from_str(input).unwrap();
 
-                let exec_start = unit.lookup_last_value(crate::systemd_unit::SERVICE_SECTION, "ExecStart");
+                let exec_start =
+                    unit.lookup_last_value(crate::systemd_unit::SERVICE_SECTION, "ExecStart");
                 assert_eq!(
                     exec_start.map(|ev| ev.raw().as_str()),
                     Some("/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'")
@@ -1372,7 +1373,8 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
 
                 let mut unit = SystemdUnit::load_from_str(input).unwrap();
 
-                let exec_start = unit.lookup_last_value(crate::systemd_unit::SERVICE_SECTION, "ExecStart");
+                let exec_start =
+                    unit.lookup_last_value(crate::systemd_unit::SERVICE_SECTION, "ExecStart");
                 assert_eq!(
                     exec_start.map(|ev| ev.raw().as_str()),
                     Some("/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'")
@@ -1401,7 +1403,11 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
                     "/usr/bin/podman test /some/path \"an arg\" \"a;b\\nc\\td\'e\" \"a;b\\nc\\td\" \"a\\\"b\""
                 );
 
-                unit.set_entry_raw(crate::systemd_unit::SERVICE_SECTION, "ExecStart", new_exec_start.as_str());
+                unit.set_entry_raw(
+                    crate::systemd_unit::SERVICE_SECTION,
+                    "ExecStart",
+                    new_exec_start.as_str(),
+                );
 
                 let mut output = Vec::new();
                 let res = unit.write_to(&mut output);

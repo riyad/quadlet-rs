@@ -28,9 +28,9 @@ impl Display for RuntimeError {
             RuntimeError::CliMissingOutputDirectory(_) => {
                 write!(f, "Missing output directory argument")
             }
-            RuntimeError::Io(ctx,e) => {
+            RuntimeError::Io(ctx, e) => {
                 write!(f, "{ctx}: {e}")
-            },
+            }
             RuntimeError::Conversion(ctx, e) => {
                 write!(f, "{ctx}: {e}")
             }
@@ -79,12 +79,12 @@ impl Display for ConversionError {
             ConversionError::Io(e) => e.fmt(f),
             ConversionError::NoYamlKeySpecified() => {
                 write!(f, "no Yaml key specified")
-            },
+            }
             ConversionError::Parsing(e) => {
                 write!(f, "Failed parsing unit file: {e}")
-            },
+            }
             ConversionError::UnsupportedValueForKey(key, value) => {
-                write!(f, "unsupported value for {key}: {value}")
+                write!(f, "unsupported value for {key:?}: {value:?}")
             }
         }
     }

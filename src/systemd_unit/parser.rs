@@ -692,7 +692,10 @@ mod tests {
             let input = "this is \\\nsome \\\ntext   \t";
             let mut parser = Parser::new(input);
             let old_pos = parser.column;
-            assert_eq!(parser.parse_value(), Ok("this is  some  text".trim_end().into()),);
+            assert_eq!(
+                parser.parse_value(),
+                Ok("this is  some  text".trim_end().into()),
+            );
             assert_eq!(parser.column, old_pos + 7);
         }
 

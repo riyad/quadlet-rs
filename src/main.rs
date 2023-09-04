@@ -14,7 +14,8 @@ use std::env;
 use std::ffi::OsStr;
 use std::fs;
 use std::fs::File;
-use std::io::{self, BufWriter, Write};
+use std::io;
+use std::io::{BufWriter, Write};
 use std::os;
 use std::os::unix::prelude::OsStrExt;
 use std::path::{Path, PathBuf};
@@ -236,8 +237,8 @@ fn load_units_from_dir(source_path: &Path) -> (Vec<SystemdUnitFile>, Vec<Runtime
         Ok(entries) => entries,
         Err(e) => {
             prev_errors.push(RuntimeError::Io(format!("Can't read {source_path:?}"), e));
-            return (units, prev_errors)
-        },
+            return (units, prev_errors);
+        }
     };
 
     for file in files {
@@ -246,7 +247,7 @@ fn load_units_from_dir(source_path: &Path) -> (Vec<SystemdUnitFile>, Vec<Runtime
             Err(e) => {
                 prev_errors.push(RuntimeError::Io(format!("Can't read {source_path:?}"), e));
                 continue;
-            },
+            }
         };
 
         let path = file.path();
@@ -272,10 +273,13 @@ fn load_units_from_dir(source_path: &Path) -> (Vec<SystemdUnitFile>, Vec<Runtime
                 match e {
                     IoError::Io(e) => {
                         prev_errors.push(RuntimeError::Io(format!("Error loading {path:?}"), e));
-                    },
+                    }
                     IoError::Unit(e) => {
-                        prev_errors.push(RuntimeError::Conversion(format!("Error loading {path:?}"), ConversionError::Parsing(e)));
-                    },
+                        prev_errors.push(RuntimeError::Conversion(
+                            format!("Error loading {path:?}"),
+                            ConversionError::Parsing(e),
+                        ));
+                    }
                 }
                 continue;
             }
@@ -407,7 +411,7 @@ fn process() -> Vec<RuntimeError> {
             }
 
             cfg
-        },
+        }
         Err(RuntimeError::CliMissingOutputDirectory(cfg)) => {
             // short circuit
             if cfg.version {
@@ -432,7 +436,7 @@ fn process() -> Vec<RuntimeError> {
             }
 
             cfg
-        },
+        }
         Err(e) => {
             help();
             prev_errors.push(e);
@@ -465,22 +469,23 @@ fn process() -> Vec<RuntimeError> {
 
     if !cfg.dry_run {
         if let Err(e) = fs::create_dir_all(&cfg.output_path) {
-            prev_errors.push(RuntimeError::Io(format!("Can't create dir {:?}", cfg.output_path), e));
+            prev_errors.push(RuntimeError::Io(
+                format!("Can't create dir {:?}", cfg.output_path),
+                e,
+            ));
             return prev_errors;
         }
     }
 
     // Sort unit files according to potential inter-dependencies, with Volume and Network units
-	// taking precedence over all others.
-    units.sort_unstable_by(|a, _| {
-        match a.path().extension() {
-            Some(ext) if ext == "volume" || ext == "network" => Ordering::Less,
-            _ => Ordering::Greater,
-        }
+    // taking precedence over all others.
+    units.sort_unstable_by(|a, _| match a.path().extension() {
+        Some(ext) if ext == "volume" || ext == "network" => Ordering::Less,
+        _ => Ordering::Greater,
     });
 
     // A map of network/volume unit file-names, against their calculated names, as needed by Podman.
-	let mut resource_names = HashMap::with_capacity(units.len());
+    let mut resource_names = HashMap::with_capacity(units.len());
 
     for unit in units {
         let ext = unit.path().extension().expect("should have file extension");
@@ -501,18 +506,16 @@ fn process() -> Vec<RuntimeError> {
         let mut service = match service_result {
             Ok(service_unit) => service_unit,
             Err(e) => {
-                prev_errors.push(RuntimeError::Conversion(format!("Converting {:?}", unit.path()), e));
+                prev_errors.push(RuntimeError::Conversion(
+                    format!("Converting {:?}", unit.path()),
+                    e,
+                ));
                 continue;
             }
         };
 
         let mut service_output_path = cfg.output_path.clone();
-        service_output_path.push(
-            service
-                .path()
-                .file_name()
-                .unwrap(),
-        );
+        service_output_path.push(service.path().file_name().unwrap());
         service.path = service_output_path;
 
         if cfg.dry_run {

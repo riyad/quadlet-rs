@@ -19,18 +19,16 @@ pub(crate) fn from_container_unit(
     let mut service = SystemdUnitFile::new();
 
     service.merge_from(container);
-    service.path = quad_replace_extension(
-        container.path(),
-        ".service",
-        "",
-        "",
-    );
+    service.path = quad_replace_extension(container.path(), ".service", "", "");
 
     if !container.path().as_os_str().is_empty() {
         service.append_entry(
             UNIT_SECTION,
             "SourcePath",
-            container.path().to_str().expect("EnvironmentFile path is not a valid UTF-8 string"),
+            container
+                .path()
+                .to_str()
+                .expect("EnvironmentFile path is not a valid UTF-8 string"),
         );
     }
 
@@ -132,7 +130,13 @@ pub(crate) fn from_container_unit(
         }
     }
 
-    handle_networks(container, CONTAINER_SECTION, &mut service, names, &mut podman)?;
+    handle_networks(
+        container,
+        CONTAINER_SECTION,
+        &mut service,
+        names,
+        &mut podman,
+    )?;
 
     // Run with a pid1 init to reap zombies by default (as most apps don't do that)
     if let Some(run_init) = container.lookup_bool(CONTAINER_SECTION, "RunInit") {
@@ -432,7 +436,7 @@ pub(crate) fn from_container_unit(
                 if let Some(param_source) = params_map.get("source") {
                     params_map.insert(
                         "source",
-                        handle_storage_source(container, &mut service, param_source,names),
+                        handle_storage_source(container, &mut service, param_source, names),
                     );
                 } else if let Some(param_source) = params_map.get("src") {
                     params_map.insert(
@@ -499,18 +503,15 @@ pub(crate) fn from_kube_unit(
 ) -> Result<SystemdUnitFile, ConversionError> {
     let mut service = SystemdUnitFile::new();
     service.merge_from(kube);
-    service.path = quad_replace_extension(
-        kube.path(),
-        ".service",
-        "",
-        "",
-    );
+    service.path = quad_replace_extension(kube.path(), ".service", "", "");
 
     if !kube.path().as_os_str().is_empty() {
         service.append_entry(
             UNIT_SECTION,
             "SourcePath",
-            kube.path().to_str().expect("EnvironmentFile path is not a valid UTF-8 string"),
+            kube.path()
+                .to_str()
+                .expect("EnvironmentFile path is not a valid UTF-8 string"),
         );
     }
 
@@ -588,7 +589,9 @@ pub(crate) fn from_kube_unit(
             update_type = &update;
         }
         podman_start.add("--annotation");
-        podman_start.add(format!("{AUTO_UPDATE_LABEL}{annotation_suffix}={update_type}"));
+        podman_start.add(format!(
+            "{AUTO_UPDATE_LABEL}{annotation_suffix}={update_type}"
+        ));
     }
 
     let config_maps: Vec<PathBuf> = kube
@@ -644,21 +647,22 @@ pub(crate) fn from_kube_unit(
 // The original Network group is kept around as X-Network.
 // Also returns the canonical network name, either auto-generated or user-defined via the
 // NetworkName key-value.
-pub(crate) fn from_network_unit(network: &SystemdUnitFile, names: &mut HashMap<OsString, OsString>,) -> Result<SystemdUnitFile, ConversionError> {
+pub(crate) fn from_network_unit(
+    network: &SystemdUnitFile,
+    names: &mut HashMap<OsString, OsString>,
+) -> Result<SystemdUnitFile, ConversionError> {
     let mut service = SystemdUnitFile::new();
     service.merge_from(network);
-    service.path = quad_replace_extension(
-        network.path(),
-        ".service",
-        "",
-        "-network",
-    );
+    service.path = quad_replace_extension(network.path(), ".service", "", "-network");
 
     if !network.path().as_os_str().is_empty() {
         service.append_entry(
             UNIT_SECTION,
             "SourcePath",
-            network.path().to_str().expect("EnvironmentFile path is not a valid UTF-8 string"),
+            network
+                .path()
+                .to_str()
+                .expect("EnvironmentFile path is not a valid UTF-8 string"),
         );
     }
 
@@ -668,7 +672,9 @@ pub(crate) fn from_network_unit(network: &SystemdUnitFile, names: &mut HashMap<O
     service.rename_section(NETWORK_SECTION, X_NETWORK_SECTION);
 
     // Derive network name from unit name (with added prefix), or use user-provided name.
-    let podman_network_name = network.lookup(NETWORK_SECTION, "NetworkName").unwrap_or_default();
+    let podman_network_name = network
+        .lookup(NETWORK_SECTION, "NetworkName")
+        .unwrap_or_default();
     let podman_network_name = if podman_network_name.is_empty() {
         quad_replace_extension(network.path(), "", "systemd-", "")
             .file_name()
@@ -784,7 +790,10 @@ pub(crate) fn from_network_unit(network: &SystemdUnitFile, names: &mut HashMap<O
     // The default syslog identifier is the exec basename (podman) which isn't very useful here
     service.append_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
 
-    names.insert(service.path().as_os_str().to_os_string(), podman_network_name.into());
+    names.insert(
+        service.path().as_os_str().to_os_string(),
+        podman_network_name.into(),
+    );
 
     Ok(service)
 }
@@ -795,21 +804,22 @@ pub(crate) fn from_network_unit(network: &SystemdUnitFile, names: &mut HashMap<O
 // The original Volume group is kept around as X-Volume.
 // Also returns the canonical volume name, either auto-generated or user-defined via the VolumeName
 // key-value.
-pub(crate) fn from_volume_unit(volume: &SystemdUnitFile, names: &mut HashMap<OsString, OsString>,) -> Result<SystemdUnitFile, ConversionError> {
+pub(crate) fn from_volume_unit(
+    volume: &SystemdUnitFile,
+    names: &mut HashMap<OsString, OsString>,
+) -> Result<SystemdUnitFile, ConversionError> {
     let mut service = SystemdUnitFile::new();
     service.merge_from(volume);
-    service.path = quad_replace_extension(
-        volume.path(),
-        ".service",
-        "",
-        "-volume",
-    );
+    service.path = quad_replace_extension(volume.path(), ".service", "", "-volume");
 
     if !volume.path().as_os_str().is_empty() {
         service.append_entry(
             UNIT_SECTION,
             "SourcePath",
-            volume.path().to_str().expect("EnvironmentFile path is not a valid UTF-8 string"),
+            volume
+                .path()
+                .to_str()
+                .expect("EnvironmentFile path is not a valid UTF-8 string"),
         );
     }
 
@@ -819,7 +829,9 @@ pub(crate) fn from_volume_unit(volume: &SystemdUnitFile, names: &mut HashMap<OsS
     service.rename_section(VOLUME_SECTION, X_VOLUME_SECTION);
 
     // Derive volume name from unit name (with added prefix), or use user-provided name.
-    let podman_volume_name = volume.lookup(VOLUME_SECTION, "VolumeName").unwrap_or_default();
+    let podman_volume_name = volume
+        .lookup(VOLUME_SECTION, "VolumeName")
+        .unwrap_or_default();
     let podman_volume_name = if podman_volume_name.is_empty() {
         quad_replace_extension(volume.path(), "", "systemd-", "")
             .file_name()
@@ -934,7 +946,10 @@ pub(crate) fn from_volume_unit(volume: &SystemdUnitFile, names: &mut HashMap<OsS
     // The default syslog identifier is the exec basename (podman) which isn't very useful here
     service.append_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
 
-    names.insert(service.path().as_os_str().to_os_string(), podman_volume_name.into());
+    names.insert(
+        service.path().as_os_str().to_os_string(),
+        podman_volume_name.into(),
+    );
 
     Ok(service)
 }
@@ -989,9 +1004,14 @@ fn handle_networks(
 
             if network_name.ends_with(".network") {
                 // the podman network name is systemd-$name if none is specified by the user.
-                let podman_network_name = names.get(&OsString::from(&network_name)).map(|s| s.to_os_string()).unwrap_or_default();
+                let podman_network_name = names
+                    .get(&OsString::from(&network_name))
+                    .map(|s| s.to_os_string())
+                    .unwrap_or_default();
                 let podman_network_name = if podman_network_name.is_empty() {
-                    quad_replace_extension(&PathBuf::from(&network_name), "", "systemd-", "").as_os_str().to_os_string()
+                    quad_replace_extension(&PathBuf::from(&network_name), "", "systemd-", "")
+                        .as_os_str()
+                        .to_os_string()
                 } else {
                     podman_network_name
                 };
@@ -1184,7 +1204,10 @@ fn handle_storage_source(
         service_unit_file.append_entry(UNIT_SECTION, "RequiresMountsFor", &source);
     } else if source.ends_with(".volume") {
         // the podman volume name is systemd-$name if none has been provided by the user.
-        let volume_name = names.get(&OsString::from(&source)).map(|s| PathBuf::from(s)).unwrap_or_default();
+        let volume_name = names
+            .get(&OsString::from(&source))
+            .map(|s| PathBuf::from(s))
+            .unwrap_or_default();
         let volume_name = if volume_name.as_os_str().is_empty() {
             quad_replace_extension(&PathBuf::from(&source), "", "systemd-", "")
         } else {
