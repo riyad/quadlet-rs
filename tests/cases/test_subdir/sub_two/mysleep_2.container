@@ -1,3 +1,6 @@
+## assert-symlink default.target.wants/mysleep_2.service ../mysleep_2.service
+## assert-symlink multi-user.target.wants/mysleep_2.service ../mysleep_2.service
+
 [Unit]
 Description=The sleep container
 After=local-fs.target

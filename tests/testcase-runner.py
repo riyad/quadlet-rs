@@ -59,6 +59,7 @@ def read_file(dir, filename):
         return f.read()
 
 def write_file(indir, filename, data):
+    os.makedirs(os.path.dirname(os.path.join(indir, filename)), exist_ok=True)
     with open(os.path.join(indir, filename), "w") as f:
         f.write(data)
 
@@ -80,7 +81,7 @@ class QuadletTestCase(unittest.TestCase):
         super().__init__()
         self._testMethodDoc = filename
         self.filename = filename
-        self.servicename = to_service(filename)
+        self.servicename = to_service(os.path.basename(filename))
         self.data = read_file(testcases_dir, filename)
         self.checks = get_checks_from_data(self.data)
         self.expect_fail = find_check(self.checks, "assert-failed") is not None
@@ -340,7 +341,7 @@ class QuadletTestCase(unittest.TestCase):
             os.mkdir(indir)
             outdir = os.path.join(basedir, "out")
             os.mkdir(outdir)
-            write_file (indir, self.filename, self.data);
+            write_file(indir, self.filename, self.data);
             cmd = [generator_bin, '--user', '--no-kmsg-log', '-v', outdir]
 
             env = {
@@ -412,13 +413,14 @@ def load_test_suite():
     generator_bin = sys.argv[2]
 
     test_suite = unittest.TestSuite()
-    for de in os.scandir(testcases_dir):
-        name = de.name
-        if (name.endswith(".container") or
-            name.endswith(".kube") or
-            name.endswith(".network") or
-            name.endswith(".volume")) and not name.startswith("."):
-            test_suite.addTest(QuadletTestCase(name))
+    for (dirpath, _dirnames, filenames) in os.walk(testcases_dir):
+        rel_dirpath = dirpath.removeprefix(testcases_dir).removeprefix('/')
+        for name in filenames:
+            if (name.endswith(".container") or
+                name.endswith(".kube") or
+                name.endswith(".network") or
+                name.endswith(".volume")) and not name.startswith("."):
+                test_suite.addTest(QuadletTestCase(os.path.join(rel_dirpath, name)))
 
     return test_suite
 
