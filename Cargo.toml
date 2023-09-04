@@ -9,6 +9,7 @@ edition = "2021"
 dirs = "5.0"
 ordered-multimap = "0.6"
 users = { version = "0.11", default_features = false }  # otherwise pulls in `log`
+walkdir = "2"
 
 # optimize with tipps from https://github.com/johnthagen/min-sized-rust
 [profile.release]

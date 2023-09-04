@@ -16,15 +16,18 @@ use std::fs;
 use std::fs::File;
 use std::io::{self, BufWriter, Write};
 use std::os;
+use std::os::unix::prelude::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process;
 use users;
+use walkdir::{DirEntry, WalkDir};
 
 static SUPPORTED_EXTENSIONS: [&str; 4] = ["container", "kube", "network", "volume"];
 
 const QUADLET_VERSION: &str = "0.2.0-dev";
 const UNIT_DIR_ADMIN:  &str = "/etc/containers/systemd";
 const UNIT_DIR_DISTRO: &str = "/usr/share/containers/systemd";
+const SYSTEM_USER_DIR_LEVEL: usize = 5;
 
 #[derive(Debug, Default, PartialEq)]
 pub(crate) struct CliOptions {
@@ -99,6 +102,15 @@ fn get_unit_search_dirs(rootless: bool) -> Vec<PathBuf> {
     if let Ok(unit_dirs_env) = std::env::var("QUADLET_UNIT_DIRS") {
         let unit_dirs_env: Vec<PathBuf> = env::split_paths(&unit_dirs_env)
             .map(PathBuf::from)
+            .filter(|p| {
+                if p.is_absolute() {
+                    return true;
+                }
+
+                log!("{p:?} is not a valid file path");
+                false
+            })
+            .flat_map(|p| subdirs_for_search_dir(p, false, None))
             .collect();
         return unit_dirs_env;
     }
@@ -106,24 +118,115 @@ fn get_unit_search_dirs(rootless: bool) -> Vec<PathBuf> {
     let mut dirs: Vec<PathBuf> = Vec::with_capacity(3);
     if rootless {
         let config_dir = dirs::config_dir().expect("could not determine config dir");
-        dirs.push(config_dir.join("containers/systemd"));
-        dirs.push(
+        dirs.extend(subdirs_for_search_dir(
+            config_dir.join("containers/systemd"),
+            false,
+            None,
+        ));
+        dirs.extend(subdirs_for_search_dir(
+            PathBuf::from(UNIT_DIR_ADMIN).join("users"),
+            true,
+            Some(Box::new(_non_numeric_filter)),
+        ));
+        dirs.extend(subdirs_for_search_dir(
             PathBuf::from(UNIT_DIR_ADMIN)
                 .join("users")
                 .join(users::get_current_uid().to_string()),
-        );
+            true,
+            Some(Box::new(_user_level_filter)),
+        ));
         dirs.push(PathBuf::from(UNIT_DIR_ADMIN).join("users"));
-    } else {
-        dirs.push(PathBuf::from(UNIT_DIR_ADMIN));
-        dirs.push(PathBuf::from(UNIT_DIR_DISTRO));
+        return dirs;
+    }
+
+    dirs.extend(subdirs_for_search_dir(
+        PathBuf::from(UNIT_DIR_ADMIN),
+        false,
+        Some(Box::new(_user_level_filter)),
+    ));
+    dirs.extend(subdirs_for_search_dir(
+        PathBuf::from(UNIT_DIR_DISTRO),
+        false,
+        None,
+    ));
+
+    dirs
+}
+
+fn subdirs_for_search_dir(
+    path: PathBuf,
+    rootless: bool,
+    filter_fn: Option<Box<dyn Fn(&DirEntry, bool) -> bool>>,
+) -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+
+    for entry in WalkDir::new(&path)
+        .into_iter()
+        .filter_entry(|e| e.path().is_dir())
+    {
+        match entry {
+            Err(e) => debug!("Error occurred walking sub directories {path:?}: {e}"),
+            Ok(entry) => {
+                if let Some(filter_fn) = &filter_fn {
+                    if filter_fn(&entry, rootless) {
+                        dirs.push(entry.path().to_owned())
+                    }
+                } else {
+                    dirs.push(entry.path().to_owned())
+                }
+            }
+        }
     }
 
     dirs
 }
 
-fn load_units_from_dir(
-    source_path: &Path,
-) -> (Vec<SystemdUnitFile>, Vec<RuntimeError>) {
+fn _non_numeric_filter(entry: &DirEntry, _rootless: bool) -> bool {
+    // when running in rootless, only recrusive walk directories that are non numeric
+    // ignore sub dirs under the user directory that may correspond to a user id
+    if entry
+        .path()
+        .starts_with(PathBuf::from(UNIT_DIR_ADMIN).join("users"))
+    {
+        if entry.path().components().count() > SYSTEM_USER_DIR_LEVEL {
+            if !entry
+                .path()
+                .components()
+                .last()
+                .expect("path should have enough components")
+                .as_os_str()
+                .as_bytes()
+                .iter()
+                .all(|b| b - 48 < 10)
+            {
+                return true;
+            }
+        }
+    } else {
+        return true;
+    }
+
+    false
+}
+
+fn _user_level_filter(entry: &DirEntry, rootless: bool) -> bool {
+    // if quadlet generator is run rootless, do not recurse other user sub dirs
+    // if quadlet generator is run as root, ignore users sub dirs
+    if entry
+        .path()
+        .starts_with(PathBuf::from(UNIT_DIR_ADMIN).join("users"))
+    {
+        if rootless {
+            return true;
+        }
+    } else {
+        return true;
+    }
+
+    false
+}
+
+fn load_units_from_dir(source_path: &Path) -> (Vec<SystemdUnitFile>, Vec<RuntimeError>) {
     let mut prev_errors = Vec::new();
 
     let mut units = Vec::new();
@@ -700,6 +803,7 @@ mod tests {
 
         #[test]
         fn rootful() {
+            // NOTE: directories must exists
             assert_eq!(
                 get_unit_search_dirs(false),
                 [
@@ -711,6 +815,7 @@ mod tests {
 
         #[test]
         fn rootless() {
+            // NOTE: directories must exists
             assert_eq!(
                 get_unit_search_dirs(true),
                 [
