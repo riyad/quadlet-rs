@@ -93,6 +93,66 @@ fn parse_args(args: Vec<String>) -> Result<CliOptions, RuntimeError> {
     Ok(cfg)
 }
 
+fn validate_args() -> Result<CliOptions, RuntimeError> {
+    let args = env::args().collect();
+
+    let cfg = match parse_args(args) {
+        Ok(cfg) => {
+            // short circuit
+            if cfg.version {
+                println!("quadlet-rs {}", QUADLET_VERSION);
+                process::exit(0);
+            }
+
+            if cfg.dry_run {
+                logger::enable_dry_run();
+            }
+            if cfg.verbose || cfg.dry_run {
+                logger::enable_debug();
+            }
+            if cfg.no_kmsg || cfg.dry_run {
+                logger::disable_kmsg();
+            }
+
+            cfg
+        }
+        Err(RuntimeError::CliMissingOutputDirectory(cfg)) => {
+            // short circuit
+            if cfg.version {
+                println!("quadlet-rs {}", QUADLET_VERSION);
+                process::exit(0)
+            }
+
+            if cfg.dry_run {
+                logger::enable_dry_run();
+            }
+            if cfg.verbose || cfg.dry_run {
+                logger::enable_debug();
+            }
+            if cfg.no_kmsg || cfg.dry_run {
+                logger::disable_kmsg();
+            }
+
+            // FIXME: DRY the code around
+            if !cfg.dry_run {
+                return Err(RuntimeError::CliMissingOutputDirectory(cfg));
+            }
+
+            cfg
+        }
+        Err(e) => return Err(e)
+    };
+
+    if !cfg.dry_run {
+        debug!(
+            "Starting quadlet-rs-generator, output to: {:?}",
+            &cfg.output_path
+        );
+    }
+
+    Ok(cfg)
+}
+
 // This returns the directories where we read quadlet-supported unit files from
 // For system generators these are in /usr/share/containers/systemd (for distro files)
 // and /etc/containers/systemd (for sysadmin files).
@@ -368,7 +428,16 @@ fn enable_service_file(output_path: &Path, service: &SystemdUnitFile) {
 }
 
 fn main() {
-    let errs = process();
+    let cfg = match validate_args() {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            help();
+            log!("{e}");
+            process::exit(1);
+        },
+    };
+
+    let errs = process(cfg);
     if !errs.is_empty() {
         for e in errs {
             log!("{e}");
@@ -378,69 +447,8 @@ fn main() {
     process::exit(0);
 }
 
-fn process() -> Vec<RuntimeError> {
+fn process(cfg: CliOptions) -> Vec<RuntimeError> {
     let mut prev_errors: Vec<RuntimeError> = Vec::new();
-
-    let args: Vec<String> = env::args().collect();
-
-    let cfg = match parse_args(args) {
-        Ok(cfg) => {
-            // short circuit
-            if cfg.version {
-                println!("quadlet-rs {}", QUADLET_VERSION);
-                return prev_errors;
-            }
-
-            if cfg.dry_run {
-                logger::enable_dry_run();
-            }
-            if cfg.verbose || cfg.dry_run {
-                logger::enable_debug();
-            }
-            if cfg.no_kmsg || cfg.dry_run {
-                logger::disable_kmsg();
-            }
-
-            cfg
-        }
-        Err(RuntimeError::CliMissingOutputDirectory(cfg)) => {
-            // short circuit
-            if cfg.version {
-                println!("quadlet-rs {}", QUADLET_VERSION);
-                return prev_errors;
-            }
-
-            if cfg.dry_run {
-                logger::enable_dry_run();
-            }
-            if cfg.verbose || cfg.dry_run {
-                logger::enable_debug();
-            }
-            if cfg.no_kmsg || cfg.dry_run {
-                logger::disable_kmsg();
-            }
-
-            if !cfg.dry_run {
-                help();
-                prev_errors.push(RuntimeError::CliMissingOutputDirectory(cfg));
-                return prev_errors;
-            }
-
-            cfg
-        }
-        Err(e) => {
-            help();
-            prev_errors.push(e);
-            return prev_errors;
-        }
-    };
-
-    if !cfg.dry_run {
-        debug!(
-            "Starting quadlet-rs-generator, output to: {:?}",
-            &cfg.output_path
-        );
-    }
 
     let source_paths = get_unit_search_dirs(cfg.is_user);
 
