@@ -11,7 +11,6 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::env;
-use std::ffi::OsStr;
 use std::fs;
 use std::fs::File;
 use std::io;
@@ -233,7 +232,7 @@ fn load_units_from_dir(source_path: &Path) -> (Vec<SystemdUnitFile>, Vec<Runtime
     let mut units = Vec::new();
     let mut seen = HashSet::new();
 
-    let files = match source_path.read_dir() {
+    let files = match UnitFiles::new(source_path) {
         Ok(entries) => entries,
         Err(e) => {
             prev_errors.push(RuntimeError::Io(format!("Can't read {source_path:?}"), e));
@@ -253,14 +252,6 @@ fn load_units_from_dir(source_path: &Path) -> (Vec<SystemdUnitFile>, Vec<Runtime
         let path = file.path();
         let name = file.file_name();
 
-        let extension = path
-            .extension()
-            .unwrap_or(OsStr::new(""))
-            .to_str()
-            .expect("extension is not valid UTF-8 string");
-        if !SUPPORTED_EXTENSIONS.contains(&extension) {
-            continue;
-        }
         if seen.contains(&name) {
             continue;
         }
