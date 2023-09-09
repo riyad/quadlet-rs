@@ -286,17 +286,15 @@ fn _user_level_filter(entry: &DirEntry, rootless: bool) -> bool {
     false
 }
 
-fn load_units_from_dir(source_path: &Path) -> (Vec<SystemdUnitFile>, Vec<RuntimeError>) {
-    let mut prev_errors = Vec::new();
-
-    let mut units = Vec::new();
+fn load_units_from_dir(source_path: &Path) -> Vec<Result<SystemdUnitFile, RuntimeError>> {
+    let mut results = Vec::new();
     let mut seen = HashSet::new();
 
     let files = match UnitFiles::new(source_path) {
         Ok(entries) => entries,
         Err(e) => {
-            prev_errors.push(RuntimeError::Io(format!("Can't read {source_path:?}"), e));
-            return (units, prev_errors);
+            results.push(Err(e));
+            return results;
         }
     };
 
@@ -304,7 +302,7 @@ fn load_units_from_dir(source_path: &Path) -> (Vec<SystemdUnitFile>, Vec<Runtime
         let file = match file {
             Ok(file) => file,
             Err(e) => {
-                prev_errors.push(RuntimeError::Io(format!("Can't read {source_path:?}"), e));
+                results.push(Err(e));
                 continue;
             }
         };
@@ -323,13 +321,13 @@ fn load_units_from_dir(source_path: &Path) -> (Vec<SystemdUnitFile>, Vec<Runtime
             Err(e) => {
                 match e {
                     IoError::Io(e) => {
-                        prev_errors.push(RuntimeError::Io(format!("Error loading {path:?}"), e));
+                        results.push(Err(RuntimeError::Io(format!("Error loading {path:?}"), e)));
                     }
                     IoError::Unit(e) => {
-                        prev_errors.push(RuntimeError::Conversion(
+                        results.push(Err(RuntimeError::Conversion(
                             format!("Error loading {path:?}"),
                             ConversionError::Parsing(e),
-                        ));
+                        )));
                     }
                 }
                 continue;
@@ -337,10 +335,10 @@ fn load_units_from_dir(source_path: &Path) -> (Vec<SystemdUnitFile>, Vec<Runtime
         };
 
         seen.insert(name);
-        units.push(unit);
+        results.push(Ok(unit));
     }
 
-    (units, prev_errors)
+    results
 }
 
 fn generate_service_file(service: &mut SystemdUnitFile) -> io::Result<()> {
@@ -452,12 +450,19 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
 
     let source_paths = get_unit_search_dirs(cfg.is_user);
 
-    let mut units = Vec::new();
-    for dir in &source_paths {
-        let (new_units, new_errors) = load_units_from_dir(dir);
-        units.extend(new_units);
-        prev_errors.extend(new_errors);
-    }
+    let mut units: Vec<SystemdUnitFile> = source_paths
+        .iter()
+        .flat_map(|dir| load_units_from_dir(dir.as_path()))
+        .filter_map(|r| {
+            match r {
+                Ok(u) => Some(u),
+                Err(e) => {
+                    prev_errors.push(e);
+                    None
+                },
+            }
+        })
+        .collect();
 
     if units.is_empty() {
         // containers/podman/issues/17374: exit cleanly but log that we
