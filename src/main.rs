@@ -8,9 +8,9 @@ use self::quadlet::*;
 use self::systemd_unit::*;
 
 use std::cmp::Ordering;
-use std::collections::HashMap;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::env;
+use std::ffi::OsString;
 use std::fs;
 use std::fs::File;
 use std::io;
@@ -286,9 +286,8 @@ fn _user_level_filter(entry: &DirEntry, rootless: bool) -> bool {
     false
 }
 
-fn load_units_from_dir(source_path: &Path) -> Vec<Result<SystemdUnitFile, RuntimeError>> {
+fn load_units_from_dir(source_path: &Path, seen: &mut HashSet<OsString>) -> Vec<Result<SystemdUnitFile, RuntimeError>> {
     let mut results = Vec::new();
-    let mut seen = HashSet::new();
 
     let files = match UnitFiles::new(source_path) {
         Ok(entries) => entries,
@@ -450,9 +449,11 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
 
     let source_paths = get_unit_search_dirs(cfg.is_user);
 
+    let mut seen = HashSet::new();
+
     let mut units: Vec<SystemdUnitFile> = source_paths
         .iter()
-        .flat_map(|dir| load_units_from_dir(dir.as_path()))
+        .flat_map(|dir| load_units_from_dir(dir.as_path(), &mut seen))
         .filter_map(|r| {
             match r {
                 Ok(u) => Some(u),
