@@ -200,8 +200,15 @@ pub(crate) fn from_container_unit(
         podman.add_slice(&["--security-opt", "label:nested"]);
     }
 
+    if let Some(pids_limit) = container.lookup(CONTAINER_SECTION, "PidsLimit") {
+        if !pids_limit.is_empty() {
+            podman.add("--pids-limit");
+            podman.add(pids_limit);
+        }
+    }
+
     let security_label_type = container
-        .lookup_last(CONTAINER_SECTION, "SecurityLabelType")
+        .lookup(CONTAINER_SECTION, "SecurityLabelType")
         .unwrap_or_default();
     if !security_label_type.is_empty() {
         podman.add("--security-opt");
@@ -209,7 +216,7 @@ pub(crate) fn from_container_unit(
     }
 
     let security_label_file_type = container
-        .lookup_last(CONTAINER_SECTION, "SecurityLabelFileType")
+        .lookup(CONTAINER_SECTION, "SecurityLabelFileType")
         .unwrap_or_default();
     if !security_label_file_type.is_empty() {
         podman.add("--security-opt");
@@ -217,7 +224,7 @@ pub(crate) fn from_container_unit(
     }
 
     let security_label_level = container
-        .lookup_last(CONTAINER_SECTION, "SecurityLabelLevel")
+        .lookup(CONTAINER_SECTION, "SecurityLabelLevel")
         .unwrap_or_default();
     if !security_label_level.is_empty() {
         podman.add("--security-opt");

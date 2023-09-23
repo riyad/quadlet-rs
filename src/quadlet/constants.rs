@@ -11,7 +11,7 @@ pub const X_VOLUME_SECTION: &str    = "X-Volume";
 
 pub const AUTO_UPDATE_LABEL: &str = "io.containers.autoupdate";
 
-pub static SUPPORTED_CONTAINER_KEYS: [&str; 62] = [
+pub static SUPPORTED_CONTAINER_KEYS: [&str; 63] = [
     "AddCapability",
     "AddDevice",
     "Annotation",
@@ -46,6 +46,7 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 62] = [
     "Network",
     "NoNewPrivileges",
     "Notify",
+    "PidsLimit",
     "PodmanArgs",
     "PublishPort",
     "Pull",
