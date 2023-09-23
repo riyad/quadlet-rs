@@ -224,6 +224,13 @@ pub(crate) fn from_container_unit(
         podman.add(format!("label=level:{security_label_level}"));
     }
 
+    if let Some(ulimit) = container.lookup(CONTAINER_SECTION, "Ulimit") {
+        if !ulimit.is_empty() {
+            podman.add("--ulimit");
+            podman.add(ulimit);
+        }
+    }
+
     for mut device in container.lookup_all_strv(CONTAINER_SECTION, "AddDevice") {
         if device.starts_with('-') {
             // ignore device if it doesn't exist

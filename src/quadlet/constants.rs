@@ -11,7 +11,7 @@ pub const X_VOLUME_SECTION: &str    = "X-Volume";
 
 pub const AUTO_UPDATE_LABEL: &str = "io.containers.autoupdate";
 
-pub static SUPPORTED_CONTAINER_KEYS: [&str; 61] = [
+pub static SUPPORTED_CONTAINER_KEYS: [&str; 62] = [
     "AddCapability",
     "AddDevice",
     "Annotation",
@@ -67,6 +67,7 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 61] = [
     "Sysctl",
     "Timezone",
     "Tmpfs",
+    "Ulimit",
     "Unmask",
     "User",
     "UserNS",
