@@ -258,6 +258,18 @@ pub(crate) fn from_container_unit(
         podman.add_slice(&["--security-opt", &format!("seccomp={seccomp_profile}")])
     }
 
+    for ip_addr in container.lookup_all(CONTAINER_SECTION, "DNS") {
+        podman.add(format!("--dns={ip_addr}"))
+    }
+
+    for dns_option in container.lookup_all(CONTAINER_SECTION, "DNSOption") {
+        podman.add(format!("--dns-option={dns_option}"))
+    }
+
+    for dns_search in container.lookup_all(CONTAINER_SECTION, "DNSSearch") {
+        podman.add(format!("--dns-search={dns_search}"))
+    }
+
     for caps in container.lookup_all_strv(CONTAINER_SECTION, "DropCapability") {
         podman.add(format!("--cap-drop={}", caps.to_ascii_lowercase()))
     }
@@ -715,6 +727,10 @@ pub(crate) fn from_network_unit(
         .unwrap_or(false);
     if disable_dns {
         podman.add("--disable-dns")
+    }
+
+    for ip_addr in network.lookup_all(NETWORK_SECTION, "DNS") {
+        podman.add(format!("--dns={ip_addr}"))
     }
 
     let driver = network.lookup_last(NETWORK_SECTION, "Driver");

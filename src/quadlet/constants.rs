@@ -11,12 +11,15 @@ pub const X_VOLUME_SECTION: &str    = "X-Volume";
 
 pub const AUTO_UPDATE_LABEL: &str = "io.containers.autoupdate";
 
-pub static SUPPORTED_CONTAINER_KEYS: [&str; 63] = [
+pub static SUPPORTED_CONTAINER_KEYS: [&str; 66] = [
     "AddCapability",
     "AddDevice",
     "Annotation",
     "AutoUpdate",
     "ContainerName",
+    "DNS",
+    "DNSOption",
+    "DNSSearch",
     "DropCapability",
     "Environment",
     "EnvironmentFile",
@@ -94,8 +97,9 @@ pub static SUPPORTED_KUBE_KEYS: [&str; 14] = [
     "Yaml",
 ];
 
-pub static SUPPORTED_NETWORK_KEYS: [&str; 12] = [
+pub static SUPPORTED_NETWORK_KEYS: [&str; 13] = [
     "DisableDNS",
+    "DNS",
     "Driver",
     "Gateway",
     "Internal",
