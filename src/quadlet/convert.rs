@@ -88,7 +88,7 @@ pub(crate) fn from_container_unit(
     service.append_entry(
         SERVICE_SECTION,
         "ExecStop",
-        format!("{} rm -f -i --cidfile=%t/%N.cid", get_podman_binary()),
+        format!("{} rm -v -f -i --cidfile=%t/%N.cid", get_podman_binary()),
     );
     // The ExecStopPost is needed when the main PID (i.e., conmon) gets killed.
     // In that case, ExecStop is not executed but *Post only.  If both are
@@ -97,7 +97,7 @@ pub(crate) fn from_container_unit(
     service.append_entry(
         SERVICE_SECTION,
         "ExecStopPost",
-        format!("-{} rm -f -i --cidfile=%t/%N.cid", get_podman_binary()),
+        format!("-{} rm -v -f -i --cidfile=%t/%N.cid", get_podman_binary()),
     );
 
     // FIXME: (COMPAT) remove once we can rely on Podman v4.4.0 or newer being present
