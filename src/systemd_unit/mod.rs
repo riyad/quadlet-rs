@@ -8,7 +8,6 @@ mod value;
 
 use std::fmt;
 
-
 pub use self::constants::*;
 pub use self::quoted::*;
 pub use self::split::*;

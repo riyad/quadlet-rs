@@ -1603,13 +1603,25 @@ fn is_port_range(port: &str) -> bool {
     chars.next().is_none()
 }
 
-fn lookup_and_add_bool(unit_file: &SystemdUnitFile, section: &str, key: &str, flag: &str, podman: &mut  PodmanCommand) {
+fn lookup_and_add_bool(
+    unit_file: &SystemdUnitFile,
+    section: &str,
+    key: &str,
+    flag: &str,
+    podman: &mut PodmanCommand,
+) {
     if let Some(val) = unit_file.lookup_bool(section, key) {
         podman.add_bool(flag, val);
     }
 }
 
-fn lookup_and_add_string(unit_file: &SystemdUnitFile, section: &str, key: &str, flag: &str, podman: &mut  PodmanCommand) {
+fn lookup_and_add_string(
+    unit_file: &SystemdUnitFile,
+    section: &str,
+    key: &str,
+    flag: &str,
+    podman: &mut PodmanCommand,
+) {
     if let Some(val) = unit_file.lookup(section, key) {
         if !val.is_empty() {
             podman.add(format!("{flag}={val}"));

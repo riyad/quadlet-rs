@@ -189,7 +189,7 @@ fn is_unambiguous_name(image_name: &str) -> bool {
 pub(crate) fn warn_if_ambiguous_image_name(unit: &SystemdUnitFile, section: &str) {
     if let Some(image_name) = unit.lookup_last(section, "Image") {
         if unit.path().extension().unwrap_or_default() == "image" {
-            return
+            return;
         }
         if !is_unambiguous_name(image_name) {
             let file_name = unit.path().file_name().expect("should have a file name");
