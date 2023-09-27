@@ -54,6 +54,12 @@ pub(crate) fn from_container_unit(
         ));
     }
 
+    let image = if !image.is_empty() {
+        handle_image_source(&image, &mut service, names)?.to_string()
+    } else {
+        image
+    };
+
     let podman_container_name = container
         .lookup_last(CONTAINER_SECTION, "ContainerName")
         .map(|v| v.to_string())
@@ -522,6 +528,88 @@ pub(crate) fn from_container_unit(
     Ok(service)
 }
 
+pub(crate) fn from_image_unit(
+    image: &SystemdUnitFile,
+    _names: &HashMap<OsString, OsString>,
+    _is_user: bool,
+) -> Result<SystemdUnitFile, ConversionError> {
+    let mut service = SystemdUnitFile::new();
+    service.merge_from(image);
+    service.path = quad_replace_extension(image.path(), ".service", "", "-image");
+
+    if !image.path().as_os_str().is_empty() {
+        service.append_entry(
+            UNIT_SECTION,
+            "SourcePath",
+            image
+                .path()
+                .to_str()
+                .expect("EnvironmentFile path is not a valid UTF-8 string"),
+        );
+    }
+
+    check_for_unknown_keys(image, IMAGE_SECTION, &SUPPORTED_IMAGE_KEYS)?;
+
+    let image_name = image
+        .lookup_last(IMAGE_SECTION, "Image")
+        .unwrap_or_default();
+    if image_name.is_empty() {
+        return Err(ConversionError::InvalidImageOrRootfs(
+            "no Image key specified".into(),
+        ));
+    }
+
+    // Rename old Image group to X-Image so that systemd ignores it
+    service.rename_section(IMAGE_SECTION, X_IMAGE_SECTION);
+
+    // Need the containers filesystem mounted to start podman
+    service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
+
+    let mut podman = PodmanCommand::new_command("image");
+    podman.add("pull");
+
+    let string_keys = [
+        ("Arch", "--arch"),
+        ("AuthFile", "--authfile"),
+        ("CertDir", "--cert-dir"),
+        ("Creds", "--creds"),
+        ("DecryptionKey", "--decryption-key"),
+        ("OS", "--os"),
+        ("Variant", "--variant"),
+    ];
+
+    let bool_keys = [
+        ("AllTags", "--all-tags"),
+        ("TLSVerify", "--tls-verify"),
+    ];
+
+    for (key, flag) in string_keys {
+        lookup_and_add_string(image, IMAGE_SECTION, key, flag, &mut podman)
+    }
+
+    for (key, flag) in bool_keys {
+        lookup_and_add_bool(image, IMAGE_SECTION, key, flag, &mut podman)
+    }
+
+    handle_podman_args(image, IMAGE_SECTION, &mut podman);
+
+    podman.add(image_name);
+
+    service.append_entry_value(
+        SERVICE_SECTION,
+        "ExecStart",
+        EntryValue::try_from_raw(podman.to_escaped_string().as_str())?,
+    );
+
+    service.append_entry(SERVICE_SECTION, "Type", "oneshot");
+    service.append_entry(SERVICE_SECTION, "RemainAfterExit", "yes");
+
+    // The default syslog identifier is the exec basename (podman) which isn't very useful here
+    service.append_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
+
+    Ok(service)
+}
+
 pub(crate) fn from_kube_unit(
     kube: &SystemdUnitFile,
     names: &HashMap<OsString, OsString>,
@@ -885,68 +973,89 @@ pub(crate) fn from_volume_unit(
     // Quadlet default changed in: https://github.com/containers/podman/pull/16243
     //podman.add("--ignore")
 
-    let mut opts: Vec<String> = Vec::with_capacity(2);
-    if volume.has_key(VOLUME_SECTION, "User") {
-        let uid = volume
-            .lookup_last(VOLUME_SECTION, "User")
-            .map(|s| s.parse::<u32>().unwrap_or(0)) // key found: parse or default
-            .unwrap_or(0); // key not found: use default
-        opts.push(format!("uid={uid}"));
-    }
-    if volume.has_key(VOLUME_SECTION, "Group") {
-        let gid = volume
-            .lookup_last(VOLUME_SECTION, "Group")
-            .map(|s| s.parse::<u32>().unwrap_or(0)) // key found: parse or default
-            .unwrap_or(0); // key not found: use default
-        opts.push(format!("gid={gid}"));
+    let driver = volume.lookup(VOLUME_SECTION, "Driver");
+    if let Some(driver) = driver {
+        podman.add(format!("--driver={driver}"))
     }
 
-    if let Some(copy) = volume.lookup_bool(VOLUME_SECTION, "Copy") {
-        if copy {
-            podman.add_slice(&["--opt", "copy"]);
-        } else {
-            podman.add_slice(&["--opt", "nocopy"]);
+    if driver.unwrap_or_default() == "image" {
+        let image_name = volume.lookup(VOLUME_SECTION, "Image");
+        if image_name.is_none() {
+            return Err(ConversionError::InvalidImageOrRootfs(
+                "the key Image is mandatory when using the image driver".into(),
+            ));
         }
-    }
 
-    let mut dev_valid = false;
+        let image_name = image_name.expect("cannot be none");
+        let image_name = handle_image_source(image_name, &mut service, &names)?;
 
-    if let Some(dev) = volume.lookup_last(VOLUME_SECTION, "Device") {
-        if !dev.is_empty() {
-            podman.add("--opt");
-            podman.add(format!("device={dev}"));
-            dev_valid = true;
-        }
-    }
-
-    if let Some(dev_type) = volume.lookup_last(VOLUME_SECTION, "Type") {
-        if !dev_type.is_empty() {
-            if dev_valid {
-                podman.add("--opt");
-                podman.add(format!("type={dev_type}"));
-            } else {
-                return Err(ConversionError::InvalidDeviceType(
-                    "key Type can't be used without Device".into(),
-                ));
-            }
-        }
-    }
-
-    if let Some(mount_opts) = volume.lookup_last(VOLUME_SECTION, "Options") {
-        if !mount_opts.is_empty() {
-            if dev_valid {
-                opts.push(mount_opts.into());
-            } else {
-                return Err(ConversionError::InvalidDeviceOptions(
-                    "key Options can't be used without Device".into(),
-                ));
-            }
-        }
-    }
-
-    if !opts.is_empty() {
         podman.add("--opt");
-        podman.add(format!("o={}", opts.join(",")));
+        podman.add(format!("image={image_name}"));
+    } else {
+        let mut opts: Vec<String> = Vec::with_capacity(2);
+
+        if volume.has_key(VOLUME_SECTION, "User") {
+            let uid = volume
+                .lookup_last(VOLUME_SECTION, "User")
+                .map(|s| s.parse::<u32>().unwrap_or(0)) // key found: parse or default
+                .unwrap_or(0); // key not found: use default
+            opts.push(format!("uid={uid}"));
+        }
+        if volume.has_key(VOLUME_SECTION, "Group") {
+            let gid = volume
+                .lookup_last(VOLUME_SECTION, "Group")
+                .map(|s| s.parse::<u32>().unwrap_or(0)) // key found: parse or default
+                .unwrap_or(0); // key not found: use default
+            opts.push(format!("gid={gid}"));
+        }
+
+        if let Some(copy) = volume.lookup_bool(VOLUME_SECTION, "Copy") {
+            if copy {
+                podman.add_slice(&["--opt", "copy"]);
+            } else {
+                podman.add_slice(&["--opt", "nocopy"]);
+            }
+        }
+
+        let mut dev_valid = false;
+
+        if let Some(dev) = volume.lookup_last(VOLUME_SECTION, "Device") {
+            if !dev.is_empty() {
+                podman.add("--opt");
+                podman.add(format!("device={dev}"));
+                dev_valid = true;
+            }
+        }
+
+        if let Some(dev_type) = volume.lookup_last(VOLUME_SECTION, "Type") {
+            if !dev_type.is_empty() {
+                if dev_valid {
+                    podman.add("--opt");
+                    podman.add(format!("type={dev_type}"));
+                } else {
+                    return Err(ConversionError::InvalidDeviceType(
+                        "key Type can't be used without Device".into(),
+                    ));
+                }
+            }
+        }
+
+        if let Some(mount_opts) = volume.lookup_last(VOLUME_SECTION, "Options") {
+            if !mount_opts.is_empty() {
+                if dev_valid {
+                    opts.push(mount_opts.into());
+                } else {
+                    return Err(ConversionError::InvalidDeviceOptions(
+                        "key Options can't be used without Device".into(),
+                    ));
+                }
+            }
+        }
+
+        if !opts.is_empty() {
+            podman.add("--opt");
+            podman.add(format!("o={}", opts.join(",")));
+        }
     }
 
     podman.add_labels(&labels);
@@ -1007,6 +1116,45 @@ fn handle_health(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanComm
             }
         }
     }
+}
+
+fn handle_image_source<'a>(
+    quadlet_image_name: &'a str,
+    service_unit_file: &mut SystemdUnitFile,
+    names: &'a HashMap<OsString, OsString>,
+) -> Result<&'a str, ConversionError> {
+    if quadlet_image_name.ends_with(".image") {
+        //let quadlet_image_name = OsStr::new(quadlet_image_name);
+
+        // since there is no default name conversion, the actual image name must exist in the names map
+        let image_name = names.get(&OsString::from(quadlet_image_name));
+        if image_name.is_none() {
+            return Err(ConversionError::ImageNotFound(format!(
+                "requested Quadlet image {quadlet_image_name:?} was not found"
+            )));
+        }
+
+        // the systemd unit name is $name-image.service
+        let image_service_name = quad_replace_extension(
+            Path::new(image_name.expect("cannot be none")),
+            ".service",
+            "",
+            "-image",
+        )
+        .to_str()
+        .expect("image service name is not a valid UTF-8 string")
+        .to_string();
+        service_unit_file.append_entry(UNIT_SECTION, "Requires", &image_service_name);
+        service_unit_file.append_entry(UNIT_SECTION, "After", &image_service_name);
+
+        let image_name = image_name
+            .expect("cannot be none")
+            .to_str()
+            .expect("image name is not a valid UTF-8 string");
+        return Ok(image_name);
+    }
+
+    return Ok(quadlet_image_name);
 }
 
 fn handle_log_driver(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {
@@ -1453,6 +1601,20 @@ fn is_port_range(port: &str) -> bool {
 
     // make sure we're at the end of the string
     chars.next().is_none()
+}
+
+fn lookup_and_add_bool(unit_file: &SystemdUnitFile, section: &str, key: &str, flag: &str, podman: &mut  PodmanCommand) {
+    if let Some(val) = unit_file.lookup_bool(section, key) {
+        podman.add_bool(flag, val);
+    }
+}
+
+fn lookup_and_add_string(unit_file: &SystemdUnitFile, section: &str, key: &str, flag: &str, podman: &mut  PodmanCommand) {
+    if let Some(val) = unit_file.lookup(section, key) {
+        if !val.is_empty() {
+            podman.add(format!("{flag}={val}"));
+        }
+    }
 }
 
 fn quad_replace_extension(

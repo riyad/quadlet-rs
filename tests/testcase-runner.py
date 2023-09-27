@@ -48,7 +48,9 @@ def find_sublist_regex(full_list, sublist):
 
 def to_service(filename):
     (base, ext) = os.path.splitext(filename)
-    if ext == ".network":
+    if ext == ".image":
+        base = base + "-image"
+    elif ext == ".network":
         base = base + "-network"
     elif ext == ".volume":
         base = base + "-volume"
@@ -417,6 +419,7 @@ def load_test_suite():
         rel_dirpath = dirpath.removeprefix(testcases_dir).removeprefix('/')
         for name in filenames:
             if (name.endswith(".container") or
+                name.endswith(".image") or
                 name.endswith(".kube") or
                 name.endswith(".network") or
                 name.endswith(".volume")) and not name.startswith("."):

@@ -43,6 +43,7 @@ impl Display for RuntimeError {
 #[derive(Debug)]
 #[non_exhaustive]
 pub(crate) enum ConversionError {
+    ImageNotFound(String),
     InvalidDeviceOptions(String),
     InvalidDeviceType(String),
     InvalidImageOrRootfs(String),
@@ -64,7 +65,8 @@ pub(crate) enum ConversionError {
 impl Display for ConversionError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            ConversionError::InvalidDeviceOptions(msg)
+            ConversionError::ImageNotFound(msg)
+            | ConversionError::InvalidDeviceOptions(msg)
             | ConversionError::InvalidDeviceType(msg)
             | ConversionError::InvalidImageOrRootfs(msg)
             | ConversionError::InvalidKillMode(msg)
@@ -184,10 +186,13 @@ fn is_unambiguous_name(image_name: &str) -> bool {
 //
 // We implement a simple version of this from scratch here to avoid
 // a huge dependency in the generator just for a warning.
-pub(crate) fn warn_if_ambiguous_image_name(container: &SystemdUnitFile) {
-    if let Some(image_name) = container.lookup_last(CONTAINER_SECTION, "Image") {
+pub(crate) fn warn_if_ambiguous_image_name(unit: &SystemdUnitFile, section: &str) {
+    if let Some(image_name) = unit.lookup_last(section, "Image") {
+        if unit.path().extension().unwrap_or_default() == "image" {
+            return
+        }
         if !is_unambiguous_name(image_name) {
-            let file_name = container.path().file_name().unwrap();
+            let file_name = unit.path().file_name().expect("should have a file name");
             log!("Warning: {file_name:?} specifies the image {image_name:?} which not a fully qualified image name. This is not ideal for performance and security reasons. See the podman-pull manpage discussion of short-name-aliases.conf for details.");
         }
     }

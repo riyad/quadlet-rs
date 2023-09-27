@@ -10,6 +10,7 @@ use self::systemd_unit::*;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::env;
+
 use std::ffi::OsString;
 use std::fs;
 use std::fs::File;
@@ -22,7 +23,7 @@ use std::process;
 use users;
 use walkdir::{DirEntry, WalkDir};
 
-static SUPPORTED_EXTENSIONS: [&str; 4] = ["container", "kube", "network", "volume"];
+static SUPPORTED_EXTENSIONS: [&str; 5] = ["container", "image", "kube", "network", "volume"];
 
 const QUADLET_VERSION: &str = "0.2.0-dev";
 const UNIT_DIR_ADMIN:  &str = "/etc/containers/systemd";
@@ -140,7 +141,7 @@ fn validate_args() -> Result<CliOptions, RuntimeError> {
 
             cfg
         }
-        Err(e) => return Err(e)
+        Err(e) => return Err(e),
     };
 
     if !cfg.dry_run {
@@ -286,7 +287,10 @@ fn _user_level_filter(entry: &DirEntry, rootless: bool) -> bool {
     false
 }
 
-fn load_units_from_dir(source_path: &Path, seen: &mut HashSet<OsString>) -> Vec<Result<SystemdUnitFile, RuntimeError>> {
+fn load_units_from_dir(
+    source_path: &Path,
+    seen: &mut HashSet<OsString>,
+) -> Vec<Result<SystemdUnitFile, RuntimeError>> {
     let mut results = Vec::new();
 
     let files = match UnitFiles::new(source_path) {
@@ -431,7 +435,7 @@ fn main() {
             help();
             log!("{e}");
             process::exit(1);
-        },
+        }
     };
 
     let errs = process(cfg);
@@ -454,13 +458,11 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
     let mut units: Vec<SystemdUnitFile> = source_paths
         .iter()
         .flat_map(|dir| load_units_from_dir(dir.as_path(), &mut seen))
-        .filter_map(|r| {
-            match r {
-                Ok(u) => Some(u),
-                Err(e) => {
-                    prev_errors.push(e);
-                    None
-                },
+        .filter_map(|r| match r {
+            Ok(u) => Some(u),
+            Err(e) => {
+                prev_errors.push(e);
+                None
             }
         })
         .collect();
@@ -482,10 +484,13 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
         }
     }
 
-    // Sort unit files according to potential inter-dependencies, with Volume and Network units
-    // taking precedence over all others.
+    // Sort unit files according to potential inter-dependencies, with Image, Volume and Network
+    // units taking precedence over all others.
+    // resulting order: .image < (.network | .volume) < (.container | .kube)
     units.sort_unstable_by(|a, _| match a.path().extension() {
-        Some(ext) if ext == "volume" || ext == "network" => Ordering::Less,
+        // this works as long as we have only 3 tiers
+        Some(ext) if ext == "image" => Ordering::Less,
+        Some(ext) if ext == "network" || ext == "volume" => Ordering::Equal,
         _ => Ordering::Greater,
     });
 
@@ -493,21 +498,32 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
     let mut resource_names = HashMap::with_capacity(units.len());
 
     for unit in units {
-        let ext = unit.path().extension().expect("should have file extension");
+        let ext = unit.path().extension();
 
-        let service_result = if ext == "container" {
-            warn_if_ambiguous_image_name(&unit);
-            convert::from_container_unit(&unit, &resource_names, cfg.is_user)
-        } else if ext == "kube" {
-            convert::from_kube_unit(&unit, &resource_names, cfg.is_user)
-        } else if ext == "network" {
-            convert::from_network_unit(&unit, &mut resource_names)
-        } else if ext == "volume" {
-            convert::from_volume_unit(&unit, &mut resource_names)
-        } else {
-            log!("Unsupported file type {:?}", unit.path());
-            continue;
+        let service_result = match ext
+            .map(|e| e.to_str().unwrap_or_default())
+            .unwrap_or_default()
+        {
+            "container" => {
+                warn_if_ambiguous_image_name(&unit, CONTAINER_SECTION);
+                convert::from_container_unit(&unit, &resource_names, cfg.is_user)
+            }
+            "image" => {
+                warn_if_ambiguous_image_name(&unit, IMAGE_SECTION);
+                convert::from_image_unit(&unit, &resource_names, cfg.is_user)
+            }
+            "kube" => convert::from_kube_unit(&unit, &resource_names, cfg.is_user),
+            "network" => convert::from_network_unit(&unit, &mut resource_names),
+            "volume" => {
+                warn_if_ambiguous_image_name(&unit, VOLUME_SECTION);
+                convert::from_volume_unit(&unit, &mut resource_names)
+            }
+            _ => {
+                log!("Unsupported file type {:?}", unit.path());
+                continue;
+            }
         };
+
         let mut service = match service_result {
             Ok(service_unit) => service_unit,
             Err(e) => {
@@ -832,7 +848,7 @@ mod tests {
                         dirs::config_dir()
                             .expect("could not determine config dir")
                             .to_str()
-                            .expect("home dir ist not valid UTF-8 string")
+                            .expect("home dir is not valid UTF-8 string")
                     ),
                     format!("/etc/containers/systemd/users/{}", users::get_current_uid()),
                     format!("/etc/containers/systemd/users"),
