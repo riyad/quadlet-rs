@@ -23,12 +23,7 @@ use std::process;
 use users;
 use walkdir::{DirEntry, WalkDir};
 
-static SUPPORTED_EXTENSIONS: [&str; 5] = ["container", "image", "kube", "network", "volume"];
-
 const QUADLET_VERSION: &str = "0.2.0-dev";
-const UNIT_DIR_ADMIN:  &str = "/etc/containers/systemd";
-const UNIT_DIR_DISTRO: &str = "/usr/share/containers/systemd";
-const SYSTEM_USER_DIR_LEVEL: usize = 5;
 
 #[derive(Debug, Default, PartialEq)]
 pub(crate) struct CliOptions {

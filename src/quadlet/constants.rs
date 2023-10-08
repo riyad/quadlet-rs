@@ -1,5 +1,9 @@
 pub(crate) const DEFAULT_PODMAN_BINARY: &str = "/usr/bin/podman";
 
+pub const UNIT_DIR_ADMIN:  &str = "/etc/containers/systemd";
+pub const UNIT_DIR_DISTRO: &str = "/usr/share/containers/systemd";
+pub const SYSTEM_USER_DIR_LEVEL: usize = 5;
+
 pub const CONTAINER_SECTION: &str   = "Container";
 pub const IMAGE_SECTION: &str       = "Image";
 pub const KUBE_SECTION: &str        = "Kube";
@@ -12,6 +16,8 @@ pub const X_NETWORK_SECTION: &str   = "X-Network";
 pub const X_VOLUME_SECTION: &str    = "X-Volume";
 
 pub const AUTO_UPDATE_LABEL: &str = "io.containers.autoupdate";
+
+pub static SUPPORTED_EXTENSIONS: [&str; 5] = ["container", "image", "kube", "network", "volume"];
 
 pub static SUPPORTED_CONTAINER_KEYS: [&str; 66] = [
     "AddCapability",
