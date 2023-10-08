@@ -1,13 +1,17 @@
 use std::ffi::OsStr;
-use std::fs::DirEntry;
-use std::path::Path;
+use std::os::unix::prelude::OsStrExt;
+use std::path::{Path, PathBuf};
+use std::{env, fs};
 
-use crate::SUPPORTED_EXTENSIONS;
+use walkdir::WalkDir;
+
+use super::constants::*;
+use super::logger::*;
 
 use super::RuntimeError;
 
 pub(crate) struct UnitFiles {
-    iter: Box<dyn Iterator<Item = Result<DirEntry, RuntimeError>>>,
+    inner: Box<dyn Iterator<Item = Result<fs::DirEntry, RuntimeError>>>,
 }
 
 impl UnitFiles {
@@ -41,15 +45,234 @@ impl UnitFiles {
         });
 
         Ok(UnitFiles {
-            iter: Box::new(iter),
+            inner: Box::new(iter),
         })
     }
 }
 
 impl Iterator for UnitFiles {
-    type Item = Result<DirEntry, RuntimeError>;
+    type Item = Result<fs::DirEntry, RuntimeError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next()
+        self.inner.next()
+    }
+}
+
+pub(crate) struct UnitSearchDirs(Vec<PathBuf>);
+
+impl UnitSearchDirs {
+    pub(crate) fn dirs(&self) -> &Vec<PathBuf> {
+        &self.0
+    }
+
+    pub(crate) fn new() -> UnitSearchDirsBuilder {
+        UnitSearchDirsBuilder {
+            recursive: true,
+            rootless: false,
+        }
+    }
+
+    pub(crate) fn iter(&self) -> UnitSearchDirsIterator {
+        UnitSearchDirsIterator{ inner: self.0.iter() }
+    }
+}
+
+pub(crate) struct UnitSearchDirsBuilder {
+    recursive: bool,
+    rootless: bool,
+}
+
+impl UnitSearchDirsBuilder {
+    pub(crate) fn build(&self) -> UnitSearchDirs {
+        // Allow overdiding source dir, this is mainly for the CI tests
+        if let Ok(unit_dirs_env) = std::env::var("QUADLET_UNIT_DIRS") {
+            let iter = env::split_paths(&unit_dirs_env)
+                .map(PathBuf::from)
+                .filter(|p| {
+                    if p.is_absolute() {
+                        return true;
+                    }
+
+                    log!("{p:?} is not a valid file path");
+                    false
+                })
+                .flat_map(|p| self.subdirs_for_search_dir(p, None));
+
+            return UnitSearchDirs(iter.collect());
+        }
+
+        let mut dirs: Vec<PathBuf> = Vec::with_capacity(3);
+        if self.rootless {
+            let config_dir = dirs::config_dir().expect("could not determine config dir");
+            dirs.extend(self.subdirs_for_search_dir(config_dir.join("containers/systemd"), None));
+            dirs.extend(self.subdirs_for_search_dir(
+                PathBuf::from(UNIT_DIR_ADMIN).join("users"),
+                Some(Box::new(_non_numeric_filter)),
+            ));
+            dirs.extend(
+                self.subdirs_for_search_dir(
+                    PathBuf::from(UNIT_DIR_ADMIN)
+                        .join("users")
+                        .join(users::get_current_uid().to_string()),
+                    Some(Box::new(_user_level_filter)),
+                ),
+            );
+            dirs.push(PathBuf::from(UNIT_DIR_ADMIN).join("users"));
+            return UnitSearchDirs(dirs);
+        }
+
+        dirs.extend(self.subdirs_for_search_dir(
+            PathBuf::from(UNIT_DIR_ADMIN),
+            Some(Box::new(_user_level_filter)),
+        ));
+        dirs.extend(self.subdirs_for_search_dir(PathBuf::from(UNIT_DIR_DISTRO), None));
+
+        UnitSearchDirs(dirs)
+    }
+
+    pub(crate) fn recursive(mut self, recursive: bool) -> Self {
+        self.recursive = recursive;
+        self
+    }
+
+    pub(crate) fn rootless(mut self, rootless: bool) -> Self {
+        self.rootless = rootless;
+        self
+    }
+
+    fn subdirs_for_search_dir(
+        &self,
+        path: PathBuf,
+        filter_fn: Option<Box<dyn Fn(&UnitSearchDirsBuilder, &walkdir::DirEntry) -> bool>>,
+    ) -> Vec<PathBuf> {
+        let mut dirs = Vec::new();
+
+        if !self.recursive {
+            dirs.push(path);
+            return dirs;
+        }
+
+        for entry in WalkDir::new(&path)
+            .into_iter()
+            .filter_entry(|e| e.path().is_dir())
+        {
+            match entry {
+                Err(e) => debug!("Error occurred walking sub directories {path:?}: {e}"),
+                Ok(entry) => {
+                    if let Some(filter_fn) = &filter_fn {
+                        if filter_fn(&self, &entry) {
+                            dirs.push(entry.path().to_owned())
+                        }
+                    } else {
+                        dirs.push(entry.path().to_owned())
+                    }
+                }
+            }
+        }
+
+        dirs
+    }
+}
+
+fn _non_numeric_filter(
+    _unit_search_dirs: &UnitSearchDirsBuilder,
+    entry: &walkdir::DirEntry,
+) -> bool {
+    // when running in rootless, only recrusive walk directories that are non numeric
+    // ignore sub dirs under the user directory that may correspond to a user id
+    if entry
+        .path()
+        .starts_with(PathBuf::from(UNIT_DIR_ADMIN).join("users"))
+    {
+        if entry.path().components().count() > SYSTEM_USER_DIR_LEVEL {
+            if !entry
+                .path()
+                .components()
+                .last()
+                .expect("path should have enough components")
+                .as_os_str()
+                .as_bytes()
+                .iter()
+                .all(|b| b - 48 < 10)
+            {
+                return true;
+            }
+        }
+    } else {
+        return true;
+    }
+
+    false
+}
+
+fn _user_level_filter(unit_search_dirs: &UnitSearchDirsBuilder, entry: &walkdir::DirEntry) -> bool {
+    // if quadlet generator is run rootless, do not recurse other user sub dirs
+    // if quadlet generator is run as root, ignore users sub dirs
+    if entry
+        .path()
+        .starts_with(PathBuf::from(UNIT_DIR_ADMIN).join("users"))
+    {
+        if unit_search_dirs.rootless {
+            return true;
+        }
+    } else {
+        return true;
+    }
+
+    false
+}
+
+pub(crate) struct UnitSearchDirsIterator<'a> {
+    inner: std::slice::Iter<'a, PathBuf>,
+}
+
+impl<'a> Iterator for UnitSearchDirsIterator<'a> {
+    type Item = &'a PathBuf;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod unit_search_dirs {
+        use super::*;
+
+        #[test]
+        fn rootful() {
+            // NOTE: directories must exists
+            assert_eq!(
+                UnitSearchDirs::new().rootless(false).build().0,
+                ["/etc/containers/systemd", "/usr/share/containers/systemd",]
+                    .iter()
+                    .map(PathBuf::from)
+                    .collect::<Vec<_>>()
+            )
+        }
+
+        #[test]
+        fn rootless() {
+            // NOTE: directories must exists
+            assert_eq!(
+                UnitSearchDirs::new().rootless(true).build().0,
+                [
+                    format!(
+                        "{}/containers/systemd",
+                        dirs::config_dir()
+                            .expect("could not determine config dir")
+                            .to_str()
+                            .expect("home dir is not valid UTF-8 string")
+                    ),
+                    format!("/etc/containers/systemd/users/{}", users::get_current_uid()),
+                    format!("/etc/containers/systemd/users"),
+                ]
+                .iter()
+                .map(PathBuf::from)
+                .collect::<Vec<_>>()
+            )
+        }
     }
 }
