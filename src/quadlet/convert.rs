@@ -8,6 +8,16 @@ use super::constants::*;
 use super::podman_command::PodmanCommand;
 use super::*;
 
+fn get_base_podman_command(unit: &SystemdUnitFile, section: &str) -> PodmanCommand {
+    let mut podman = PodmanCommand::new();
+
+    podman.extend(unit.lookup_all(section, "ContainersConfModule").map(|s| format!("--module={s}")));
+
+    podman.extend(unit.lookup_all_args(section, "GlobalArgs"));
+
+    podman
+}
+
 // Convert a quadlet container file (unit file with a Container group) to a systemd
 // service file (unit file with Service group) based on the options in the Container group.
 // The original Container group is kept around as X-Container.
@@ -91,19 +101,22 @@ pub(crate) fn from_container_unit(
 
     // If conmon exited uncleanly it may not have removed the container, so
     // force it, -i makes it ignore non-existing files.
-    service.append_entry(
+    let mut service_stop_cmd = get_base_podman_command(container, CONTAINER_SECTION);
+    service_stop_cmd.add_slice(&["rm", "-v", "-f", "-i", "--cidfile=%t/%N.cid"]);
+    service.append_entry_value(
         SERVICE_SECTION,
         "ExecStop",
-        format!("{} rm -v -f -i --cidfile=%t/%N.cid", get_podman_binary()),
+        EntryValue::try_from_raw(service_stop_cmd.to_escaped_string().as_str())?,
     );
     // The ExecStopPost is needed when the main PID (i.e., conmon) gets killed.
     // In that case, ExecStop is not executed but *Post only.  If both are
     // fired in sequence, *Post will exit when detecting that the --cidfile
     // has already been removed by the previous `rm`..
-    service.append_entry(
+    service_stop_cmd.args[0] = format!("-{}", service_stop_cmd.args[0]);
+    service.append_entry_value(
         SERVICE_SECTION,
         "ExecStopPost",
-        format!("-{} rm -v -f -i --cidfile=%t/%N.cid", get_podman_binary()),
+        EntryValue::try_from_raw(service_stop_cmd.to_escaped_string().as_str())?,
     );
 
     // FIXME: (COMPAT) remove once we can rely on Podman v4.4.0 or newer being present
@@ -111,7 +124,9 @@ pub(crate) fn from_container_unit(
     // Quadlet change in: https://github.com/containers/podman/pull/17487
     service.append_entry(SERVICE_SECTION, "ExecStopPost", "-rm -f %t/%N.cid");
 
-    let mut podman = PodmanCommand::new_command("run");
+    let mut podman = get_base_podman_command(container, CONTAINER_SECTION);
+
+    podman.add("run");
 
     podman.add(format!("--name={podman_container_name}"));
 
@@ -513,11 +528,11 @@ pub(crate) fn from_container_unit(
         podman.add(rootfs);
     }
 
-    let mut exec_args = container
+    let exec_args = container
         .lookup_last_value(CONTAINER_SECTION, "Exec")
-        .map(|v| SplitWord::new(v.raw()).collect())
-        .unwrap_or(vec![]);
-    podman.add_vec(&mut exec_args);
+        .map(|v| SplitWord::new(v.raw()))
+        .unwrap_or_default();
+    podman.extend(exec_args);
 
     service.append_entry_value(
         SERVICE_SECTION,
@@ -565,7 +580,8 @@ pub(crate) fn from_image_unit(
     // Need the containers filesystem mounted to start podman
     service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
 
-    let mut podman = PodmanCommand::new_command("image");
+    let mut podman = get_base_podman_command(image, IMAGE_SECTION);
+    podman.add("image");
     podman.add("pull");
 
     let string_keys = [
@@ -684,7 +700,8 @@ pub(crate) fn from_kube_unit(
         service.set_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
     }
 
-    let mut podman_start = PodmanCommand::new_command("kube");
+    let mut podman_start = get_base_podman_command(kube, KUBE_SECTION);
+    podman_start.add("kube");
     podman_start.add("play");
 
     podman_start.add_slice(&[
@@ -754,7 +771,10 @@ pub(crate) fn from_kube_unit(
         EntryValue::try_from_raw(podman_start.to_escaped_string().as_str())?,
     );
 
-    let mut podman_stop = PodmanCommand::new_command("kube");
+    // Use `ExecStopPost` to make sure cleanup happens even in case of
+    // errors; otherwise containers, pods, etc. would be left behind.
+    let mut podman_stop = get_base_podman_command(kube, KUBE_SECTION);
+    podman_stop.add("kube");
     podman_stop.add("down");
     podman_stop.add(
         yaml_path
@@ -819,7 +839,8 @@ pub(crate) fn from_network_unit(
     // Need the containers filesystem mounted to start podman
     service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
 
-    let mut podman = PodmanCommand::new_command("network");
+    let mut podman = get_base_podman_command(network, NETWORK_SECTION);
+    podman.add("network");
     podman.add("create");
     // FIXME:  (COMPAT) add `--ignore` once we can rely on Podman v4.4.0 or newer being present
     // Podman support added in: https://github.com/containers/podman/pull/16773
@@ -982,7 +1003,8 @@ pub(crate) fn from_volume_unit(
 
     let labels = volume.lookup_all_key_val(VOLUME_SECTION, "Label");
 
-    let mut podman = PodmanCommand::new_command("volume");
+    let mut podman = get_base_podman_command(volume, VOLUME_SECTION);
+    podman.add("volume");
     podman.add("create");
     // FIXME:  (COMPAT) add `--ignore` once we can rely on Podman v4.4.0 or newer being present
     // Podman support added in: https://github.com/containers/podman/pull/16243
@@ -1244,11 +1266,7 @@ fn handle_networks(
 }
 
 fn handle_podman_args(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {
-    let mut podman_args: Vec<String> = unit_file.lookup_all_args(section, "PodmanArgs").collect();
-
-    if !podman_args.is_empty() {
-        podman.add_vec(&mut podman_args);
-    }
+    podman.extend(unit_file.lookup_all_args(section, "PodmanArgs"));
 }
 
 fn handle_publish_ports(

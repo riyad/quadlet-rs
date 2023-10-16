@@ -5,16 +5,10 @@ use crate::systemd_unit::quote_words;
 use super::get_podman_binary;
 
 pub(crate) struct PodmanCommand {
-    args: Vec<String>,
+    pub(crate) args: Vec<String>,
 }
 
 impl PodmanCommand {
-    fn _new() -> Self {
-        PodmanCommand {
-            args: Vec::with_capacity(10),
-        }
-    }
-
     pub(crate) fn add<S>(&mut self, arg: S)
     where
         S: Into<String>,
@@ -59,17 +53,15 @@ impl PodmanCommand {
         }
     }
 
-    pub(crate) fn add_vec(&mut self, args: &mut Vec<String>) {
-        self.args.append(args);
+    pub(crate) fn extend(&mut self, args: impl Iterator<Item = String>) {
+        self.args.extend(args);
     }
 
-    pub(crate) fn new_command(command: &str) -> Self {
-        let mut podman = Self::_new();
+    pub(crate) fn new() -> Self {
+        let mut v = Vec::with_capacity(10);
+        v.push(get_podman_binary());
 
-        podman.add(get_podman_binary());
-        podman.add(command);
-
-        podman
+        PodmanCommand { args: v }
     }
 
     pub(crate) fn to_escaped_string(&self) -> String {

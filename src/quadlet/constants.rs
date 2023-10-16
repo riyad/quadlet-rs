@@ -19,12 +19,13 @@ pub const AUTO_UPDATE_LABEL: &str = "io.containers.autoupdate";
 
 pub static SUPPORTED_EXTENSIONS: [&str; 5] = ["container", "image", "kube", "network", "volume"];
 
-pub static SUPPORTED_CONTAINER_KEYS: [&str; 66] = [
+pub static SUPPORTED_CONTAINER_KEYS: [&str; 68] = [
     "AddCapability",
     "AddDevice",
     "Annotation",
     "AutoUpdate",
     "ContainerName",
+    "ContainersConfModule",
     "DNS",
     "DNSOption",
     "DNSSearch",
@@ -34,6 +35,7 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 66] = [
     "EnvironmentHost",
     "Exec",
     "ExposeHostPort",
+    "GlobalArgs",
     "Group",
     "HealthCmd",
     "HealthInterval",
@@ -88,13 +90,15 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 66] = [
     "WorkingDir",
 ];
 
-pub static SUPPORTED_IMAGE_KEYS: [&str; 11] = [
+pub static SUPPORTED_IMAGE_KEYS: [&str; 13] = [
     "AllTags",
     "Arch",
     "AuthFile",
     "CertDir",
+    "ContainersConfModule",
     "Creds",
     "DecryptionKey",
+    "GlobalArgs",
     "Image",
     "PodmanArgs",
     "OS",
@@ -102,10 +106,12 @@ pub static SUPPORTED_IMAGE_KEYS: [&str; 11] = [
     "Variant",
 ];
 
-pub static SUPPORTED_KUBE_KEYS: [&str; 14] = [
+pub static SUPPORTED_KUBE_KEYS: [&str; 16] = [
     "AutoUpdate",
     "ConfigMap",
+    "ContainersConfModule",
     "ExitCodePropagation",
+    "GlobalArgs",
     "LogDriver",
     "Network",
     "PodmanArgs",
@@ -119,11 +125,13 @@ pub static SUPPORTED_KUBE_KEYS: [&str; 14] = [
     "Yaml",
 ];
 
-pub static SUPPORTED_NETWORK_KEYS: [&str; 13] = [
+pub static SUPPORTED_NETWORK_KEYS: [&str; 15] = [
+    "ContainersConfModule",
     "DisableDNS",
     "DNS",
     "Driver",
     "Gateway",
+    "GlobalArgs",
     "Internal",
     "IPAMDriver",
     "IPRange",
@@ -140,10 +148,12 @@ pub static SUPPORTED_SERVICE_KEYS: [&str; 1] = [
     "WorkingDirectory",
 ];
 
-pub static SUPPORTED_VOLUME_KEYS: [&str; 11] = [
+pub static SUPPORTED_VOLUME_KEYS: [&str; 13] = [
+    "ContainersConfModule",
     "Copy",
     "Device",
     "Driver",
+    "GlobalArgs",
     "Group",
     "Image",
     "Label",

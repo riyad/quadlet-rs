@@ -286,7 +286,13 @@ impl<'a> SplitWord<'a> {
     }
 }
 
-impl<'a> Iterator for SplitWord<'a> {
+impl<'a> Default for SplitWord<'_> {
+    fn default() -> Self {
+        Self { chars: "".chars(), c: Default::default() }
+    }
+}
+
+impl<'a> Iterator for SplitWord<'_> {
     type Item = String;
 
     fn next(&mut self) -> Option<Self::Item> {

@@ -160,11 +160,22 @@ class QuadletTestCase(unittest.TestCase):
             last_value = real_values[-1]
             return value in last_value
 
-        def assert_podman_args(args, testcase, key):
-            return find_sublist(getattr(testcase, key), args) != -1
+        def assert_podman_args(args, testcase, key, allow_regex, global_only):
+            podman_args = getattr(testcase, key)
+            if global_only:
+                podman_cmd_location = find_sublist(podman_args, [args[0]])
+                if podman_cmd_location == 1:
+                    return False
+                podman_args = podman_args[:podman_cmd_location]
+                args = args[1:]
 
-        def assert_podman_args_regex(args, testcase, key):
-            return find_sublist_regex(getattr(testcase, key), args) != -1
+            location = -1
+            if allow_regex:
+                location = find_sublist_regex(podman_args, args)
+            else:
+                location = find_sublist(podman_args, args)
+
+            return location != -1
 
         def key_value_string_to_map(key_value_string, separator):
             key_val_map = dict()
@@ -186,13 +197,21 @@ class QuadletTestCase(unittest.TestCase):
                     return False
             return True
 
-        def assert_podman_args_key_val(args, testcase, key, allow_regex):
+        def assert_podman_args_key_val(args, testcase, key, allow_regex, global_only):
             if len(args) != 3:
                 return False
             opt = args[0]
             separator = args[1]
             values = args[2]
             podman_args = getattr(testcase, key)
+
+            if global_only:
+                podman_cmd_location = find_sublist(podman_args, [args[0]])
+                if podman_cmd_location == -1:
+                    return False
+
+                podman_args = podman_args[:podman_cmd_location]
+                args = args[1:]
 
             expected_key_val_map = key_value_string_to_map(values, separator)
             arg_key_location = 0
@@ -227,16 +246,28 @@ class QuadletTestCase(unittest.TestCase):
             return match_sublist_regex_at(getattr(testcase, key), len(getattr(testcase, key)) - len(args), args)
 
         def assert_start_podman_args(*args):
-            return assert_podman_args(*args, '_Service_ExecStart')
+            return assert_podman_args(*args, '_Service_ExecStart', False, False)
 
         def assert_start_podman_args_regex(*args):
-            return assert_podman_args_regex(*args, '_Service_ExecStart')
+            return assert_podman_args(*args, '_Service_ExecStart', True, False)
+
+        def assert_start_podman_global_args(*args):
+            return assert_podman_args(*args, '_Service_ExecStart', False, True)
+
+        def assert_start_podman_global_args_regex(*args):
+            return assert_podman_args(*args, '_Service_ExecStart', True, True)
 
         def assert_start_podman_args_key_val(*args):
-            return assert_podman_args_key_val(*args, '_Service_ExecStart', False)
+            return assert_podman_args_key_val(*args, '_Service_ExecStart', False, False)
 
         def assert_start_podman_args_key_val_regex(*args):
-            return assert_podman_args_key_val(*args, '_Service_ExecStart', True)
+            return assert_podman_args_key_val(*args, '_Service_ExecStart', True, False)
+
+        def assert_start_podman_global_args_key_val(*args):
+            return assert_podman_args_key_val(*args, '_Service_ExecStart', False, True)
+
+        def assert_start_podman_global_args_key_val_regex(*args):
+            return assert_podman_args_key_val(*args, '_Service_ExecStart', True, True)
 
         def assert_start_podman_final_args(*args):
             return assert_podman_final_args(*args, '_Service_ExecStart')
@@ -245,7 +276,10 @@ class QuadletTestCase(unittest.TestCase):
             return assert_podman_final_args_regex(*args, '_Service_ExecStart')
 
         def assert_stop_podman_args(*args):
-            return assert_podman_args(*args, '_Service_ExecStop')
+            return assert_podman_args(*args, '_Service_ExecStop', False, False)
+
+        def assert_stop_podman_global_args(*args):
+            return assert_podman_args(*args, '_Service_ExecStop', False, True)
 
         def assert_stop_podman_final_args(*args):
             return assert_podman_final_args(*args, '_Service_ExecStop')
@@ -253,14 +287,29 @@ class QuadletTestCase(unittest.TestCase):
         def assert_stop_podman_final_args_regex(*args):
             return assert_podman_final_args_regex(*args, '_Service_ExecStop')
 
+        def assert_stop_podman_args_key_val(*args):
+            return assert_podman_args_key_val(*args, '_Service_ExecStop', False, False)
+
+        def assert_stop_podman_args_key_val_regex(*args):
+            return assert_podman_args_key_val(*args, '_Service_ExecStop', True, False)
+
         def assert_stop_post_podman_args(*args):
-            return assert_podman_args(*args, '_Service_ExecStopPost')
+            return assert_podman_args(*args, '_Service_ExecStopPost', False, False)
+
+        def assert_stop_post_podman_global_args(*args):
+            return assert_podman_args(*args, '_Service_ExecStopPost', False, True)
 
         def assert_stop_post_podman_final_args(*args):
             return assert_podman_final_args(*args, '_Service_ExecStopPost')
 
         def assert_stop_post_podman_final_args_regex(*args):
             return assert_podman_final_args_regex(*args, '_Service_ExecStopPost')
+
+        def assert_stop_post_podman_args_key_val(*args):
+            return assert_podman_args_key_val(*args, '_Service_ExecStopPost', False, False)
+
+        def assert_stop_post_podman_args_key_val_regex(*args):
+            return assert_podman_args_key_val(*args, '_Service_ExecStopPost', True, False)
 
         def assert_symlink(args, testcase):
             if len(args) != 2:
@@ -288,15 +337,25 @@ class QuadletTestCase(unittest.TestCase):
             "assert-podman-args-regex": assert_start_podman_args_regex,
             "assert-podman-args-key-val": assert_start_podman_args_key_val,
             "assert-podman-args-key-val-regex": assert_start_podman_args_key_val_regex,
+            "assert-podman-global-args": assert_start_podman_global_args,
+            "assert-podman-global-args-regex": assert_start_podman_global_args_regex,
+            "assert-podman-global-args-key-val": assert_start_podman_global_args_key_val,
+            "assert-podman-global-args-key-val-regex": assert_start_podman_global_args_key_val_regex,
             "assert-podman-final-args": assert_start_podman_final_args,
             "assert-podman-final-args-regex": assert_start_podman_final_args_regex,
             "assert-symlink": assert_symlink,
             "assert-podman-stop-args": assert_stop_podman_args,
+            "assert-podman-stop-global-args": assert_stop_podman_global_args,
             "assert-podman-stop-final-args": assert_stop_podman_final_args,
             "assert-podman-stop-final-args-regex": assert_stop_podman_final_args_regex,
+            "assert-podman-stop-args-key-val": assert_stop_podman_args_key_val,
+            "assert-podman-stop-args-key-val-regex": assert_stop_podman_args_key_val_regex,
             "assert-podman-stop-post-args": assert_stop_post_podman_args,
+            "assert-podman-stop-post-global-args": assert_stop_post_podman_global_args,
             "assert-podman-stop-post-final-args": assert_stop_post_podman_final_args,
             "assert-podman-stop-post-final-args-regex": assert_stop_post_podman_final_args_regex,
+            "assert-podman-stop-post-args-key-val": assert_stop_post_podman_args_key_val,
+            "assert-podman-stop-post-args-key-val-regex": assert_stop_post_podman_args_key_val_regex,
         }
 
         servicepath = os.path.join(outdir, self.servicename)

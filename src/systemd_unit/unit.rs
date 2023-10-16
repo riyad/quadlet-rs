@@ -1394,8 +1394,9 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
                 assert_eq!(split.next(), Some(&"a\"b".into()));
                 assert_eq!(split.next(), None);
 
-                let mut command = PodmanCommand::new_command("test");
-                command.add_vec(&mut split_words);
+                let mut command = PodmanCommand::new();
+                command.add("test");
+                command.extend(split_words.into_iter());
 
                 let new_exec_start = command.to_escaped_string();
                 assert_eq!(
