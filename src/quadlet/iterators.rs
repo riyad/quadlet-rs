@@ -67,13 +67,15 @@ impl UnitSearchDirs {
 
     pub(crate) fn new() -> UnitSearchDirsBuilder {
         UnitSearchDirsBuilder {
-            recursive: true,
+            recursive: false,
             rootless: false,
         }
     }
 
     pub(crate) fn iter(&self) -> UnitSearchDirsIterator {
-        UnitSearchDirsIterator{ inner: self.0.iter() }
+        UnitSearchDirsIterator {
+            inner: self.0.iter(),
+        }
     }
 }
 
@@ -147,11 +149,6 @@ impl UnitSearchDirsBuilder {
     ) -> Vec<PathBuf> {
         let mut dirs = Vec::new();
 
-        if !self.recursive {
-            dirs.push(path);
-            return dirs;
-        }
-
         for entry in WalkDir::new(&path)
             .into_iter()
             .filter_entry(|e| e.path().is_dir())
@@ -193,7 +190,7 @@ fn _non_numeric_filter(
                 .as_os_str()
                 .as_bytes()
                 .iter()
-                .all(|b| b - 48 < 10)
+                .all(|b| b.is_ascii_digit())
             {
                 return true;
             }
@@ -243,35 +240,59 @@ mod tests {
 
         #[test]
         fn rootful() {
+            let expected = ["/etc/containers/systemd", "/usr/share/containers/systemd"]
+                .iter()
+                .map(PathBuf::from)
+                .collect::<Vec<_>>();
+
             // NOTE: directories must exists
+            for path in &expected {
+                if !path.exists() {
+                    panic!("{path:?} must exist to run tests");
+                }
+            }
+
             assert_eq!(
-                UnitSearchDirs::new().rootless(false).build().0,
-                ["/etc/containers/systemd", "/usr/share/containers/systemd",]
-                    .iter()
-                    .map(PathBuf::from)
-                    .collect::<Vec<_>>()
+                UnitSearchDirs::new()
+                    .rootless(false)
+                    .recursive(false)
+                    .build()
+                    .0,
+                expected,
             )
         }
 
         #[test]
         fn rootless() {
+            let expected = [
+                format!(
+                    "{}/containers/systemd",
+                    dirs::config_dir()
+                        .expect("could not determine config dir")
+                        .to_str()
+                        .expect("home dir is not valid UTF-8 string")
+                ),
+                format!("/etc/containers/systemd/users/{}", users::get_current_uid()),
+                format!("/etc/containers/systemd/users"),
+            ]
+            .iter()
+            .map(PathBuf::from)
+            .collect::<Vec<_>>();
+
             // NOTE: directories must exists
+            for path in &expected {
+                if !path.exists() {
+                    panic!("{path:?} must exist to run tests");
+                }
+            }
+
             assert_eq!(
-                UnitSearchDirs::new().rootless(true).build().0,
-                [
-                    format!(
-                        "{}/containers/systemd",
-                        dirs::config_dir()
-                            .expect("could not determine config dir")
-                            .to_str()
-                            .expect("home dir is not valid UTF-8 string")
-                    ),
-                    format!("/etc/containers/systemd/users/{}", users::get_current_uid()),
-                    format!("/etc/containers/systemd/users"),
-                ]
-                .iter()
-                .map(PathBuf::from)
-                .collect::<Vec<_>>()
+                UnitSearchDirs::new()
+                    .rootless(true)
+                    .recursive(false)
+                    .build()
+                    .0,
+                expected
             )
         }
     }
