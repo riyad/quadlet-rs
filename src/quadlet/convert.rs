@@ -661,8 +661,24 @@ pub(crate) fn from_kube_unit(
     // Need the containers filesystem mounted to start podman
     service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
 
-    service.append_entry(SERVICE_SECTION, "Type", "notify");
-    service.append_entry(SERVICE_SECTION, "NotifyAccess", "all");
+    // Allow users to set the Service Type to oneshot to allow resources only kube yaml
+    match service.lookup(SERVICE_SECTION, "Type") {
+        None => {
+            service.append_entry(SERVICE_SECTION, "Type", "notify");
+            service.append_entry(SERVICE_SECTION, "NotifyAccess", "all");
+        },
+        // could be combined with the case above
+        Some(service_type) if service_type != "oneshot" => {
+            service.append_entry(SERVICE_SECTION, "Type", "notify");
+            service.append_entry(SERVICE_SECTION, "NotifyAccess", "all");
+        },
+        Some(service_type) => {
+            if service_type != "notify" && service_type != "oneshot" {
+                return Err(ConversionError::InvalidServiceType(format!("invalid service Type {service_type:?}")));
+            }
+        },
+    }
+
 
     if !kube.has_key(SERVICE_SECTION, "SyslogIdentifier") {
         service.set_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
