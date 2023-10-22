@@ -330,25 +330,7 @@ pub(crate) fn from_container_unit(
         podman.add("--read-only-tmpfs=false")
     }
 
-    let has_user = container.has_key(CONTAINER_SECTION, "User");
-    let has_group = container.has_key(CONTAINER_SECTION, "Group");
-    if has_user || has_group {
-        let uid = container
-            .lookup_last(CONTAINER_SECTION, "User")
-            .map(|s| s.parse::<u32>().unwrap_or(0)) // key found: parse or default
-            .unwrap_or(0); // key not found: use default
-        let gid = container
-            .lookup_last(CONTAINER_SECTION, "Group")
-            .map(|s| s.parse::<u32>().unwrap_or(0)) // key found: parse or default
-            .unwrap_or(0); // key not found: use default
-
-        podman.add("--user");
-        if has_group {
-            podman.add(format!("{uid}:{gid}"));
-        } else {
-            podman.add(uid.to_string());
-        }
-    }
+    handle_user(container, CONTAINER_SECTION, &mut podman)?;
 
     if let Some(workdir) = container.lookup(CONTAINER_SECTION, "WorkingDir") {
         podman.add(format!("-w={workdir}"));
@@ -597,10 +579,7 @@ pub(crate) fn from_image_unit(
         ("Variant", "--variant"),
     ];
 
-    let bool_keys = [
-        ("AllTags", "--all-tags"),
-        ("TLSVerify", "--tls-verify"),
-    ];
+    let bool_keys = [("AllTags", "--all-tags"), ("TLSVerify", "--tls-verify")];
 
     for (key, flag) in string_keys {
         lookup_and_add_string(image, IMAGE_SECTION, key, flag, &mut podman)
@@ -1472,6 +1451,34 @@ fn handle_storage_source(
     }
 
     source
+}
+
+fn handle_user(
+    unit_file: &SystemdUnit,
+    section: &str,
+    podman: &mut PodmanCommand,
+) -> Result<(), ConversionError> {
+    let user = unit_file.lookup(section, "User");
+    let group = unit_file.lookup(section, "Group");
+
+    return match (user, group) {
+        // if both are "empty" we return `Ok`
+        (None, None) => Ok(()),
+        (None, Some(group)) if !group.is_empty() => Err(ConversionError::InvalidGroup(
+            "invalid Group set without User".into(),
+        )),
+        (None, Some(_empty)) => Ok(()),
+        (Some(user), None) if !user.is_empty() => {
+            podman.add(format!("--user={user}"));
+            Ok(())
+        }
+        (Some(_empty), None) => Ok(()),
+        (Some(user), Some(group)) if !user.is_empty() && !group.is_empty() => {
+            podman.add(format!("--user={user}:{group}"));
+            Ok(())
+        }
+        (Some(_), Some(_)) => Ok(()),
+    };
 }
 
 fn handle_user_ns(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {

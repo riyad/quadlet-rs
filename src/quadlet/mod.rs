@@ -46,6 +46,7 @@ pub(crate) enum ConversionError {
     ImageNotFound(String),
     InvalidDeviceOptions(String),
     InvalidDeviceType(String),
+    InvalidGroup(String),
     InvalidImageOrRootfs(String),
     InvalidKillMode(String),
     InvalidPortFormat(String),
@@ -68,6 +69,7 @@ impl Display for ConversionError {
             ConversionError::ImageNotFound(msg)
             | ConversionError::InvalidDeviceOptions(msg)
             | ConversionError::InvalidDeviceType(msg)
+            | ConversionError::InvalidGroup(msg)
             | ConversionError::InvalidImageOrRootfs(msg)
             | ConversionError::InvalidKillMode(msg)
             | ConversionError::InvalidPortFormat(msg)
