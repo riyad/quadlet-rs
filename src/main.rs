@@ -376,7 +376,7 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
             }
             "image" => {
                 warn_if_ambiguous_image_name(&unit, IMAGE_SECTION);
-                convert::from_image_unit(&unit, &resource_names, cfg.is_user)
+                convert::from_image_unit(&unit, &mut resource_names, cfg.is_user)
             }
             "kube" => convert::from_kube_unit(&unit, &resource_names, cfg.is_user),
             "network" => convert::from_network_unit(&unit, &mut resource_names),

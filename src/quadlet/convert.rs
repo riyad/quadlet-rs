@@ -11,7 +11,10 @@ use super::*;
 fn get_base_podman_command(unit: &SystemdUnitFile, section: &str) -> PodmanCommand {
     let mut podman = PodmanCommand::new();
 
-    podman.extend(unit.lookup_all(section, "ContainersConfModule").map(|s| format!("--module={s}")));
+    podman.extend(
+        unit.lookup_all(section, "ContainersConfModule")
+            .map(|s| format!("--module={s}")),
+    );
 
     podman.extend(unit.lookup_all_args(section, "GlobalArgs"));
 
@@ -545,7 +548,7 @@ pub(crate) fn from_container_unit(
 
 pub(crate) fn from_image_unit(
     image: &SystemdUnitFile,
-    _names: &HashMap<OsString, OsString>,
+    names: &mut HashMap<OsString, OsString>,
     _is_user: bool,
 ) -> Result<SystemdUnitFile, ConversionError> {
     let mut service = SystemdUnitFile::new();
@@ -623,6 +626,21 @@ pub(crate) fn from_image_unit(
     // The default syslog identifier is the exec basename (podman) which isn't very useful here
     service.append_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
 
+    let podman_image_name = if let Some(image) = image.lookup(IMAGE_SECTION, "ImageTag") {
+        if !image.is_empty() {
+            image
+        } else {
+            image_name
+        }
+    } else {
+        image_name
+    };
+
+    names.insert(
+        service.path().as_os_str().to_os_string(),
+        podman_image_name.into(),
+    );
+
     Ok(service)
 }
 
@@ -682,19 +700,20 @@ pub(crate) fn from_kube_unit(
         None => {
             service.append_entry(SERVICE_SECTION, "Type", "notify");
             service.append_entry(SERVICE_SECTION, "NotifyAccess", "all");
-        },
+        }
         // could be combined with the case above
         Some(service_type) if service_type != "oneshot" => {
             service.append_entry(SERVICE_SECTION, "Type", "notify");
             service.append_entry(SERVICE_SECTION, "NotifyAccess", "all");
-        },
+        }
         Some(service_type) => {
             if service_type != "notify" && service_type != "oneshot" {
-                return Err(ConversionError::InvalidServiceType(format!("invalid service Type {service_type:?}")));
+                return Err(ConversionError::InvalidServiceType(format!(
+                    "invalid service Type {service_type:?}"
+                )));
             }
-        },
+        }
     }
-
 
     if !kube.has_key(SERVICE_SECTION, "SyslogIdentifier") {
         service.set_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");

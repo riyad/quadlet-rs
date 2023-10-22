@@ -90,7 +90,7 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 68] = [
     "WorkingDir",
 ];
 
-pub static SUPPORTED_IMAGE_KEYS: [&str; 13] = [
+pub static SUPPORTED_IMAGE_KEYS: [&str; 14] = [
     "AllTags",
     "Arch",
     "AuthFile",
@@ -100,6 +100,7 @@ pub static SUPPORTED_IMAGE_KEYS: [&str; 13] = [
     "DecryptionKey",
     "GlobalArgs",
     "Image",
+    "ImageTag",
     "PodmanArgs",
     "OS",
     "TLSVerify",
