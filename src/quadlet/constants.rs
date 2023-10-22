@@ -106,12 +106,13 @@ pub static SUPPORTED_IMAGE_KEYS: [&str; 13] = [
     "Variant",
 ];
 
-pub static SUPPORTED_KUBE_KEYS: [&str; 16] = [
+pub static SUPPORTED_KUBE_KEYS: [&str; 17] = [
     "AutoUpdate",
     "ConfigMap",
     "ContainersConfModule",
     "ExitCodePropagation",
     "GlobalArgs",
+    "KubeDownForce",
     "LogDriver",
     "Network",
     "PodmanArgs",

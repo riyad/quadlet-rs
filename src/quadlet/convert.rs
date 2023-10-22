@@ -776,6 +776,11 @@ pub(crate) fn from_kube_unit(
     let mut podman_stop = get_base_podman_command(kube, KUBE_SECTION);
     podman_stop.add("kube");
     podman_stop.add("down");
+
+    if let Some(kube_down_force) = kube.lookup_bool(KUBE_SECTION, "KubeDownForce") {
+        podman_stop.add_bool("--force", kube_down_force)
+    }
+
     podman_stop.add(
         yaml_path
             .to_str()
