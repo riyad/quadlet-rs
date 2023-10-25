@@ -1,11 +1,12 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 
-import sys
+import csv
 import os
 import re
-import tempfile
-import subprocess
 import shlex
+import subprocess
+import sys
+import tempfile
 import unittest
 
 def match_sublist_at(full_list, pos, sublist):
@@ -179,10 +180,14 @@ class QuadletTestCase(unittest.TestCase):
 
         def key_value_string_to_map(key_value_string, separator):
             key_val_map = dict()
-            key_var_list = key_value_string.split(separator)
-            for param in key_var_list:
-                kv = param.split('=')
-                key_val_map[kv[0]] = kv[1]
+            csv_reader = csv.reader(key_value_string, delimiter=separator)
+            key_var_list = list(csv_reader)
+            for param in key_var_list[0]:
+                val = ""
+                kv = param.split('=', maxsplit=2)
+                if len(kv) == 2:
+                    val = kv[1]
+                key_val_map[kv[0]] = val
 
             return key_val_map
 

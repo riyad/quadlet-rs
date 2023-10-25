@@ -449,37 +449,9 @@ pub(crate) fn from_container_unit(
     }
 
     for mount in container.lookup_all_args(CONTAINER_SECTION, "Mount") {
-        let params: Vec<&str> = mount.split(',').collect();
-        let mut params_map: HashMap<&str, String> = HashMap::with_capacity(params.len());
-        for param in &params {
-            let kv: Vec<&str> = param.split('=').collect();
-            params_map.insert(kv[0], kv[1].to_string());
-        }
-        if let Some(param_type) = params_map.get("type") {
-            if param_type == "volume" || param_type == "bind" || param_type == "glob" {
-                if let Some(param_source) = params_map.get("source") {
-                    params_map.insert(
-                        "source",
-                        handle_storage_source(container, &mut service, param_source, names),
-                    );
-                } else if let Some(param_source) = params_map.get("src") {
-                    params_map.insert(
-                        "src",
-                        handle_storage_source(container, &mut service, param_source, names),
-                    );
-                }
-            }
-        }
-        let mut params_array = Vec::with_capacity(params.len());
-        params_array.push(format!("type={}", params_map["type"]));
-        for (k, v) in params_map {
-            if k == "type" {
-                continue;
-            }
-            params_array.push(format!("{k}={v}"));
-        }
+        let mount_str = resolve_container_mount_params(container, &mut service, mount, names)?;
         podman.add("--mount");
-        podman.add(params_array.join(","));
+        podman.add(mount_str);
     }
 
     handle_health(container, CONTAINER_SECTION, &mut podman);
@@ -1570,6 +1542,40 @@ fn handle_user_remap(
     Ok(())
 }
 
+// FindMountType parses the input and extracts the type of the mount type and
+// the remaining non-type tokens.
+fn find_mount_type(input: &str) -> Result<(String, Vec<String>), ConversionError> {
+    // Split by comma, iterate over the slice and look for
+    // "type=$mountType". Everything else is appended to tokens.
+    let mut csv_reader = csv::ReaderBuilder::new().has_headers(false).from_reader(input.as_bytes());
+    if csv_reader.records().count() != 1 {
+        return Err(ConversionError::InvalidMountFormat(input.into()));
+    }
+
+    let mut found = false;
+    let mut mount_type = String::new();
+    let mut tokens = Vec::with_capacity(3);
+    let mut csv_reader = csv::ReaderBuilder::new().has_headers(false).from_reader(input.as_bytes());
+    for result in csv_reader.records() {
+        let record = dbg!(result)?;
+        for field in record.iter() {
+            let mut kv = dbg!(field).split('=');
+            if dbg!(found) || !(dbg!(kv.clone().count()) == 2 && dbg!(kv.next()) == Some("type")) {
+                tokens.push(field.to_string());
+                continue;
+            }
+            mount_type = kv.next().expect("should have type value").to_string();
+            found = true;
+        }
+    }
+
+    if !dbg!(found) {
+        return Err(ConversionError::InvalidMountFormat(input.into()));
+    }
+
+    Ok((mount_type, tokens))
+}
+
 fn is_port_range(port: &str) -> bool {
     // NOTE: We chose to implement a parser ouselves, because pulling in the regex crate just for this
     // increases the binary size by at least 0.5M. :/
@@ -1679,6 +1685,44 @@ fn quad_replace_extension(
     file.with_file_name(format!(
         "{extra_prefix}{base_name}{extra_suffix}{new_extension}"
     ))
+}
+
+fn resolve_container_mount_params(
+    container_unit_file: &SystemdUnitFile,
+    service_unit_file: &mut SystemdUnitFile,
+    mount: String,
+    names: &HashMap<OsString, OsString>,
+) -> Result<String, ConversionError> {
+    let (mount_type, tokens) = find_mount_type(mount.as_str())?;
+
+    // Source resolution is required only for these types of mounts
+    if !(mount_type == "volume" || mount_type == "bind" || mount_type == "glob") {
+        return Ok(mount);
+    }
+
+    let mut csv_writer = csv::Writer::from_writer(vec![]);
+    csv_writer.write_field(format!("type={mount_type}"))?;
+    for token in tokens.iter() {
+        if token.starts_with("source=") || token.starts_with("src=") {
+            if let Some((_k, v)) = token.split_once('=') {
+                let resolved_source =
+                    handle_storage_source(container_unit_file, service_unit_file, v, names);
+                csv_writer.write_field(format!("source={resolved_source}"))?;
+            } else {
+                return Err(ConversionError::InvalidMountSource);
+            }
+        } else {
+            csv_writer.write_field(token)?;
+        }
+    }
+    csv_writer.write_record(None::<&[u8]>)?;
+
+    return Ok(String::from_utf8(
+        csv_writer
+            .into_inner()
+            .expect("connot convert Mount params back into CSV"),
+    )
+    .expect("connot convert Mount params back into CSV"));
 }
 
 /// Parses arguments to podman-run's `--publish` option.
