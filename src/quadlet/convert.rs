@@ -90,9 +90,7 @@ pub(crate) fn from_container_unit(
             service.set_entry(SERVICE_SECTION, "KillMode", "mixed");
         }
         Some(kill_mode) => {
-            return Err(ConversionError::InvalidKillMode(format!(
-                "invalid KillMode '{kill_mode}'"
-            )));
+            return Err(ConversionError::InvalidKillMode(kill_mode.into()));
         }
     }
 
@@ -189,9 +187,7 @@ pub(crate) fn from_container_unit(
             podman.add("-d");
         }
         Some(service_type) => {
-            return Err(ConversionError::InvalidServiceType(format!(
-                "invalid service Type '{service_type}'"
-            )));
+            return Err(ConversionError::InvalidServiceType(service_type.into()));
         }
     }
 
@@ -342,9 +338,7 @@ pub(crate) fn from_container_unit(
 
     for tmpfs in container.lookup_all(CONTAINER_SECTION, "Tmpfs") {
         if tmpfs.chars().filter(|c| *c == ':').count() > 1 {
-            return Err(ConversionError::InvalidTmpfs(format!(
-                "invalid tmpfs format {tmpfs:?}"
-            )));
+            return Err(ConversionError::InvalidTmpfs(tmpfs.into()));
         }
 
         podman.add("--tmpfs");
@@ -392,9 +386,7 @@ pub(crate) fn from_container_unit(
         let exposed_port = exposed_port.trim(); // Allow whitespaces before and after
 
         if !is_port_range(exposed_port) {
-            return Err(ConversionError::InvalidPortFormat(format!(
-                "invalid port format '{exposed_port}'"
-            )));
+            return Err(ConversionError::InvalidPortFormat(exposed_port.into()));
         }
 
         podman.add(format!("--expose={exposed_port}"))
@@ -649,7 +641,7 @@ pub(crate) fn from_kube_unit(
 
     let yaml_path = kube.lookup_last(KUBE_SECTION, "Yaml").unwrap_or("");
     if yaml_path.is_empty() {
-        return Err(ConversionError::YamlMissing("no Yaml key specified".into()));
+        return Err(ConversionError::NoYamlKeySpecified);
     }
 
     let yaml_path = PathBuf::from(yaml_path).absolute_from_unit(kube);
@@ -662,9 +654,7 @@ pub(crate) fn from_kube_unit(
             service.set_entry(SERVICE_SECTION, "KillMode", "mixed");
         }
         Some(kill_mode) => {
-            return Err(ConversionError::InvalidKillMode(format!(
-                "invalid KillMode '{kill_mode}'"
-            )));
+            return Err(ConversionError::InvalidKillMode(kill_mode.into()));
         }
     }
 
@@ -687,9 +677,7 @@ pub(crate) fn from_kube_unit(
         }
         Some(service_type) => {
             if service_type != "notify" && service_type != "oneshot" {
-                return Err(ConversionError::InvalidServiceType(format!(
-                    "invalid service Type {service_type:?}"
-                )));
+                return Err(ConversionError::InvalidServiceType(service_type.into()));
             }
         }
     }
@@ -1074,9 +1062,7 @@ pub(crate) fn from_volume_unit(
                     podman.add("--opt");
                     podman.add(format!("type={dev_type}"));
                 } else {
-                    return Err(ConversionError::InvalidDeviceType(
-                        "key Type can't be used without Device".into(),
-                    ));
+                    return Err(ConversionError::InvalidDeviceType);
                 }
             }
         }
@@ -1086,9 +1072,7 @@ pub(crate) fn from_volume_unit(
                 if dev_valid {
                     opts.push(mount_opts.into());
                 } else {
-                    return Err(ConversionError::InvalidDeviceOptions(
-                        "key Options can't be used without Device".into(),
-                    ));
+                    return Err(ConversionError::InvalidDeviceOptions);
                 }
             }
         }
@@ -1170,9 +1154,7 @@ fn handle_image_source<'a>(
         // since there is no default name conversion, the actual image name must exist in the names map
         let image_name = names.get(&OsString::from(quadlet_image_name));
         if image_name.is_none() {
-            return Err(ConversionError::ImageNotFound(format!(
-                "requested Quadlet image {quadlet_image_name:?} was not found"
-            )));
+            return Err(ConversionError::ImageNotFound(quadlet_image_name.into()));
         }
 
         // the systemd unit name is $name-image.service
@@ -1308,9 +1290,7 @@ fn handle_publish_ports(
                 ip = parts.pop().unwrap();
             }
             _ => {
-                return Err(ConversionError::InvalidPublishedPort(format!(
-                    "invalid published port '{publish_port}'"
-                )));
+                return Err(ConversionError::InvalidPublishedPort(publish_port.into()));
             }
         }
 
@@ -1319,15 +1299,11 @@ fn handle_publish_ports(
         }
 
         if !host_port.is_empty() && !is_port_range(host_port.as_str()) {
-            return Err(ConversionError::InvalidPortFormat(format!(
-                "invalid port format '{host_port}'"
-            )));
+            return Err(ConversionError::InvalidPortFormat(host_port));
         }
 
         if !container_port.is_empty() && !is_port_range(container_port.as_str()) {
-            return Err(ConversionError::InvalidPortFormat(format!(
-                "invalid port format '{container_port}'"
-            )));
+            return Err(ConversionError::InvalidPortFormat(container_port));
         }
 
         podman.add("--publish");
@@ -1371,7 +1347,7 @@ fn handle_set_working_directory(
             if let Some(yaml) = kube.lookup(KUBE_SECTION, "Yaml") {
                 PathBuf::from(yaml)
             } else {
-                return Err(ConversionError::NoYamlKeySpecified());
+                return Err(ConversionError::NoYamlKeySpecified);
             }
         }
         "unit" => kube.path().clone(),
@@ -1464,9 +1440,7 @@ fn handle_user(
     return match (user, group) {
         // if both are "empty" we return `Ok`
         (None, None) => Ok(()),
-        (None, Some(group)) if !group.is_empty() => Err(ConversionError::InvalidGroup(
-            "invalid Group set without User".into(),
-        )),
+        (None, Some(group)) if !group.is_empty() => Err(ConversionError::InvalidGroup),
         (None, Some(_empty)) => Ok(()),
         (Some(user), None) if !user.is_empty() => {
             podman.add(format!("--user={user}"));

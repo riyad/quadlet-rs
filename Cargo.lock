@@ -138,6 +138,7 @@ version = "0.2.0"
 dependencies = [
  "dirs",
  "ordered-multimap",
+ "thiserror",
  "users",
  "walkdir",
 ]

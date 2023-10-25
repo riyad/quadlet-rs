@@ -1,22 +1,16 @@
 use super::*;
 
-use std::fmt::Display;
 use std::str::Chars;
 
 const LINE_CONTINUATION_REPLACEMENT: &str = " ";
 
 type ParseResult<T> = Result<T, ParseError>;
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Eq, PartialEq, thiserror::Error)]
+#[error("{line}:{col} {msg}")]
 pub struct ParseError {
     pub(crate) line: usize,
     pub(crate) col: usize,
     pub(crate) msg: String,
-}
-
-impl Display for ParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{} {}", self.line, self.col, self.msg)
-    }
 }
 
 #[derive(Debug)]

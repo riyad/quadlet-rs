@@ -1384,7 +1384,7 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
                     Some("/some/path an arg a;b\nc\td\'e a;b\nc\td a\"b")
                 );
 
-                let mut split_words: Vec<String> =
+                let split_words: Vec<String> =
                     SplitWord::new(exec_start.unwrap().raw()).collect();
                 let mut split = split_words.iter();
                 assert_eq!(split.next(), Some(&"/some/path".into()));

@@ -14,98 +14,61 @@ pub(crate) use self::iterators::*;
 pub(crate) use self::path_buf_ext::*;
 
 use std::env;
-use std::fmt::Display;
 use std::io;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub(crate) enum RuntimeError {
+    #[error("Missing output directory argument")]
     CliMissingOutputDirectory(crate::CliOptions),
-    Io(String, io::Error),
-    Conversion(String, ConversionError),
+    #[error("{0}: {1}")]
+    Io(String, #[source] io::Error),
+    #[error("{0}: {1}")]
+    Conversion(String, #[source] ConversionError),
 }
 
-impl Display for RuntimeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            RuntimeError::CliMissingOutputDirectory(_) => {
-                write!(f, "Missing output directory argument")
-            }
-            RuntimeError::Io(ctx, e) => {
-                write!(f, "{ctx}: {e}")
-            }
-            RuntimeError::Conversion(ctx, e) => {
-                write!(f, "{ctx}: {e}")
-            }
-        }
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub(crate) enum ConversionError {
+    #[error("requested Quadlet image {0:?} was not found")]
     ImageNotFound(String),
-    InvalidDeviceOptions(String),
-    InvalidDeviceType(String),
-    InvalidGroup(String),
+    #[error("key Options can't be used without Device")]
+    InvalidDeviceOptions,
+    #[error("key Type can't be used without Device")]
+    InvalidDeviceType,
+    #[error("invalid Group set without User")]
+    InvalidGroup,
+    #[error("{0}")]
     InvalidImageOrRootfs(String),
+    #[error("invalid KillMode {0:?}")]
     InvalidKillMode(String),
+    #[error("{0}")]
+    InvalidMountCsv(#[from] csv::Error),
+    #[error("incorrect mount format {0:?}: should be --mount type=<bind|glob|tmpfs|volume>,[src=<host-dir|volume-name>,]target=<ctr-dir>[,options]")]
+    InvalidMountFormat(String),
+    #[error("source parameter does not include a value")]
+    InvalidMountSource,
+    #[error("invalid port format {0:?}")]
     InvalidPortFormat(String),
+    #[error("invalid published port {0:?}")]
     InvalidPublishedPort(String),
+    #[error("{0}")]
     InvalidRemapUsers(String),
+    #[error("invalid service Type {0:?}")]
     InvalidServiceType(String),
+    #[error("{0}")]
     InvalidSubnet(String),
+    #[error("invalid tmpfs format {0:?}")]
     InvalidTmpfs(String),
-    Io(io::Error),
-    NoYamlKeySpecified(),
-    Parsing(systemd_unit::Error),
+    #[error("{0}")]
+    Io(#[from] io::Error),
+    #[error("no Yaml key specified")]
+    NoYamlKeySpecified,
+    #[error("failed parsing unit file: {0}")]
+    Parsing(#[from] systemd_unit::Error),
+    #[error("{0}")]
     UnknownKey(String),
+    #[error("unsupported value for {0:?}: {1:?}")]
     UnsupportedValueForKey(String, String),
-    YamlMissing(String),
-}
-
-impl Display for ConversionError {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            ConversionError::ImageNotFound(msg)
-            | ConversionError::InvalidDeviceOptions(msg)
-            | ConversionError::InvalidDeviceType(msg)
-            | ConversionError::InvalidGroup(msg)
-            | ConversionError::InvalidImageOrRootfs(msg)
-            | ConversionError::InvalidKillMode(msg)
-            | ConversionError::InvalidPortFormat(msg)
-            | ConversionError::InvalidPublishedPort(msg)
-            | ConversionError::InvalidRemapUsers(msg)
-            | ConversionError::InvalidServiceType(msg)
-            | ConversionError::InvalidSubnet(msg)
-            | ConversionError::InvalidTmpfs(msg)
-            | ConversionError::UnknownKey(msg)
-            | ConversionError::YamlMissing(msg) => {
-                write!(f, "{msg}")
-            }
-            ConversionError::Io(e) => e.fmt(f),
-            ConversionError::NoYamlKeySpecified() => {
-                write!(f, "no Yaml key specified")
-            }
-            ConversionError::Parsing(e) => {
-                write!(f, "Failed parsing unit file: {e}")
-            }
-            ConversionError::UnsupportedValueForKey(key, value) => {
-                write!(f, "unsupported value for {key:?}: {value:?}")
-            }
-        }
-    }
-}
-
-impl From<io::Error> for ConversionError {
-    fn from(e: io::Error) -> Self {
-        ConversionError::Io(e)
-    }
-}
-
-impl From<systemd_unit::Error> for ConversionError {
-    fn from(e: systemd_unit::Error) -> Self {
-        ConversionError::Parsing(e)
-    }
 }
 
 impl From<systemd_unit::IoError> for ConversionError {

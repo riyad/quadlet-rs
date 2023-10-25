@@ -6,8 +6,6 @@ mod unit;
 mod unit_file;
 mod value;
 
-use std::fmt;
-
 pub use self::constants::*;
 pub use self::quoted::*;
 pub use self::split::*;
@@ -16,38 +14,15 @@ pub use self::unit_file::*;
 pub(crate) use self::value::*;
 
 // TODO: mimic https://doc.rust-lang.org/std/num/enum.IntErrorKind.html
-// TODO: use thiserror?
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
+    #[error("value must be one of `1`, `yes`, `true`, `on`, `0`, `no`, `false`, `off`")]
     ParseBool,
+    #[error("failed unquoting value: {0}")]
     Unquoting(String),
-    Unit(parser::ParseError),
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Error::ParseBool => {
-                write!(
-                    f,
-                    "value must be one of `1`, `yes`, `true`, `on`, `0`, `no`, `false`, `off`"
-                )
-            }
-            Error::Unquoting(msg) => {
-                write!(f, "failed unquoting value: {msg}")
-            }
-            Error::Unit(e) => {
-                write!(f, "failed to parse unit file: {e}")
-            }
-        }
-    }
-}
-
-impl From<parser::ParseError> for Error {
-    fn from(e: parser::ParseError) -> Self {
-        Error::Unit(e)
-    }
+    #[error("failed to parse unit file: {0}")]
+    Unit(#[from] parser::ParseError),
 }
 
 pub(crate) fn parse_bool(s: &str) -> Result<bool, Error> {
