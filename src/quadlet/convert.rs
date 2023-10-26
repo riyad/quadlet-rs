@@ -313,17 +313,15 @@ pub(crate) fn from_container_unit(
     }
     let read_only = read_only.unwrap_or(false); // key not found: use default
 
+    if let Some(read_only_tmpfs) = container.lookup_bool(CONTAINER_SECTION, "ReadOnlyTmpfs") {
+        podman.add_bool("--read-only-tmpfs", read_only_tmpfs)
+    }
+
     let volatile_tmp = container
         .lookup_bool(CONTAINER_SECTION, "VolatileTmp")
         .unwrap_or(false);
-    if volatile_tmp {
-        // Read only mode already has a tmpfs by default
-        if !read_only {
-            podman.add_slice(&["--tmpfs", "/tmp:rw,size=512M,mode=1777"]);
-        }
-    } else if read_only {
-        // !volatile_tmp, disable the default tmpfs from --read-only
-        podman.add("--read-only-tmpfs=false")
+    if volatile_tmp && !read_only {
+        podman.add_slice(&["--tmpfs", "/tmp:rw,size=512M,mode=1777"]);
     }
 
     handle_user(container, CONTAINER_SECTION, &mut podman)?;

@@ -19,7 +19,7 @@ pub const AUTO_UPDATE_LABEL: &str = "io.containers.autoupdate";
 
 pub static SUPPORTED_EXTENSIONS: [&str; 5] = ["container", "image", "kube", "network", "volume"];
 
-pub static SUPPORTED_CONTAINER_KEYS: [&str; 68] = [
+pub static SUPPORTED_CONTAINER_KEYS: [&str; 69] = [
     "AddCapability",
     "AddDevice",
     "Annotation",
@@ -64,6 +64,7 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 68] = [
     "PublishPort",
     "Pull",
     "ReadOnly",
+    "ReadOnlyTmpfs",
     "RemapGid",     // deprecated, use UserNS instead
     "RemapUid",     // deprecated, use UserNS instead
     "RemapUidSize", // deprecated, use UserNS instead
@@ -85,7 +86,7 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 68] = [
     "Unmask",
     "User",
     "UserNS",
-    "VolatileTmp",
+    "VolatileTmp",  // deprecated, use ReadOnlyTmpfs instead
     "Volume",
     "WorkingDir",
 ];
