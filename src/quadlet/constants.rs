@@ -19,7 +19,7 @@ pub const AUTO_UPDATE_LABEL: &str = "io.containers.autoupdate";
 
 pub static SUPPORTED_EXTENSIONS: [&str; 5] = ["container", "image", "kube", "network", "volume"];
 
-pub static SUPPORTED_CONTAINER_KEYS: [&str; 69] = [
+pub static SUPPORTED_CONTAINER_KEYS: [&str; 73] = [
     "AddCapability",
     "AddDevice",
     "Annotation",
@@ -35,6 +35,7 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 69] = [
     "EnvironmentHost",
     "Exec",
     "ExposeHostPort",
+    "GIDMap",
     "GlobalArgs",
     "Group",
     "HealthCmd",
@@ -79,9 +80,12 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 69] = [
     "SecurityLabelType",
     "Secret",
     "ShmSize",
+    "SubGIDMap",
+    "SubUIDMap",
     "Sysctl",
     "Timezone",
     "Tmpfs",
+    "UIDMap",
     "Ulimit",
     "Unmask",
     "User",

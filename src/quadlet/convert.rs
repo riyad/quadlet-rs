@@ -330,9 +330,7 @@ pub(crate) fn from_container_unit(
         podman.add(format!("-w={workdir}"));
     }
 
-    handle_user_remap(container, CONTAINER_SECTION, &mut podman, is_user, true)?;
-
-    handle_user_ns(container, CONTAINER_SECTION, &mut podman);
+    handle_user_mappings(container, CONTAINER_SECTION, &mut podman, is_user, true)?;
 
     for tmpfs in container.lookup_all(CONTAINER_SECTION, "Tmpfs") {
         if tmpfs.chars().filter(|c| *c == ':').count() > 1 {
@@ -675,9 +673,7 @@ pub(crate) fn from_kube_unit(
 
     handle_log_driver(kube, KUBE_SECTION, &mut podman_start);
 
-    handle_user_remap(kube, KUBE_SECTION, &mut podman_start, is_user, false)?;
-
-    handle_user_ns(kube, KUBE_SECTION, &mut podman_start);
+    handle_user_mappings(kube, KUBE_SECTION, &mut podman_start, is_user, false)?;
 
     handle_networks(kube, KUBE_SECTION, &mut service, names, &mut podman_start)?;
 
@@ -1425,13 +1421,62 @@ fn handle_user(
     };
 }
 
-fn handle_user_ns(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {
+fn handle_user_mappings(
+    unit_file: &SystemdUnit,
+    section: &str,
+    podman: &mut PodmanCommand,
+    is_user: bool,
+    support_manual: bool,
+) -> Result<(), ConversionError> {
+    let mut mappings_defined = false;
+
     if let Some(userns) = unit_file.lookup(section, "UserNS") {
         if !userns.is_empty() {
             podman.add("--userns");
             podman.add(userns);
+            mappings_defined = true;
         }
     }
+
+    for uid_map in unit_file.lookup_all_strv(section, "UIDMap") {
+        podman.add(format!("--uidmap={uid_map}"));
+        mappings_defined = true;
+    }
+
+    for gid_map in unit_file.lookup_all_strv(section, "GIDMap") {
+        podman.add(format!("--gidmap={gid_map}"));
+        mappings_defined = true;
+    }
+
+    if let Some(sub_uid_map) = unit_file.lookup(section, "SubUIDMap") {
+        if !sub_uid_map.is_empty() {
+            podman.add("--subuidname");
+            podman.add(sub_uid_map);
+            mappings_defined = true;
+        }
+    }
+
+    if let Some(sub_gid_map) = unit_file.lookup(section, "SubGIDMap") {
+        if !sub_gid_map.is_empty() {
+            podman.add("--subgidname");
+            podman.add(sub_gid_map);
+            mappings_defined = true;
+        }
+    }
+
+    if mappings_defined {
+        let has_remap_uid = unit_file.lookup(section, "RemapUid").is_some();
+        let has_remap_gid = unit_file.lookup(section, "RemapGid").is_some();
+        let has_remap_users = unit_file.lookup_last(section, "RemapUsers").is_some();
+        if has_remap_uid || has_remap_gid || has_remap_users {
+            return Err(ConversionError::InvalidRemapUsers(
+                "deprecated Remap keys are set along with explicit mapping keys".into(),
+            ));
+        }
+        return Ok(())
+    }
+
+    return handle_user_remap(unit_file, section, podman, is_user, support_manual);
 }
 
 fn handle_user_remap(
@@ -1545,7 +1590,9 @@ fn handle_user_remap(
 fn find_mount_type(input: &str) -> Result<(String, Vec<String>), ConversionError> {
     // Split by comma, iterate over the slice and look for
     // "type=$mountType". Everything else is appended to tokens.
-    let mut csv_reader = csv::ReaderBuilder::new().has_headers(false).from_reader(input.as_bytes());
+    let mut csv_reader = csv::ReaderBuilder::new()
+        .has_headers(false)
+        .from_reader(input.as_bytes());
     if csv_reader.records().count() != 1 {
         return Err(ConversionError::InvalidMountFormat(input.into()));
     }
@@ -1553,7 +1600,9 @@ fn find_mount_type(input: &str) -> Result<(String, Vec<String>), ConversionError
     let mut found = false;
     let mut mount_type = String::new();
     let mut tokens = Vec::with_capacity(3);
-    let mut csv_reader = csv::ReaderBuilder::new().has_headers(false).from_reader(input.as_bytes());
+    let mut csv_reader = csv::ReaderBuilder::new()
+        .has_headers(false)
+        .from_reader(input.as_bytes());
     for result in csv_reader.records() {
         let record = dbg!(result)?;
         for field in record.iter() {

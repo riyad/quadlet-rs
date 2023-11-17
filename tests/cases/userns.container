@@ -1,5 +1,5 @@
+## assert-podman-args "--userns" "keep-id"
+
 [Container]
 Image=localhost/imagename
-Exec=top
-UserNS=keep-id:uid=200,gid=210
-## assert-podman-args "--userns" "keep-id:uid=200,gid=210"
+UserNS=keep-id
