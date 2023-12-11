@@ -8,6 +8,8 @@ use super::constants::*;
 use super::podman_command::PodmanCommand;
 use super::*;
 
+type ResourceNameMap = HashMap<OsString, OsString>;
+
 fn get_base_podman_command(unit: &SystemdUnitFile, section: &str) -> PodmanCommand {
     let mut podman = PodmanCommand::new();
 
@@ -26,7 +28,7 @@ fn get_base_podman_command(unit: &SystemdUnitFile, section: &str) -> PodmanComma
 // The original Container group is kept around as X-Container.
 pub(crate) fn from_container_unit(
     container: &SystemdUnitFile,
-    names: &HashMap<OsString, OsString>,
+    names: &ResourceNameMap,
     is_user: bool,
 ) -> Result<SystemdUnitFile, ConversionError> {
     let mut service = SystemdUnitFile::new();
@@ -500,7 +502,7 @@ pub(crate) fn from_container_unit(
 
 pub(crate) fn from_image_unit(
     image: &SystemdUnitFile,
-    names: &mut HashMap<OsString, OsString>,
+    names: &mut ResourceNameMap,
     _is_user: bool,
 ) -> Result<SystemdUnitFile, ConversionError> {
     let mut service = SystemdUnitFile::new();
@@ -595,7 +597,7 @@ pub(crate) fn from_image_unit(
 
 pub(crate) fn from_kube_unit(
     kube: &SystemdUnitFile,
-    names: &HashMap<OsString, OsString>,
+    names: &ResourceNameMap,
     is_user: bool,
 ) -> Result<SystemdUnitFile, ConversionError> {
     let mut service = SystemdUnitFile::new();
@@ -766,7 +768,7 @@ pub(crate) fn from_kube_unit(
 // NetworkName key-value.
 pub(crate) fn from_network_unit(
     network: &SystemdUnitFile,
-    names: &mut HashMap<OsString, OsString>,
+    names: &mut ResourceNameMap,
 ) -> Result<SystemdUnitFile, ConversionError> {
     let mut service = SystemdUnitFile::new();
     service.merge_from(network);
@@ -928,7 +930,7 @@ pub(crate) fn from_network_unit(
 // key-value.
 pub(crate) fn from_volume_unit(
     volume: &SystemdUnitFile,
-    names: &mut HashMap<OsString, OsString>,
+    names: &mut ResourceNameMap,
 ) -> Result<SystemdUnitFile, ConversionError> {
     let mut service = SystemdUnitFile::new();
     service.merge_from(volume);
@@ -1122,7 +1124,7 @@ fn handle_health(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanComm
 fn handle_image_source<'a>(
     quadlet_image_name: &'a str,
     service_unit_file: &mut SystemdUnitFile,
-    names: &'a HashMap<OsString, OsString>,
+    names: &'a ResourceNameMap,
 ) -> Result<&'a str, ConversionError> {
     if quadlet_image_name.ends_with(".image") {
         //let quadlet_image_name = OsStr::new(quadlet_image_name);
@@ -1166,7 +1168,7 @@ fn handle_networks(
     quadlet_unit_file: &SystemdUnit,
     section: &str,
     service_unit_file: &mut SystemdUnit,
-    names: &HashMap<OsString, OsString>,
+    names: &ResourceNameMap,
     podman: &mut PodmanCommand,
 ) -> Result<(), ConversionError> {
     let networks = quadlet_unit_file.lookup_all(section, "Network");
@@ -1354,7 +1356,7 @@ fn handle_storage_source(
     quadlet_unit_file: &SystemdUnitFile,
     service_unit_file: &mut SystemdUnitFile,
     source: &str,
-    names: &HashMap<OsString, OsString>,
+    names: &ResourceNameMap,
 ) -> String {
     let mut source = source.to_owned();
 
@@ -1748,7 +1750,7 @@ fn resolve_container_mount_params(
     container_unit_file: &SystemdUnitFile,
     service_unit_file: &mut SystemdUnitFile,
     mount: String,
-    names: &HashMap<OsString, OsString>,
+    names: &ResourceNameMap,
 ) -> Result<String, ConversionError> {
     let (mount_type, tokens) = find_mount_type(mount.as_str())?;
 
