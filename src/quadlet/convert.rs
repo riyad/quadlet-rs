@@ -171,14 +171,20 @@ pub(crate) fn from_container_unit(
         Some("notify") | None => {
             // If we're not in oneshot mode always use some form of sd-notify, normally via conmon,
             // but we also allow passing it to the container by setting Notify=yes
+            let notify = container.lookup(CONTAINER_SECTION, "Notify");
+            match notify {
+                Some(notify) if notify == "healthy" => podman.add("--sdnotify=healthy"),
+                _ => {
+                    let notify = container
+                        .lookup_bool(CONTAINER_SECTION, "Notify")
+                        .unwrap_or(false);
 
-            let notify = container
-                .lookup_bool(CONTAINER_SECTION, "Notify")
-                .unwrap_or(false);
-            if notify {
-                podman.add("--sdnotify=container");
-            } else {
-                podman.add("--sdnotify=conmon");
+                    if notify {
+                        podman.add("--sdnotify=container");
+                    } else {
+                        podman.add("--sdnotify=conmon");
+                    }
+                }
             }
             service.set_entry(SERVICE_SECTION, "Type", "notify");
             service.set_entry(SERVICE_SECTION, "NotifyAccess", "all");
@@ -1473,7 +1479,7 @@ fn handle_user_mappings(
                 "deprecated Remap keys are set along with explicit mapping keys".into(),
             ));
         }
-        return Ok(())
+        return Ok(());
     }
 
     return handle_user_remap(unit_file, section, podman, is_user, support_manual);
