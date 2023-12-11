@@ -309,6 +309,10 @@ pub(crate) fn from_container_unit(
         podman.add(format!("--shm-size={shm_size}"))
     }
 
+    if let Some(entrypoint) = container.lookup(CONTAINER_SECTION, "Entrypoint") {
+        podman.add(format!("--entrypoint={entrypoint}"))
+    }
+
     for sysctl in container.lookup_all_strv(CONTAINER_SECTION, "Sysctl") {
         podman.add(format!("--sysctl={sysctl}"))
     }

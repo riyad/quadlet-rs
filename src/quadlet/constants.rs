@@ -19,7 +19,7 @@ pub const AUTO_UPDATE_LABEL: &str = "io.containers.autoupdate";
 
 pub static SUPPORTED_EXTENSIONS: [&str; 5] = ["container", "image", "kube", "network", "volume"];
 
-pub static SUPPORTED_CONTAINER_KEYS: [&str; 73] = [
+pub static SUPPORTED_CONTAINER_KEYS: [&str; 74] = [
     "AddCapability",
     "AddDevice",
     "Annotation",
@@ -30,6 +30,7 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 73] = [
     "DNSOption",
     "DNSSearch",
     "DropCapability",
+    "Entrypoint",
     "Environment",
     "EnvironmentFile",
     "EnvironmentHost",
