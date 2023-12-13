@@ -53,6 +53,8 @@ def to_service(filename):
         base = base + "-image"
     elif ext == ".network":
         base = base + "-network"
+    elif ext == ".pod":
+        base = base + "-pod"
     elif ext == ".volume":
         base = base + "-volume"
     return base + ".service"
@@ -280,6 +282,36 @@ class QuadletTestCase(unittest.TestCase):
         def assert_start_podman_final_args_regex(*args):
             return assert_podman_final_args_regex(*args, '_Service_ExecStart')
 
+        def assert_start_pre_podman_args(*args):
+            return assert_podman_args(*args, '_Service_ExecStartPre', False, False)
+
+        def assert_start_pre_podman_args_regex(*args):
+            return assert_podman_args(*args, '_Service_ExecStartPre', True, False)
+
+        def assert_start_pre_podman_global_args(*args):
+            return assert_podman_args(*args, '_Service_ExecStartPre', False, True)
+
+        def assert_start_pre_podman_global_args_regex(*args):
+            return assert_podman_args(*args, '_Service_ExecStartPre', True, True)
+
+        def assert_start_pre_podman_args_key_val(*args):
+            return assert_podman_args_key_val(*args, '_Service_ExecStartPre', False, False)
+
+        def assert_start_pre_podman_args_key_val_regex(*args):
+            return assert_podman_args_key_val(*args, '_Service_ExecStartPre', True, False)
+
+        def assert_start_pre_podman_global_args_key_val(*args):
+            return assert_podman_args_key_val(*args, '_Service_ExecStartPre', False, True)
+
+        def assert_start_pre_podman_global_args_key_val_regex(*args):
+            return assert_podman_args_key_val(*args, '_Service_ExecStartPre', True, True)
+
+        def assert_start_pre_podman_final_args(*args):
+            return assert_podman_final_args(*args, '_Service_ExecStartPre')
+
+        def assert_start_pre_podman_final_args_regex(*args):
+            return assert_podman_final_args_regex(*args, '_Service_ExecStartPre')
+
         def assert_stop_podman_args(*args):
             return assert_podman_args(*args, '_Service_ExecStop', False, False)
 
@@ -348,6 +380,16 @@ class QuadletTestCase(unittest.TestCase):
             "assert-podman-global-args-key-val-regex": assert_start_podman_global_args_key_val_regex,
             "assert-podman-final-args": assert_start_podman_final_args,
             "assert-podman-final-args-regex": assert_start_podman_final_args_regex,
+            "assert-podman-pre-args": assert_start_pre_podman_args,
+            "assert-podman-pre-args-regex": assert_start_pre_podman_args_regex,
+            "assert-podman-pre-args-key-val": assert_start_pre_podman_args_key_val,
+            "assert-podman-pre-args-key-val-regex": assert_start_pre_podman_args_key_val_regex,
+            "assert-podman-pre-global-args": assert_start_pre_podman_global_args,
+            "assert-podman-pre-global-args-regex": assert_start_pre_podman_global_args_regex,
+            "assert-podman-pre-global-args-key-val": assert_start_pre_podman_global_args_key_val,
+            "assert-podman-pre-global-args-key-val-regex": assert_start_pre_podman_global_args_key_val_regex,
+            "assert-podman-pre-final-args": assert_start_pre_podman_final_args,
+            "assert-podman-pre-final-args-regex": assert_start_pre_podman_final_args_regex,
             "assert-symlink": assert_symlink,
             "assert-podman-stop-args": assert_stop_podman_args,
             "assert-podman-stop-global-args": assert_stop_podman_global_args,
@@ -375,6 +417,7 @@ class QuadletTestCase(unittest.TestCase):
             self.outdata = read_file(outdir, self.servicename)
             self.sections = parse_unitfile(canonicalize_unitfile(self.outdata))
             self._Service_ExecStart = shlex.split(self.sections.get("Service", {}).get("ExecStart", ["podman"])[0])
+            self._Service_ExecStartPre = shlex.split(self.sections.get("Service", {}).get("ExecStartPre", ["podman"])[0])
             self._Service_ExecStop = shlex.split(self.sections.get("Service", {}).get("ExecStop", ["podman"])[0])
             self._Service_ExecStopPost = shlex.split(self.sections.get("Service", {}).get("ExecStopPost", ["podman"])[0])
             self.expect_file(self.servicename)
