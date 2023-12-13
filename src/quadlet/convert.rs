@@ -352,34 +352,13 @@ pub(crate) fn from_container_unit(
         podman.add(tmpfs);
     }
 
-    for volume in container.lookup_all(CONTAINER_SECTION, "Volume") {
-        let parts: Vec<&str> = volume.split(':').collect();
-
-        let mut source = String::new();
-        let dest;
-        let mut options = String::new();
-
-        if parts.len() >= 2 {
-            source = parts[0].to_string();
-            dest = parts[1];
-        } else {
-            dest = parts[0];
-        }
-        if parts.len() >= 3 {
-            options = format!(":{}", parts[2]);
-        }
-
-        if !source.is_empty() {
-            source = handle_storage_source(container, &mut service, &source, names);
-        }
-
-        podman.add("-v");
-        if source.is_empty() {
-            podman.add(dest)
-        } else {
-            podman.add(format!("{source}:{dest}{options}"))
-        }
-    }
+    handle_volumes(
+        &container,
+        CONTAINER_SECTION,
+        &mut service,
+        names,
+        &mut podman,
+    )?;
 
     if let Some(update) = container.lookup(CONTAINER_SECTION, "AutoUpdate") {
         if !update.is_empty() {
@@ -931,6 +910,7 @@ pub(crate) fn from_network_unit(
 
 pub(crate) fn from_pod_unit(
     pod: &SystemdUnitFile,
+    names: &mut ResourceNameMap,
     pods_info_map: &PodsInfoMap,
 ) -> Result<SystemdUnitFile, ConversionError> {
     let pod_info = pods_info_map.0.get(&pod.path);
@@ -946,8 +926,7 @@ pub(crate) fn from_pod_unit(
 
     let mut service = SystemdUnitFile::new();
     service.merge_from(pod);
-    service.path = quad_replace_extension(&pod.path, ".service", "", "");
-    //service.path = format!("{}.service", pod_info.service_name).into();
+    service.path = format!("{}.service", pod_info.service_name).into();
 
     if !pod.path().as_os_str().is_empty() {
         service.append_entry(
@@ -1036,6 +1015,10 @@ pub(crate) fn from_pod_unit(
     podman_start_pre.add("--pod-id-file=%t/%N.pod-id");
     podman_start_pre.add("--exit-policy=stop");
     podman_start_pre.add("--replace");
+
+    handle_networks(pod, POD_SECTION, &mut service, names, &mut podman_start_pre)?;
+
+    handle_volumes(pod, POD_SECTION, &mut service, names, &mut podman_start_pre)?;
 
     podman_start_pre.add(format!("--name={podman_pod_name}"));
 
@@ -1365,13 +1348,13 @@ fn handle_podman_args(unit_file: &SystemdUnit, section: &str, podman: &mut Podma
 }
 
 fn handle_pod(
-    quadlet_unit_file: &SystemdUnit,
+    quadlet_unit: &SystemdUnit,
     service_unit_file: &mut SystemdUnitFile,
     section: &str,
     pods_info_map: &mut PodsInfoMap,
     podman: &mut PodmanCommand,
 ) -> Result<(), ConversionError> {
-    if let Some(pod) = quadlet_unit_file.lookup(section, "Pod") {
+    if let Some(pod) = quadlet_unit.lookup(section, "Pod") {
         if !pod.is_empty() {
             if !pod.ends_with(".pod") {
                 return Err(ConversionError::InvalidPod(pod.into()));
@@ -1753,6 +1736,45 @@ fn handle_user_remap(
             return Err(ConversionError::InvalidRemapUsers(format!(
                 "unsupported RemapUsers option '{remap_users}'"
             )));
+        }
+    }
+
+    Ok(())
+}
+
+fn handle_volumes(
+    quadlet_unit_file: &SystemdUnitFile,
+    section: &str,
+    service_unit_file: &mut SystemdUnitFile,
+    names: &ResourceNameMap,
+    podman: &mut PodmanCommand,
+) -> Result<(), ConversionError> {
+    for volume in quadlet_unit_file.lookup_all(section, "Volume") {
+        let parts: Vec<&str> = volume.split(':').collect();
+
+        let mut source = String::new();
+        let dest;
+        let mut options = String::new();
+
+        if parts.len() >= 2 {
+            source = parts[0].to_string();
+            dest = parts[1];
+        } else {
+            dest = parts[0];
+        }
+        if parts.len() >= 3 {
+            options = format!(":{}", parts[2]);
+        }
+
+        if !source.is_empty() {
+            source = handle_storage_source(quadlet_unit_file, service_unit_file, &source, names);
+        }
+
+        podman.add("-v");
+        if source.is_empty() {
+            podman.add(dest)
+        } else {
+            podman.add(format!("{source}:{dest}{options}"))
         }
     }
 
