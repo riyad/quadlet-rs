@@ -288,7 +288,10 @@ impl<'a> SplitWord<'a> {
 
 impl<'a> Default for SplitWord<'_> {
     fn default() -> Self {
-        Self { chars: "".chars(), c: Default::default() }
+        Self {
+            chars: "".chars(),
+            c: Default::default(),
+        }
     }
 }
 

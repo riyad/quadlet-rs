@@ -19,7 +19,8 @@ pub const X_VOLUME_SECTION: &str    = "X-Volume";
 
 pub const AUTO_UPDATE_LABEL: &str = "io.containers.autoupdate";
 
-pub static SUPPORTED_EXTENSIONS: [&str; 6] = ["container", "image", "kube", "network", "pod", "volume"];
+pub static SUPPORTED_EXTENSIONS: [&str; 6] =
+    ["container", "image", "kube", "network", "pod", "volume"];
 
 pub static SUPPORTED_CONTAINER_KEYS: [&str; 75] = [
     "AddCapability",
@@ -94,7 +95,7 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 75] = [
     "Unmask",
     "User",
     "UserNS",
-    "VolatileTmp",  // deprecated, use ReadOnlyTmpfs instead
+    "VolatileTmp", // deprecated, use ReadOnlyTmpfs instead
     "Volume",
     "WorkingDir",
 ];
