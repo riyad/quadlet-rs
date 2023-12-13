@@ -13,8 +13,11 @@ pub(crate) use self::constants::*;
 pub(crate) use self::iterators::*;
 pub(crate) use self::path_buf_ext::*;
 
+use std::collections::HashMap;
 use std::env;
+use std::ffi::OsString;
 use std::io;
+use std::path::PathBuf;
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum RuntimeError {
@@ -31,6 +34,8 @@ pub(crate) enum RuntimeError {
 pub(crate) enum ConversionError {
     #[error("requested Quadlet image {0:?} was not found")]
     ImageNotFound(String),
+    #[error("internal error while processing pod {0:?}")]
+    InternalPodError(String),
     #[error("key Options can't be used without Device")]
     InvalidDeviceOptions,
     #[error("key Type can't be used without Device")]
@@ -47,6 +52,8 @@ pub(crate) enum ConversionError {
     InvalidMountFormat(String),
     #[error("source parameter does not include a value")]
     InvalidMountSource,
+    #[error("pod {0:?} is not Quadlet based")]
+    InvalidPod(String),
     #[error("invalid port format {0:?}")]
     InvalidPortFormat(String),
     #[error("invalid published port {0:?}")]
@@ -65,6 +72,8 @@ pub(crate) enum ConversionError {
     NoYamlKeySpecified,
     #[error("failed parsing unit file: {0}")]
     Parsing(#[from] systemd_unit::Error),
+    #[error("Quadlet pod unit {0:?} does not exist")]
+    PodNotFound(String),
     #[error("{0}")]
     UnknownKey(String),
     #[error("unsupported value for {0:?}: {1:?}")]
@@ -79,6 +88,49 @@ impl From<systemd_unit::IoError> for ConversionError {
         }
     }
 }
+
+#[derive(Debug, Default)]
+pub(crate) struct PodInfo {
+    pub(crate) service_name: String,
+    pub(crate) containers: Vec<PathBuf>,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct PodsInfoMap(HashMap<PathBuf, PodInfo>);
+
+impl PodsInfoMap {
+    pub(crate) fn from_units(units: &Vec<SystemdUnitFile>) -> PodsInfoMap {
+        let mut pods_info_map = PodsInfoMap::default();
+
+        for unit in units {
+            if let Some(ext) = unit.path.extension() {
+                if ext != "pod" {
+                    continue;
+                }
+            }
+
+            let service_name = PodsInfoMap::_get_pod_service_name(unit);
+            pods_info_map.0.insert(
+                unit.path.clone(),
+                PodInfo {
+                    service_name: service_name
+                        .to_str()
+                        .expect("pod service name is not a valid UTF-8 string")
+                        .to_string(),
+                    containers: Default::default(),
+                },
+            );
+        }
+
+        pods_info_map
+    }
+
+    fn _get_pod_service_name(pod: &SystemdUnitFile) -> PathBuf {
+        convert::quad_replace_extension(&pod.path, "", "", "-pod")
+    }
+}
+
+pub(crate) type ResourceNameMap = HashMap<OsString, OsString>;
 
 pub(crate) fn check_for_unknown_keys(
     unit: &SystemdUnitFile,

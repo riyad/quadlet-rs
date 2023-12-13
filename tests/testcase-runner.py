@@ -486,6 +486,7 @@ def load_test_suite():
                 name.endswith(".image") or
                 name.endswith(".kube") or
                 name.endswith(".network") or
+                name.endswith(".pod") or
                 name.endswith(".volume")) and not name.startswith("."):
                 test_suite.addTest(QuadletTestCase(os.path.join(rel_dirpath, name)))
 

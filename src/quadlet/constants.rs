@@ -8,18 +8,20 @@ pub const CONTAINER_SECTION: &str   = "Container";
 pub const IMAGE_SECTION: &str       = "Image";
 pub const KUBE_SECTION: &str        = "Kube";
 pub const NETWORK_SECTION: &str     = "Network";
+pub const POD_SECTION: &str         = "Pod";
 pub const VOLUME_SECTION: &str      = "Volume";
 pub const X_CONTAINER_SECTION: &str = "X-Container";
 pub const X_IMAGE_SECTION: &str     = "X-Image";
 pub const X_KUBE_SECTION: &str      = "X-Kube";
 pub const X_NETWORK_SECTION: &str   = "X-Network";
+pub const X_POD_SECTION: &str       = "X-Pod";
 pub const X_VOLUME_SECTION: &str    = "X-Volume";
 
 pub const AUTO_UPDATE_LABEL: &str = "io.containers.autoupdate";
 
-pub static SUPPORTED_EXTENSIONS: [&str; 5] = ["container", "image", "kube", "network", "volume"];
+pub static SUPPORTED_EXTENSIONS: [&str; 6] = ["container", "image", "kube", "network", "pod", "volume"];
 
-pub static SUPPORTED_CONTAINER_KEYS: [&str; 74] = [
+pub static SUPPORTED_CONTAINER_KEYS: [&str; 75] = [
     "AddCapability",
     "AddDevice",
     "Annotation",
@@ -63,6 +65,7 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 74] = [
     "Notify",
     "PidsLimit",
     "PodmanArgs",
+    "Pod",
     "PublishPort",
     "Pull",
     "ReadOnly",
@@ -150,7 +153,12 @@ pub static SUPPORTED_NETWORK_KEYS: [&str; 15] = [
     "PodmanArgs",
     "Subnet",
 ];
-
+pub static SUPPORTED_POD_KEYS: [&str; 4] = [
+    "ContainersConfModule",
+    "GlobalArgs",
+    "PodmanArgs",
+    "PodName",
+];
 
 pub static SUPPORTED_SERVICE_KEYS: [&str; 1] = [
     "WorkingDirectory",

@@ -8,8 +8,6 @@ use super::constants::*;
 use super::podman_command::PodmanCommand;
 use super::*;
 
-type ResourceNameMap = HashMap<OsString, OsString>;
-
 fn get_base_podman_command(unit: &SystemdUnitFile, section: &str) -> PodmanCommand {
     let mut podman = PodmanCommand::new();
 
@@ -30,6 +28,7 @@ pub(crate) fn from_container_unit(
     container: &SystemdUnitFile,
     names: &ResourceNameMap,
     is_user: bool,
+    pods_info_map: &mut PodsInfoMap,
 ) -> Result<SystemdUnitFile, ConversionError> {
     let mut service = SystemdUnitFile::new();
 
@@ -475,6 +474,14 @@ pub(crate) fn from_container_unit(
             podman.add(pull);
         }
     }
+
+    handle_pod(
+        container,
+        &mut service,
+        CONTAINER_SECTION,
+        pods_info_map,
+        &mut podman,
+    )?;
 
     handle_podman_args(container, CONTAINER_SECTION, &mut podman);
 
@@ -922,6 +929,131 @@ pub(crate) fn from_network_unit(
     Ok(service)
 }
 
+pub(crate) fn from_pod_unit(
+    pod: &SystemdUnitFile,
+    pods_info_map: &PodsInfoMap,
+) -> Result<SystemdUnitFile, ConversionError> {
+    let pod_info = pods_info_map.0.get(&pod.path);
+    if pod_info.is_none() {
+        return Err(ConversionError::InternalPodError(
+            pod.path()
+                .to_str()
+                .expect("pod unit path is not a valid UTF-8 string")
+                .to_string(),
+        ));
+    }
+    let pod_info = pod_info.expect("should not be none");
+
+    let mut service = SystemdUnitFile::new();
+    service.merge_from(pod);
+    service.path = quad_replace_extension(&pod.path, ".service", "", "");
+    //service.path = format!("{}.service", pod_info.service_name).into();
+
+    if !pod.path().as_os_str().is_empty() {
+        service.append_entry(
+            UNIT_SECTION,
+            "SourcePath",
+            pod.path()
+                .to_str()
+                .expect("EnvironmentFile path is not a valid UTF-8 string"),
+        );
+    }
+
+    check_for_unknown_keys(pod, POD_SECTION, &SUPPORTED_POD_KEYS)?;
+
+    // Derive pod name from unit name (with added prefix), or use user-provided name.
+    let podman_pod_name = pod.lookup(POD_SECTION, "PodName").unwrap_or_default();
+    let podman_pod_name = if podman_pod_name.is_empty() {
+        quad_replace_extension(pod.path(), "", "systemd-", "")
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string()
+    } else {
+        podman_pod_name.to_string()
+    };
+
+    // Rename old Pod group to x-Pod so that systemd ignores it
+    service.rename_section(POD_SECTION, X_POD_SECTION);
+
+    // Need the containers filesystem mounted to start podman
+    service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
+
+    for container_service in &pod_info.containers {
+        let container_service = container_service
+            .to_str()
+            .expect("container service path is not a valid UTF-8 string");
+        service.append_entry(UNIT_SECTION, "Wants", container_service);
+        service.append_entry(UNIT_SECTION, "Before", container_service);
+    }
+
+    if pod
+        .lookup_last(SERVICE_SECTION, "SyslogIdentifier")
+        .is_none()
+    {
+        service.set_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
+    }
+
+    let mut podman_start = get_base_podman_command(pod, POD_SECTION);
+    podman_start.add("pod");
+    podman_start.add("start");
+    podman_start.add("--pod-id-file=%t/%N.pod-id");
+    service.append_entry_value(
+        SERVICE_SECTION,
+        "ExecStart",
+        EntryValue::try_from_raw(podman_start.to_escaped_string().as_str())?,
+    );
+
+    let mut podman_stop = get_base_podman_command(pod, POD_SECTION);
+    podman_stop.add("pod");
+    podman_stop.add("stop");
+    podman_stop.add("--pod-id-file=%t/%N.pod-id");
+    podman_stop.add("--ignore");
+    podman_stop.add("--time=10");
+    service.append_entry_value(
+        SERVICE_SECTION,
+        "ExecStop",
+        EntryValue::try_from_raw(podman_stop.to_escaped_string().as_str())?,
+    );
+
+    let mut podman_stop_post = get_base_podman_command(pod, POD_SECTION);
+    podman_stop_post.add("pod");
+    podman_stop_post.add("rm");
+    podman_stop_post.add("--pod-id-file=%t/%N.pod-id");
+    podman_stop_post.add("--ignore");
+    podman_stop_post.add("--force");
+    service.append_entry_value(
+        SERVICE_SECTION,
+        "ExecStopPost",
+        EntryValue::try_from_raw(podman_stop_post.to_escaped_string().as_str())?,
+    );
+
+    let mut podman_start_pre = get_base_podman_command(pod, POD_SECTION);
+    podman_start_pre.add("pod");
+    podman_start_pre.add("create");
+    podman_start_pre.add("--infra-conmon-pidfile=%t/%N.pid");
+    podman_start_pre.add("--pod-id-file=%t/%N.pod-id");
+    podman_start_pre.add("--exit-policy=stop");
+    podman_start_pre.add("--replace");
+
+    podman_start_pre.add(format!("--name={podman_pod_name}"));
+
+    handle_podman_args(pod, POD_SECTION, &mut podman_start_pre);
+    service.append_entry_value(
+        SERVICE_SECTION,
+        "ExecStartPre",
+        EntryValue::try_from_raw(podman_start_pre.to_escaped_string().as_str())?,
+    );
+
+    service.append_entry(SERVICE_SECTION, "Environment", "PODMAN_SYSTEMD_UNIT=%n");
+    service.append_entry(SERVICE_SECTION, "Type", "forking");
+    service.append_entry(SERVICE_SECTION, "Restart", "on-failure");
+    service.append_entry(SERVICE_SECTION, "PIDFile", "%t/%N.pid");
+
+    Ok(service)
+}
+
 // Convert a quadlet volume file (unit file with a Volume group) to a systemd
 // service file (unit file with Service group) based on the options in the
 // Volume group.
@@ -1230,6 +1362,36 @@ fn handle_networks(
 
 fn handle_podman_args(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {
     podman.extend(unit_file.lookup_all_args(section, "PodmanArgs"));
+}
+
+fn handle_pod(
+    quadlet_unit_file: &SystemdUnit,
+    service_unit_file: &mut SystemdUnitFile,
+    section: &str,
+    pods_info_map: &mut PodsInfoMap,
+    podman: &mut PodmanCommand,
+) -> Result<(), ConversionError> {
+    if let Some(pod) = quadlet_unit_file.lookup(section, "Pod") {
+        if !pod.is_empty() {
+            if !pod.ends_with(".pod") {
+                return Err(ConversionError::InvalidPod(pod.into()));
+            }
+
+            if let Some(pod_info) = pods_info_map.0.get_mut(&PathBuf::from(pod)) {
+                podman.add("--pod-id-file");
+                podman.add(format!("%t/{}.pod-id", pod_info.service_name));
+
+                let pod_service_name = format!("{}.service", pod_info.service_name);
+                service_unit_file.append_entry(UNIT_SECTION, "BindsTo", &pod_service_name);
+                service_unit_file.append_entry(UNIT_SECTION, "After", &pod_service_name);
+
+                pod_info.containers.push(service_unit_file.path.clone());
+            } else {
+                return Err(ConversionError::PodNotFound(pod.into()));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn handle_publish_ports(
@@ -1733,7 +1895,7 @@ fn lookup_and_add_string(
     }
 }
 
-fn quad_replace_extension(
+pub(crate) fn quad_replace_extension(
     file: &Path,
     new_extension: &str,
     extra_prefix: &str,
