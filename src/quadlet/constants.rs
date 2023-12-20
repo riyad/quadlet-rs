@@ -154,12 +154,13 @@ pub static SUPPORTED_NETWORK_KEYS: [&str; 15] = [
     "PodmanArgs",
     "Subnet",
 ];
-pub static SUPPORTED_POD_KEYS: [&str; 6] = [
+pub static SUPPORTED_POD_KEYS: [&str; 7] = [
     "ContainersConfModule",
     "GlobalArgs",
     "Network",
     "PodmanArgs",
     "PodName",
+    "PublishPort",
     "Volume",
 ];
 

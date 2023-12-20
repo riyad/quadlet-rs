@@ -1016,6 +1016,8 @@ pub(crate) fn from_pod_unit(
     podman_start_pre.add("--exit-policy=stop");
     podman_start_pre.add("--replace");
 
+    handle_publish_ports(pod, POD_SECTION, &mut podman_start_pre)?;
+
     handle_networks(pod, POD_SECTION, &mut service, names, &mut podman_start_pre)?;
 
     handle_volumes(pod, POD_SECTION, &mut service, names, &mut podman_start_pre)?;
