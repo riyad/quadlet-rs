@@ -1,6 +1,8 @@
 mod quadlet;
 mod systemd_unit;
 
+use walkdir::WalkDir;
+
 use self::quadlet::logger::*;
 use self::quadlet::PathBufExt;
 use self::quadlet::*;
@@ -11,6 +13,7 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::env;
 
+use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::fs;
 use std::fs::File;
@@ -152,7 +155,7 @@ fn load_units_from_dir(
 ) -> Vec<Result<SystemdUnitFile, RuntimeError>> {
     let mut results = Vec::new();
 
-    let files = match UnitFiles::new(source_path) {
+    let files = match iterators::UnitFiles::new(source_path) {
         Ok(entries) => entries,
         Err(e) => {
             results.push(Err(e));
@@ -201,6 +204,63 @@ fn load_units_from_dir(
     }
 
     results
+}
+
+fn load_unit_dropins(unit: &mut SystemdUnitFile, source_paths: &UnitSearchDirs) -> Vec<RuntimeError> {
+    let mut prev_errors: Vec<RuntimeError> = Vec::new();
+    let mut dropin_paths: HashMap<OsString, PathBuf> = HashMap::new();
+
+    for source_path in source_paths.iter() {
+        let mut unit_dropin_dir = unit.path().as_os_str().to_os_string();
+        unit_dropin_dir.push(".d");
+        let dropin_dir = source_path.join(unit_dropin_dir);
+
+        for entry in WalkDir::new(&dropin_dir) {
+            let dropin_file = match entry {
+                Ok(entry) => entry,
+                Err(e) => {
+                    if let Some(io_error) = e.io_error() {
+                        match io_error.kind() {
+                            io::ErrorKind::NotFound => {},  // ignore missing dropin directories
+                            _ => prev_errors.push(RuntimeError::Io(format!("error reading directory {dropin_dir:?}"), e.into())),
+                        }
+                    }
+                    continue
+                },
+            };
+
+            let dropin_name = dropin_file.file_name();
+            if dropin_file.path().extension().unwrap_or_default() != "conf" {
+                // Only *.conf supported
+                continue;
+            }
+
+            if dropin_paths.contains_key(dropin_name) {
+                // We already saw this name
+                continue;
+            }
+
+            dropin_paths.insert(dropin_name.to_owned(), dropin_dir.join(dropin_name));
+        }
+    }
+
+    let mut dropin_files: Vec<&OsString> = dropin_paths.keys().collect();
+
+    // Merge in alpha-numerical order
+    dropin_files.sort_unstable();
+
+    for dropin_file in dropin_files {
+        let dropin_path = dropin_paths.get(dropin_file.as_os_str()).expect("dropin should be there");
+
+        debug!("Loading source drop-in file {dropin_path:?}");
+
+        match SystemdUnitFile::load_from_path(dropin_path) {
+            Ok(dropin_unit_file) => unit.merge_from(&dropin_unit_file),
+            Err(e) => prev_errors.push(RuntimeError::Conversion(format!("error loading {dropin_path:?}"), e.into())),
+        }
+    }
+
+    prev_errors
 }
 
 fn generate_service_file(service: &mut SystemdUnitFile) -> io::Result<()> {
@@ -338,6 +398,10 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
         // had nothing to do
         debug!("No files parsed from {:?}", source_paths.dirs());
         return prev_errors;
+    }
+
+    for unit in units.iter_mut() {
+        prev_errors.extend(load_unit_dropins(unit, &source_paths));
     }
 
     if !cfg.dry_run {

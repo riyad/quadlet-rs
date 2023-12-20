@@ -4,6 +4,7 @@ import csv
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -64,9 +65,16 @@ def read_file(dir, filename):
         return f.read()
 
 def write_file(indir, filename, data):
+    # Write the tested file to the quadlet dir
     os.makedirs(os.path.dirname(os.path.join(indir, filename)), exist_ok=True)
     with open(os.path.join(indir, filename), "w") as f:
         f.write(data)
+
+    # Also copy any extra snippets
+    dot_dir = os.path.join(testcases_dir, f"{filename}.d")
+    if os.path.isdir(dot_dir):
+        dot_dir_dest = os.path.join(indir, f"{filename}.d")
+        shutil.copytree(dot_dir, dot_dir_dest)
 
 def get_checks_from_data(data):
     return list(
