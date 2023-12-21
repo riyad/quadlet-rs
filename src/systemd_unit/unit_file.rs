@@ -5,21 +5,12 @@ use std::path::{Path, PathBuf};
 
 use super::unit::SystemdUnit;
 
+#[derive(Debug, thiserror::Error)]
 pub enum IoError {
-    Io(io::Error),
-    Unit(super::Error),
-}
-
-impl From<super::Error> for IoError {
-    fn from(e: super::Error) -> Self {
-        IoError::Unit(e)
-    }
-}
-
-impl From<io::Error> for IoError {
-    fn from(e: io::Error) -> Self {
-        IoError::Io(e)
-    }
+    #[error("{0}")]
+    Io(#[from] io::Error),
+    #[error("{0}")]
+    Unit(#[from] super::Error),
 }
 
 #[derive(Debug, PartialEq)]
