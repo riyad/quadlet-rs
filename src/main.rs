@@ -289,12 +289,14 @@ fn enable_service_file(output_path: &Path, service: &SystemdUnitFile) {
 
     let mut alias: Vec<PathBuf> = service
         .lookup_all_strv(INSTALL_SECTION, "Alias")
+        .iter()
         .map(|s| PathBuf::from(s).cleaned())
         .collect();
     symlinks.append(&mut alias);
 
     let mut wanted_by: Vec<PathBuf> = service
         .lookup_all_strv(INSTALL_SECTION, "WantedBy")
+        .iter()
         .filter(|s| !s.contains('/')) // Only allow filenames, not paths
         .map(|wanted_by_unit| {
             let mut path = PathBuf::from(format!("{wanted_by_unit}.wants/"));
@@ -306,6 +308,7 @@ fn enable_service_file(output_path: &Path, service: &SystemdUnitFile) {
 
     let mut required_by: Vec<PathBuf> = service
         .lookup_all_strv(INSTALL_SECTION, "RequiredBy")
+        .iter()
         .filter(|s| !s.contains('/')) // Only allow filenames, not paths
         .map(|required_by_unit| {
             let mut path = PathBuf::from(format!("{required_by_unit}.requires/"));

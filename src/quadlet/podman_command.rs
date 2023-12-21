@@ -53,7 +53,10 @@ impl PodmanCommand {
         }
     }
 
-    pub(crate) fn extend(&mut self, args: impl Iterator<Item = String>) {
+    pub(crate) fn extend<I>(&mut self, args: I)
+    where
+        I: IntoIterator<Item = String>,
+    {
         self.args.extend(args);
     }
 

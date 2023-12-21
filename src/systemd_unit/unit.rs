@@ -62,30 +62,26 @@ impl SystemdUnit {
     }
 
     /// Get an interator of values for all `key`s in all instances of `section`
-    pub(crate) fn lookup_all<S, K>(
-        &self,
-        section: S,
-        key: K,
-    ) -> impl DoubleEndedIterator<Item = &str>
+    pub(crate) fn lookup_all<S, K>(&self, section: S, key: K) -> Vec<&str>
     where
         S: Into<String>,
         K: Into<String>,
     {
         self.lookup_all_values(section, key)
+            .iter()
             .map(|v| v.unquoted().as_str())
+            .collect()
     }
 
-    pub(crate) fn lookup_all_args<S, K>(
-        &self,
-        section: S,
-        key: K,
-    ) -> impl Iterator<Item = String> + '_
+    pub(crate) fn lookup_all_args<S, K>(&self, section: S, key: K) -> Vec<String>
     where
         S: Into<String>,
         K: Into<String>,
     {
-        self.lookup_all_values(section.into(), key.into())
+        self.lookup_all_values(section, key)
+            .iter()
             .flat_map(|v| SplitWord::new(v.raw()))
+            .collect()
     }
 
     /// Look up 'Environment' style key-value keys
@@ -94,9 +90,9 @@ impl SystemdUnit {
         S: Into<String>,
         K: Into<String>,
     {
-        let all_key_vals = self.lookup_all_values(section.into(), key.into());
+        let all_key_vals = self.lookup_all_values(section, key);
 
-        let mut res = HashMap::with_capacity(all_key_vals.size_hint().0);
+        let mut res = HashMap::with_capacity(all_key_vals.len());
 
         for key_vals in all_key_vals {
             for assigns in SplitWord::new(key_vals.raw().as_str()) {
@@ -109,21 +105,40 @@ impl SystemdUnit {
         res
     }
 
-    pub(crate) fn lookup_all_strv<S, K>(
-        &self,
-        section: S,
-        key: K,
-    ) -> impl Iterator<Item = String> + '_
+    pub(crate) fn lookup_all_strv<S, K>(&self, section: S, key: K) -> Vec<String>
     where
         S: Into<String>,
         K: Into<String>,
     {
-        self.lookup_all_values(section.into(), key.into())
+        self.lookup_all_values(section, key)
+            .iter()
             .flat_map(|v| SplitStrv::new(v.raw()))
+            .collect()
+    }
+
+    /// Get a Vec of values for all `key`s in all instances of `section`
+    /// This mimics quadlet's behavior in that empty values reset the list.
+    pub(crate) fn lookup_all_values<S, K>(&self, section: S, key: K) -> Vec<&EntryValue>
+    where
+        S: Into<String>,
+        K: Into<String>,
+    {
+        let values = self.lookup_all_values_raw(section, key);
+
+        // size_hint.0 is not optimal, but may prevent forseeable growing
+        let est_cap = values.size_hint().0;
+        values.fold(Vec::with_capacity(est_cap), |mut res, v| {
+            if v.raw().is_empty() {
+                res.clear();
+            } else {
+                res.push(v);
+            }
+            res
+        })
     }
 
     /// Get an interator of values for all `key`s in all instances of `section`
-    pub(crate) fn lookup_all_values<S, K>(
+    pub(crate) fn lookup_all_values_raw<S, K>(
         &self,
         section: S,
         key: K,
@@ -137,33 +152,6 @@ impl SystemdUnit {
             .unwrap_or_default()
             .data
             .get_all(&key.into())
-    }
-
-    /// Get a Vec of values for all `key`s in all instances of `section`
-    /// This mimics quadlet's behavior in that empty values reset the list.
-    pub(crate) fn lookup_all_with_reset<S, K>(&self, section: S, key: K) -> Vec<&str>
-    where
-        S: Into<String>,
-        K: Into<String>,
-    {
-        let values = self
-            .sections
-            .get(&section.into())
-            .unwrap_or_default()
-            .data
-            .get_all(&key.into())
-            .map(|v| v.unquoted().as_str());
-
-        // size_hint.0 is not optimal, but may prevent forseeable growing
-        let est_cap = values.size_hint().0;
-        values.fold(Vec::with_capacity(est_cap), |mut res, v| {
-            if v.is_empty() {
-                res.clear();
-            } else {
-                res.push(v);
-            }
-            res
-        })
     }
 
     pub(crate) fn lookup<S, K>(&self, section: S, key: K) -> Option<&str>
@@ -913,8 +901,28 @@ Key2=valA2";
 
                 let unit = SystemdUnit::load_from_str(input).unwrap();
 
-                let values: Vec<_> = unit.lookup_all("secA", "Key1").collect();
+                let values: Vec<_> = unit.lookup_all("secA", "Key1");
                 assert_eq!(values, vec!["valA1.1", "valA1.2", "valA2.1"],);
+            }
+
+            #[test]
+            fn finds_all_across_different_instances_of_the_section_with_reset() {
+                let input = "[secA]
+Key1=valA1.1
+Key1=
+[secB]
+Key1=valB1
+[secA]
+Key1=valA2.1
+Key2=valA2
+Key1=
+Key1=valA2.2
+Key1=valA2.3";
+
+                let unit = SystemdUnit::load_from_str(input).unwrap();
+
+                let values: Vec<_> = unit.lookup_all("secA", "Key1");
+                assert_eq!(values, vec!["valA2.2", "valA2.3"],);
             }
         }
 
@@ -945,30 +953,6 @@ Key2=valA2";
             #[ignore]
             fn todo() {
                 todo!()
-            }
-        }
-
-        mod lookup_all_with_reset {
-            use super::*;
-
-            #[test]
-            fn finds_all_across_different_instances_of_the_section() {
-                let input = "[secA]
-Key1=valA1.1
-Key1=
-[secB]
-Key1=valB1
-[secA]
-Key1=valA2.1
-Key2=valA2
-Key1=
-Key1=valA2.2
-Key1=valA2.3";
-
-                let unit = SystemdUnit::load_from_str(input).unwrap();
-
-                let values: Vec<_> = unit.lookup_all_with_reset("secA", "Key1");
-                assert_eq!(values, vec!["valA2.2", "valA2.3"],);
             }
         }
 

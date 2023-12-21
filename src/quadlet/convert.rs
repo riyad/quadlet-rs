@@ -13,6 +13,7 @@ fn get_base_podman_command(unit: &SystemdUnitFile, section: &str) -> PodmanComma
 
     podman.extend(
         unit.lookup_all(section, "ContainersConfModule")
+            .iter()
             .map(|s| format!("--module={s}")),
     );
 
@@ -414,6 +415,7 @@ pub(crate) fn from_container_unit(
 
     let env_files: Vec<PathBuf> = container
         .lookup_all_args(CONTAINER_SECTION, "EnvironmentFile")
+        .iter()
         .map(|s| PathBuf::from(s).absolute_from_unit(container))
         .collect();
     for env_file in env_files {
@@ -693,6 +695,7 @@ pub(crate) fn from_kube_unit(
 
     let config_maps: Vec<PathBuf> = kube
         .lookup_all_strv(KUBE_SECTION, "ConfigMap")
+        .iter()
         .map(PathBuf::from)
         .collect();
     for config_map in config_maps {
@@ -820,9 +823,9 @@ pub(crate) fn from_network_unit(
         }
     }
 
-    let subnets: Vec<&str> = network.lookup_all(NETWORK_SECTION, "Subnet").collect();
-    let gateways: Vec<&str> = network.lookup_all(NETWORK_SECTION, "Gateway").collect();
-    let ip_ranges: Vec<&str> = network.lookup_all(NETWORK_SECTION, "IPRange").collect();
+    let subnets: Vec<&str> = network.lookup_all(NETWORK_SECTION, "Subnet");
+    let gateways: Vec<&str> = network.lookup_all(NETWORK_SECTION, "Gateway");
+    let ip_ranges: Vec<&str> = network.lookup_all(NETWORK_SECTION, "IPRange");
     if !subnets.is_empty() {
         if gateways.len() > subnets.len() {
             return Err(ConversionError::InvalidSubnet(
@@ -1384,7 +1387,7 @@ fn handle_publish_ports(
     section: &str,
     podman: &mut PodmanCommand,
 ) -> Result<(), ConversionError> {
-    let publish_ports: Vec<&str> = unit_file.lookup_all(section, "PublishPort").collect();
+    let publish_ports: Vec<&str> = unit_file.lookup_all(section, "PublishPort");
     for publish_port in publish_ports {
         let publish_port = publish_port.trim(); // Allow whitespaces before and after
 
@@ -1650,8 +1653,8 @@ fn handle_user_remap(
         return Ok(());
     }
 
-    let uid_maps: Vec<String> = unit_file.lookup_all_strv(section, "RemapUid").collect();
-    let gid_maps: Vec<String> = unit_file.lookup_all_strv(section, "RemapGid").collect();
+    let uid_maps: Vec<String> = unit_file.lookup_all_strv(section, "RemapUid");
+    let gid_maps: Vec<String> = unit_file.lookup_all_strv(section, "RemapGid");
     let remap_users = unit_file.lookup_last(section, "RemapUsers");
     match remap_users {
         None => {
