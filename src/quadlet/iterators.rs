@@ -147,6 +147,19 @@ impl UnitSearchDirsBuilder {
         path: PathBuf,
         filter_fn: Option<Box<dyn Fn(&UnitSearchDirsBuilder, &walkdir::DirEntry) -> bool>>,
     ) -> Vec<PathBuf> {
+        let path = if path.is_symlink() {
+            match fs::read_link(&path) {
+                Ok(path) => path,
+                Err(e) => {
+                    debug!("Error occurred resolving path {path:?}: {e}");
+                    // Despite the failure add the path to the list for logging purposes
+                    return vec![path]
+                },
+            }
+        } else {
+            path
+        };
+
         let mut dirs = Vec::new();
 
         for entry in WalkDir::new(&path)
