@@ -464,6 +464,13 @@ pub(crate) fn from_container_unit(
         &mut podman,
     )?;
 
+    if let Some(stop_timeout) = container.lookup(CONTAINER_SECTION, "StopTimeout") {
+        if !stop_timeout.is_empty() {
+            podman.add("--stop-timeout");
+            podman.add(stop_timeout);
+        }
+    }
+
     handle_podman_args(container, CONTAINER_SECTION, &mut podman);
 
     if !image.is_empty() {
