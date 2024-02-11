@@ -322,6 +322,14 @@ impl SystemdUnit {
     }
 }
 
+impl Default for SystemdUnit {
+    fn default() -> Self {
+        Self {
+            sections: Default::default(),
+        }
+    }
+}
+
 impl ToString for SystemdUnit {
     fn to_string(&self) -> String {
         let mut res = String::new();
@@ -346,6 +354,17 @@ impl ToString for SystemdUnit {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod impl_default {
+        use super::*;
+
+        #[test]
+        fn values() {
+            let unit = SystemdUnit::default();
+
+            assert!(unit.sections.is_empty());
+        }
+    }
 
     mod systemd_unit {
         use super::*;

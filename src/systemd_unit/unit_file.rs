@@ -25,6 +25,15 @@ pub struct SystemdUnitFile {
     unit: SystemdUnit,
 }
 
+impl Default for SystemdUnitFile {
+    fn default() -> Self {
+        Self {
+            path: Default::default(),
+            unit: Default::default(),
+        }
+    }
+}
+
 impl Deref for SystemdUnitFile {
     type Target = SystemdUnit;
 
@@ -127,5 +136,22 @@ impl SystemdUnitFile {
 
     pub fn path(&self) -> &PathBuf {
         &self.path
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod impl_default {
+        use super::*;
+
+        #[test]
+        fn values() {
+            let unit_file = SystemdUnitFile::default();
+
+            assert_eq!(unit_file.path(), &PathBuf::from(""));
+            assert_eq!(unit_file.unit, SystemdUnit::new());
+        }
     }
 }
