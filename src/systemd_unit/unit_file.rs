@@ -55,6 +55,13 @@ impl SystemdUnitFile {
         self.path().file_name().expect("should have a file name")
     }
 
+    pub fn is_template_unit(&self) -> bool {
+        match self.path().file_name_template_parts() {
+            (Some(_), _) => true,
+            _ => false,
+        }
+    }
+
     pub fn load_from_path(path: &Path) -> Result<Self, IoError> {
         let buf = fs::read_to_string(&path)?;
 
@@ -188,6 +195,38 @@ mod tests {
 
             assert_eq!(unit_file.path(), &PathBuf::from(""));
             assert_eq!(unit_file.unit, SystemdUnit::new());
+        }
+    }
+
+    mod is_template_unit {
+        use super::*;
+
+            #[test]
+        fn with_empty_path() {
+            let unit_file = SystemdUnitFile { path: PathBuf::new(), ..Default::default() };
+
+            assert!(!unit_file.is_template_unit());
+        }
+
+        #[test]
+        fn with_simple_path() {
+            let unit_file = SystemdUnitFile { path: PathBuf::from("foo/bar.timer"), ..Default::default() };
+
+            assert!(!unit_file.is_template_unit());
+        }
+
+        #[test]
+        fn with_template_base_path() {
+            let unit_file = SystemdUnitFile { path: PathBuf::from("foo/bar@.netdev"), ..Default::default() };
+
+            assert!(unit_file.is_template_unit());
+        }
+
+        #[test]
+        fn with_template_instance_path() {
+            let unit_file = SystemdUnitFile { path: PathBuf::from("foo/bar@baz.netdev"), ..Default::default() };
+
+            assert!(unit_file.is_template_unit());
         }
     }
 
