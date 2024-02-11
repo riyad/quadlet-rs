@@ -744,6 +744,20 @@ mod tests {
         }
 
         #[test]
+        fn test_with_line_continuation_in_comment_succeeds() {
+            let input = "foo\\\n#   -e HOST_WHITELIST= `#optional` \\\nbar";
+            let mut parser = Parser::new(input);
+            let old_line = parser.line;
+            let old_col = parser.column;
+            assert_eq!(
+                parser.parse_value(),
+                Ok("foo bar".into()),
+            );
+            assert_eq!(parser.line, old_line + 2);
+            assert_eq!(parser.column, old_col + 2);
+        }
+
+        #[test]
         fn test_with_new_section_after_continuation_succeeds() {
             let input = "text\\\n[";
             let mut parser = Parser::new(input);
