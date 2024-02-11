@@ -8,6 +8,7 @@ pub trait PathBufExt<T> {
     fn absolute_from(&self, new_root: &Path) -> T;
     fn absolute_from_unit(&self, unit_file: &SystemdUnitFile) -> T;
     fn cleaned(&self) -> T;
+    fn file_name_template_parts(&self) -> (Option<PathBuf>, Option<PathBuf>);
     fn starts_with_systemd_specifier(&self) -> bool;
 }
 
@@ -60,6 +61,44 @@ impl PathBufExt<PathBuf> for PathBuf {
         }
 
         normalized
+    }
+
+    /// splits the file name into Systemd template unit parts
+    /// e.g. `"foo/template@instance.service"` would become `(Some("template@.service", Some("instance")))`
+    fn file_name_template_parts(&self) -> (Option<PathBuf>, Option<PathBuf>) {
+        let mut parts = self
+            .file_stem()
+            .unwrap_or_default()
+            .to_str()
+            .expect("path is not a valid UTF-8 string")
+            .splitn(2, '@');
+
+        // there's always a first part
+        let template_base = parts.next().unwrap_or_default();
+        let template_instance = parts.next();
+
+        // '@' found
+        if let Some(template_instance) = template_instance {
+            if template_base.is_empty() {
+                return (None, None);
+            }
+
+            let template_base = PathBuf::from(format!(
+                "{template_base}@.{}",
+                self.extension()
+                    .unwrap_or_default()
+                    .to_str()
+                    .expect("unit file path is not a valid UTF-8 string")
+            ));
+
+            if template_instance.is_empty() {
+                (Some(template_base), None)
+            } else {
+                (Some(template_base), Some(template_instance.into()))
+            }
+        } else {
+            (None, None)
+        }
     }
 
     /// Systemd Specifiers start with % with the exception of %%
@@ -377,6 +416,66 @@ mod tests {
 
         // TODO: test cases from https://pkg.go.dev/path/filepath#Dir
         // TODO: test cases from https://pkg.go.dev/path/filepath#Clean
+    }
+
+    mod file_name_template_parts {
+        use super::*;
+
+        #[test]
+        fn with_default_path() {
+            let path = PathBuf::default();
+
+            let (template_base, template_instance) = path.file_name_template_parts();
+
+            assert_eq!(template_base, None);
+            assert_eq!(template_instance, None);
+        }
+
+        #[test]
+        fn with_simple_path() {
+            let path = PathBuf::from("foo/simple-service_name.service");
+
+            let (template_base, template_instance) = path.file_name_template_parts();
+
+            assert_eq!(template_base, None);
+            assert_eq!(template_instance, None);
+        }
+
+        #[test]
+        fn with_base_template_path() {
+            let path = PathBuf::from("foo/simple-base_template@.service");
+
+            let (template_base, template_instance) = path.file_name_template_parts();
+
+            assert_eq!(
+                template_base,
+                Some(PathBuf::from("simple-base_template@.service"))
+            );
+            assert_eq!(template_instance, None);
+        }
+
+        #[test]
+        fn with_instance_template_path() {
+            let path = PathBuf::from("foo/simple-base_template@some-instance_foo.service");
+
+            let (template_base, template_instance) = path.file_name_template_parts();
+
+            assert_eq!(
+                template_base,
+                Some(PathBuf::from("simple-base_template@.service"))
+            );
+            assert_eq!(template_instance, Some(PathBuf::from("some-instance_foo")));
+        }
+
+        #[test]
+        fn must_have_a_base_template_path() {
+            let path = PathBuf::from("foo/@broken-instance_template.service");
+
+            let (template_base, template_instance) = path.file_name_template_parts();
+
+            assert_eq!(template_base, None);
+            assert_eq!(template_instance, None);
+        }
     }
 
     mod starts_with_systemd_specifier {
