@@ -1,5 +1,6 @@
 mod constants;
 mod parser;
+mod path_buf_ext;
 mod quoted;
 mod split;
 mod unit;
@@ -7,6 +8,7 @@ mod unit_file;
 mod value;
 
 pub use self::constants::*;
+pub use self::path_buf_ext::*;
 pub use self::quoted::*;
 pub use self::split::*;
 pub use self::unit::*;

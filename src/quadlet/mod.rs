@@ -2,7 +2,6 @@ mod constants;
 pub(crate) mod convert;
 pub mod iterators;
 pub(crate) mod logger;
-mod path_buf_ext;
 pub(crate) mod podman_command;
 
 use self::logger::*;
@@ -11,7 +10,6 @@ use crate::systemd_unit::SystemdUnitFile;
 
 pub(crate) use self::constants::*;
 pub(crate) use self::iterators::*;
-pub(crate) use self::path_buf_ext::*;
 
 use std::collections::HashMap;
 use std::env;

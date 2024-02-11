@@ -9,6 +9,7 @@ use walkdir::WalkDir;
 
 use crate::quadlet::logger::*;
 
+use super::path_buf_ext::PathBufExt;
 use super::unit::SystemdUnit;
 
 #[derive(Debug, thiserror::Error)]

@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::systemd_unit::SystemdUnitFile;
 
-pub(crate) trait PathBufExt<T> {
+pub trait PathBufExt<T> {
     fn absolute_from(&self, new_root: &Path) -> T;
     fn absolute_from_unit(&self, unit_file: &SystemdUnitFile) -> T;
     fn cleaned(&self) -> T;

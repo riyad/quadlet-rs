@@ -2,7 +2,6 @@ mod quadlet;
 mod systemd_unit;
 
 use self::quadlet::logger::*;
-use self::quadlet::PathBufExt;
 use self::quadlet::*;
 
 use self::systemd_unit::*;
