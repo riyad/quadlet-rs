@@ -224,7 +224,6 @@ fn generate_service_file(service: &mut SystemdUnitFile) -> io::Result<()> {
 // work for auto-generated files like these.
 fn enable_service_file(output_path: &Path, service: &SystemdUnitFile) {
     let mut symlinks: Vec<PathBuf> = Vec::new();
-    let service_name = service.path().file_name().expect("should have a file name");
 
     let mut alias: Vec<PathBuf> = service
         .lookup_all_strv(INSTALL_SECTION, "Alias")
@@ -233,29 +232,50 @@ fn enable_service_file(output_path: &Path, service: &SystemdUnitFile) {
         .collect();
     symlinks.append(&mut alias);
 
-    let mut wanted_by: Vec<PathBuf> = service
-        .lookup_all_strv(INSTALL_SECTION, "WantedBy")
-        .iter()
-        .filter(|s| !s.contains('/')) // Only allow filenames, not paths
-        .map(|wanted_by_unit| {
-            let mut path = PathBuf::from(format!("{wanted_by_unit}.wants/"));
-            path.push(service_name);
-            path
-        })
-        .collect();
-    symlinks.append(&mut wanted_by);
+    let mut service_name = service.file_name().to_os_string();
+    let (template_base, template_instance) = service.path().file_name_template_parts();
 
-    let mut required_by: Vec<PathBuf> = service
-        .lookup_all_strv(INSTALL_SECTION, "RequiredBy")
-        .iter()
-        .filter(|s| !s.contains('/')) // Only allow filenames, not paths
-        .map(|required_by_unit| {
-            let mut path = PathBuf::from(format!("{required_by_unit}.requires/"));
-            path.push(service_name);
-            path
-        })
-        .collect();
-    symlinks.append(&mut required_by);
+    // For non-instantiated template service we only support installs if a
+    // DefaultInstance is given. Otherwise we ignore the Install group, but
+    // it is still useful when instantiating the unit via a symlink.
+    if let Some(template_base) = template_base {
+        if template_instance.is_none() {
+            if let Some(default_instance) = service.lookup(INSTALL_SECTION, "DefaultInstance") {
+                service_name = OsString::from(format!(
+                    "{template_base}@{default_instance}.{}",
+                    service.unit_type()
+                ));
+            } else {
+                service_name = OsString::default();
+            }
+        }
+    }
+
+    if !service_name.is_empty() {
+        let mut wanted_by: Vec<PathBuf> = service
+            .lookup_all_strv(INSTALL_SECTION, "WantedBy")
+            .iter()
+            .filter(|s| !s.contains('/')) // Only allow filenames, not paths
+            .map(|wanted_by_unit| {
+                let mut path = PathBuf::from(format!("{wanted_by_unit}.wants/"));
+                path.push(&service_name);
+                path
+            })
+            .collect();
+        symlinks.append(&mut wanted_by);
+
+        let mut required_by: Vec<PathBuf> = service
+            .lookup_all_strv(INSTALL_SECTION, "RequiredBy")
+            .iter()
+            .filter(|s| !s.contains('/')) // Only allow filenames, not paths
+            .map(|required_by_unit| {
+                let mut path = PathBuf::from(format!("{required_by_unit}.requires/"));
+                path.push(&service_name);
+                path
+            })
+            .collect();
+        symlinks.append(&mut required_by);
+    }
 
     // construct relative symlink targets so that <output_path>/<symlink_rel (aka. foo/<service_name>)>
     // links to <output_path>/<service_name>
@@ -268,7 +288,7 @@ fn enable_service_file(output_path: &Path, service: &SystemdUnitFile) {
         for _ in 1..symlink_rel.components().count() {
             target.push("..");
         }
-        target.push(service_name);
+        target.push(service.file_name());
 
         let symlink_path = output_path.join(symlink_rel);
         let symlink_dir = symlink_path.parent().unwrap();
@@ -343,7 +363,8 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
     }
 
     for unit in units.iter_mut() {
-        let _ = unit.load_dropins_from(source_paths.dirs().iter().map(|d| d.as_path()))
+        let _ = unit
+            .load_dropins_from(source_paths.dirs().iter().map(|d| d.as_path()))
             .map_err(|e| {
                 prev_errors.push(RuntimeError::Conversion(
                     format!("failed loading drop-ins for {unit:?}"),

@@ -75,13 +75,26 @@ impl SystemdUnitFile {
         self: &mut SystemdUnitFile,
         source_paths: I,
     ) -> Result<(), IoError> {
-        let mut dropin_paths: HashMap<OsString, PathBuf> = HashMap::new();
+        let source_paths = Vec::from_iter(source_paths);
 
-        for source_path in source_paths {
+        let mut dropin_dirs: Vec<PathBuf> = Vec::new();
+
+        for source_path in &source_paths {
             let mut unit_dropin_dir = self.path().as_os_str().to_os_string();
             unit_dropin_dir.push(".d");
-            let dropin_dir = source_path.join(unit_dropin_dir);
+            dropin_dirs.push(source_path.join(unit_dropin_dir));
+        }
 
+        // For instantiated templates, also look in the non-instanced template dropin dirs
+        if let (Some(template_base), Some(_)) = self.path().file_name_template_parts() {
+            for source_path in &source_paths {
+                let template_dropin_dir = self.path().with_file_name(format!("{template_base}@.{}.d", self.unit_type()));
+                dropin_dirs.push(source_path.join(template_dropin_dir));
+            }
+        }
+
+        let mut dropin_paths: HashMap<OsString, PathBuf> = HashMap::new();
+        for dropin_dir in dropin_dirs {
             for entry in WalkDir::new(&dropin_dir) {
                 let dropin_file = match entry {
                     Ok(entry) => entry,
@@ -93,7 +106,7 @@ impl SystemdUnitFile {
                                     return Err(IoError::Io(
                                         //format!("error reading directory {dropin_dir:?}"),
                                         e.into(),
-                                    ))
+                                    ));
                                 }
                             }
                         }
@@ -130,10 +143,12 @@ impl SystemdUnitFile {
 
             match SystemdUnitFile::load_from_path(dropin_path) {
                 Ok(dropin_unit_file) => self.merge_from(&dropin_unit_file),
-                Err(e) => return Err(
-                    //format!("error loading {dropin_path:?}"),
-                    e,
-                ),
+                Err(e) => {
+                    return Err(
+                        //format!("error loading {dropin_path:?}"),
+                        e,
+                    );
+                }
             }
         }
 

@@ -75,11 +75,17 @@ pub(crate) fn from_container_unit(
         image
     };
 
-    let podman_container_name = container
-        .lookup_last(CONTAINER_SECTION, "ContainerName")
-        .map(|v| v.to_string())
-        // By default, We want to name the container by the service name
-        .unwrap_or("systemd-%N".to_owned());
+    let podman_container_name =
+        if let Some(container_name) = container.lookup(CONTAINER_SECTION, "ContainerName") {
+            container_name
+        } else {
+            // By default, We want to name the container by the service name
+            if container.is_template_unit() {
+                "systemd-%P_%I"
+            } else {
+                "systemd-%N"
+            }
+        };
 
     // Set PODMAN_SYSTEMD_UNIT so that podman auto-update can restart the service.
     service.append_entry(SERVICE_SECTION, "Environment", "PODMAN_SYSTEMD_UNIT=%n");
@@ -687,9 +693,9 @@ pub(crate) fn from_kube_unit(
     for update in kube.lookup_all_strv(KUBE_SECTION, "AutoUpdate") {
         let annotation_suffix;
         let update_type;
-        if let Some(val) = update.split_once('/') {
-            annotation_suffix = format!("/{}", val.0);
-            update_type = val.1;
+        if let Some((anno_value, typ)) = update.split_once('/') {
+            annotation_suffix = format!("/{}", anno_value);
+            update_type = typ;
         } else {
             annotation_suffix = "".to_string();
             update_type = &update;
