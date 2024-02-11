@@ -143,6 +143,10 @@ impl SystemdUnitFile {
     pub fn path(&self) -> &PathBuf {
         &self.path
     }
+
+    pub fn unit_type(&self) -> &str {
+        self.path.extension().expect("should have an extension").to_str().expect("path is not a valid UTF-8 string")
+    }
 }
 
 #[cfg(test)]
@@ -184,6 +188,25 @@ mod tests {
 
             assert_eq!(unit_file.path(), &PathBuf::from(""));
             assert_eq!(unit_file.unit, SystemdUnit::new());
+        }
+    }
+
+    mod unit_type {
+        use super::*;
+
+        #[test]
+        #[should_panic]  // FIXME
+        fn with_empty_path() {
+            let unit_file = SystemdUnitFile { path: PathBuf::new(), ..Default::default() };
+
+            assert_eq!(unit_file.unit_type(), "");
+        }
+
+        #[test]
+        fn is_same_as_extension() {
+            let unit_file = SystemdUnitFile { path: PathBuf::from("foo.timer"), ..Default::default() };
+
+            assert_eq!(unit_file.unit_type(), "timer");
         }
     }
 }
