@@ -64,6 +64,13 @@ def read_file(dir, filename):
     with open(os.path.join(dir, filename), "r") as f:
         return f.read()
 
+def get_generic_template_file(filename):
+    (base, ext) = os.path.splitext(os.path.basename(filename))
+    parts = base.split('@', 2)
+    if len(parts) == 2 and len(parts[1]) > 0:
+        return f"{parts[0]}@{ext}"
+    return None
+
 def write_file(indir, filename, data):
     # Write the tested file to the quadlet dir
     os.makedirs(os.path.dirname(os.path.join(indir, filename)), exist_ok=True)
@@ -71,10 +78,16 @@ def write_file(indir, filename, data):
         f.write(data)
 
     # Also copy any extra snippets
-    dot_dir = os.path.join(testcases_dir, f"{filename}.d")
-    if os.path.isdir(dot_dir):
-        dot_dir_dest = os.path.join(indir, f"{filename}.d")
-        shutil.copytree(dot_dir, dot_dir_dest)
+    snippetdirs = [f"{filename}.d"]
+    generic_file_name = get_generic_template_file(filename)
+    if generic_file_name is not None:
+        snippetdirs.append(f"{generic_file_name}.d")
+
+    for snippetdir in snippetdirs:
+        dot_dir = os.path.join(testcases_dir, snippetdir)
+        if os.path.isdir(dot_dir):
+            dot_dir_dest = os.path.join(indir, snippetdir)
+            shutil.copytree(dot_dir, dot_dir_dest)
 
 def get_checks_from_data(data):
     return list(
