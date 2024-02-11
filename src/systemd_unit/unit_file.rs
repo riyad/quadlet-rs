@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ffi::OsStr;
 use std::ffi::OsString;
 use std::fs;
 use std::io;
@@ -50,6 +51,10 @@ impl DerefMut for SystemdUnitFile {
 }
 
 impl SystemdUnitFile {
+    pub fn file_name(&self) -> &OsStr {
+        self.path().file_name().expect("should have a file name")
+    }
+
     pub fn load_from_path(path: &Path) -> Result<Self, IoError> {
         let buf = fs::read_to_string(&path)?;
 
@@ -143,6 +148,32 @@ impl SystemdUnitFile {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod file_name {
+        use super::*;
+
+        #[test]
+        #[should_panic]  // FIXME
+        fn with_empty_path() {
+            let unit_file = SystemdUnitFile { path: PathBuf::new(), ..Default::default() };
+
+            assert_eq!(unit_file.file_name(), "");
+        }
+
+        #[test]
+        fn with_simple_path() {
+            let unit_file = SystemdUnitFile { path: PathBuf::from("foo.timer"), ..Default::default() };
+
+            assert_eq!(unit_file.file_name(), "foo.timer");
+        }
+
+        #[test]
+        fn with_long_path() {
+            let unit_file = SystemdUnitFile { path: PathBuf::from("foo/bar.netdev"), ..Default::default() };
+
+            assert_eq!(unit_file.file_name(), "bar.netdev");
+        }
+    }
 
     mod impl_default {
         use super::*;

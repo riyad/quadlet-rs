@@ -423,7 +423,7 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
         };
 
         let mut service_output_path = cfg.output_path.clone();
-        service_output_path.push(service.path().file_name().unwrap());
+        service_output_path.push(service.file_name());
         service.path = service_output_path;
 
         if cfg.dry_run {
