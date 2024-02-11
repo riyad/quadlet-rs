@@ -8,7 +8,7 @@ pub trait PathBufExt<T> {
     fn absolute_from(&self, new_root: &Path) -> T;
     fn absolute_from_unit(&self, unit_file: &SystemdUnitFile) -> T;
     fn cleaned(&self) -> T;
-    fn file_name_template_parts(&self) -> (Option<PathBuf>, Option<PathBuf>);
+    fn file_name_template_parts(&self) -> (Option<&str>, Option<&str>);
     fn starts_with_systemd_specifier(&self) -> bool;
 }
 
@@ -64,8 +64,8 @@ impl PathBufExt<PathBuf> for PathBuf {
     }
 
     /// splits the file name into Systemd template unit parts
-    /// e.g. `"foo/template@instance.service"` would become `(Some("template@.service", Some("instance")))`
-    fn file_name_template_parts(&self) -> (Option<PathBuf>, Option<PathBuf>) {
+    /// e.g. `"foo/template@instance.service"` would become `(Some("template"), Some("instance"))`
+    fn file_name_template_parts(&self) -> (Option<&str>, Option<&str>) {
         let mut parts = self
             .file_stem()
             .unwrap_or_default()
@@ -82,14 +82,6 @@ impl PathBufExt<PathBuf> for PathBuf {
             if template_base.is_empty() {
                 return (None, None);
             }
-
-            let template_base = PathBuf::from(format!(
-                "{template_base}@.{}",
-                self.extension()
-                    .unwrap_or_default()
-                    .to_str()
-                    .expect("unit file path is not a valid UTF-8 string")
-            ));
 
             if template_instance.is_empty() {
                 (Some(template_base), None)
@@ -447,10 +439,7 @@ mod tests {
 
             let (template_base, template_instance) = path.file_name_template_parts();
 
-            assert_eq!(
-                template_base,
-                Some(PathBuf::from("simple-base_template@.service"))
-            );
+            assert_eq!(template_base, Some("simple-base_template"));
             assert_eq!(template_instance, None);
         }
 
@@ -460,11 +449,8 @@ mod tests {
 
             let (template_base, template_instance) = path.file_name_template_parts();
 
-            assert_eq!(
-                template_base,
-                Some(PathBuf::from("simple-base_template@.service"))
-            );
-            assert_eq!(template_instance, Some(PathBuf::from("some-instance_foo")));
+            assert_eq!(template_base, Some("simple-base_template"));
+            assert_eq!(template_instance, Some("some-instance_foo"));
         }
 
         #[test]
