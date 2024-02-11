@@ -238,11 +238,17 @@ impl<'a> Parser<'a> {
         let mut value: String = String::new();
         let mut backslash = false;
         let mut line_continuation = false;
+        let mut line_continuation_ignored_spaces = 0;
 
         while let Some(c) = self.cur {
             if backslash {
                 backslash = false;
                 match c {
+                    // for leniency we ignore spaces between the '\' and the '\n' of a line continuation
+                    ' ' => {
+                        line_continuation_ignored_spaces += 1;
+                        backslash = true;  // pretend this is still the case :/
+                    }
                     // line continuation -> add replacement to value and continue normally
                     '\n' => {
                         value.push_str(LINE_CONTINUATION_REPLACEMENT);
@@ -251,11 +257,16 @@ impl<'a> Parser<'a> {
                     // just an escape sequence -> add to value and continue normally
                     _ => {
                         value.push('\\');
+                        // restore ignored spaces (see above)
+                        for _ in 0..line_continuation_ignored_spaces {
+                            value.push(' ')
+                        }
                         value.push(c);
                     }
                 }
             } else if line_continuation {
                 line_continuation = false;
+                line_continuation_ignored_spaces = 0;
                 match c {
                     '#' | ';' => {
                         // ignore interspersed comments
@@ -716,6 +727,17 @@ mod tests {
             assert_eq!(parser.parse_value(), Ok("  late text".into()),);
             assert_eq!(parser.line, old_line + 2);
             assert_eq!(parser.column, old_col + 8);
+        }
+
+        #[test]
+        fn test_leniency_with_space_after_line_continuation_succeeds() {
+            let input = "foo \\    bar\\ \nbaz";
+            let mut parser = Parser::new(input);
+            let old_line = parser.line;
+            let old_col = parser.column;
+            assert_eq!(parser.parse_value(), Ok("foo \\    bar baz".into()),);
+            assert_eq!(parser.line, old_line + 1);
+            assert_eq!(parser.column, old_col + 2);
         }
 
         #[test]
