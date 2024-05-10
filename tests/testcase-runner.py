@@ -466,7 +466,10 @@ class QuadletTestCase(unittest.TestCase):
 
     def runTest(self):
         res = None
-        with tempfile.TemporaryDirectory(prefix="podman_test") as basedir:
+        with tempfile.TemporaryDirectory(prefix="podman-e2e-") as basedir:
+            # match directory structure from podman-quadlet
+            basedir = os.path.join(basedir, "subtest-0")
+            os.mkdir(basedir)
             indir = os.path.join(basedir, "quadlet")
             os.mkdir(indir)
             outdir = os.path.join(basedir, "out")
