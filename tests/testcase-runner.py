@@ -173,6 +173,21 @@ class QuadletTestCase(unittest.TestCase):
 
             return True
 
+        def assert_last_key_is_regex(args, testcase):
+            if len(args) != 3:
+                return False
+            group = args[0]
+            key = args[1]
+            value = args[2]
+
+            real_values = testcase.lookup(group, key)
+            last_value = real_values[-1]
+
+            if re.search(value, last_value) is None:
+                return False
+
+            return True
+
         def assert_key_contains(args, testcase):
             if len(args) != 3:
                 return False
@@ -390,6 +405,7 @@ class QuadletTestCase(unittest.TestCase):
             "assert-stderr-contains": assert_stderr_contains,
             "assert-key-is": assert_key_is,
             "assert-key-is-regex": assert_key_is_regex,
+            "assert-last-key-is-regex": assert_last_key_is_regex,
             "assert-key-contains": assert_key_contains,
             "assert-podman-args": assert_start_podman_args,
             "assert-podman-args-regex": assert_start_podman_args_regex,
