@@ -36,6 +36,12 @@ pub(crate) fn from_container_unit(
     service.merge_from(container);
     service.path = quad_replace_extension(container.path(), ".service", "", "");
 
+    // Add a dependency on network-online.target so the image pull does not happen
+    // before network is ready https://github.com/containers/podman/issues/21873
+    // Prepend the lines, so the user-provided values override the default ones.
+    service.prepend_entry(UNIT_SECTION, "After", "network-online.target");
+    service.prepend_entry(UNIT_SECTION, "Wants", "network-online.target");
+
     if !container.path().as_os_str().is_empty() {
         service.append_entry(
             UNIT_SECTION,
@@ -513,6 +519,12 @@ pub(crate) fn from_image_unit(
     let mut service = SystemdUnitFile::new();
     service.merge_from(image);
     service.path = quad_replace_extension(image.path(), ".service", "", "-image");
+
+    // Add a dependency on network-online.target so the image pull does not happen
+    // before network is ready https://github.com/containers/podman/issues/21873
+    // Prepend the lines, so the user-provided values override the default ones.
+    service.prepend_entry(UNIT_SECTION, "After", "network-online.target");
+    service.prepend_entry(UNIT_SECTION, "Wants", "network-online.target");
 
     if !image.path().as_os_str().is_empty() {
         service.append_entry(
