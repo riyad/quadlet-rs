@@ -350,6 +350,10 @@ pub(crate) fn from_container_unit(
 
     handle_user_mappings(container, CONTAINER_SECTION, &mut podman, is_user, true)?;
 
+    for group_add in container.lookup_all(CONTAINER_SECTION, "GroupAdd") {
+        podman.add(format!("--group-add={group_add}"));
+    }
+
     for tmpfs in container.lookup_all(CONTAINER_SECTION, "Tmpfs") {
         if tmpfs.chars().filter(|c| *c == ':').count() > 1 {
             return Err(ConversionError::InvalidTmpfs(tmpfs.into()));

@@ -22,7 +22,7 @@ pub const AUTO_UPDATE_LABEL: &str = "io.containers.autoupdate";
 pub static SUPPORTED_EXTENSIONS: [&str; 6] =
     ["container", "image", "kube", "network", "pod", "volume"];
 
-pub static SUPPORTED_CONTAINER_KEYS: [&str; 76] = [
+pub static SUPPORTED_CONTAINER_KEYS: [&str; 77] = [
     "AddCapability",
     "AddDevice",
     "Annotation",
@@ -42,6 +42,7 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 76] = [
     "GIDMap",
     "GlobalArgs",
     "Group",
+    "GroupAdd",
     "HealthCmd",
     "HealthInterval",
     "HealthOnFailure",
