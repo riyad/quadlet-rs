@@ -19,6 +19,7 @@ impl SystemdUnit {
     {
         self.append_entry_value(section, key, EntryValue::from_unquoted(value));
     }
+
     /// Appends `key=value` to last instance of `section`
     pub(crate) fn append_entry_value<S, K>(&mut self, section: S, key: K, value: EntryValue)
     where
@@ -216,6 +217,35 @@ impl SystemdUnit {
         }
     }
 
+    /// Prepends `key=value` to last instance of `section`
+    pub(crate) fn prepend_entry<S, K, V>(&mut self, section: S, key: K, value: V)
+    where
+        S: Into<String>,
+        K: Into<String>,
+        V: Into<String>,
+    {
+        self.prepend_entry_value(section, key, EntryValue::from_unquoted(value));
+    }
+
+    /// Prepends `key=value` to last instance of `section`
+    pub(crate) fn prepend_entry_value<S, K>(&mut self, section: S, key: K, value: EntryValue)
+    where
+        S: Into<String>,
+        K: Into<String>,
+    {
+        let section = section.into();
+
+        let old_values: Vec<_> = self.sections.remove_all(&section).collect();
+
+        self.append_entry_value(section.clone(), key, value);
+
+        for entries in old_values {
+            for (ek, ev) in entries.data {
+                self.append_entry_value(section.clone(), ek, ev);
+            }
+        }
+    }
+
     pub(crate) fn rename_section<S: Into<String>>(&mut self, from: S, to: S) {
         let from_key = from.into();
 
@@ -223,7 +253,7 @@ impl SystemdUnit {
             return;
         }
 
-        let from_values: Vec<Entries> = self.sections.remove_all(&from_key).collect();
+        let from_values: Vec<_> = self.sections.remove_all(&from_key).collect();
 
         if from_values.is_empty() {
             return;
@@ -369,7 +399,7 @@ mod tests {
     mod systemd_unit {
         use super::*;
 
-        mod add_entry {
+        mod append_entry {
             use super::*;
 
             #[test]
@@ -1098,6 +1128,75 @@ KeyThree=value a3.from";
                 let mut iter = unit_to.section_entries(unchanged_section);
                 assert_eq!(iter.next(), Some(("KeyOne", "value b1")));
                 assert_eq!(iter.next(), Some(("KeyTwo", "value b2")));
+                assert_eq!(iter.next(), None);
+            }
+        }
+
+        mod prepend_entry {
+            use super::*;
+
+            #[test]
+            fn should_add_entry_to_known_section() {
+                let input = "[Section A]
+KeyOne=value 1";
+
+                let mut unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 1);
+
+                unit.prepend_entry("Section A", "NewKey", "new value");
+                assert_eq!(unit.len(), 1); // shouldn't change the number of sections
+
+                let mut iter = unit.section_entries("Section A");
+                assert_eq!(iter.next(), Some(("NewKey", "new value")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
+                assert_eq!(iter.next(), None);
+            }
+
+            #[test]
+            fn should_create_new_section_if_necessary() {
+                let input = "[Section A]
+KeyOne=value 1";
+
+                let mut unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 1);
+
+                unit.prepend_entry("New Section", "NewKey", "new value");
+                assert_eq!(unit.len(), 2);
+
+                let mut iter = unit.section_entries("Section A");
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
+                assert_eq!(iter.next(), None);
+
+                let mut iter = unit.section_entries("New Section");
+                assert_eq!(iter.next(), Some(("NewKey", "new value")));
+                assert_eq!(iter.next(), None);
+            }
+
+            #[test]
+            fn should_add_entry_to_last_instance_of_a_section() {
+                let input = "[Section A]
+KeyOne=value 1.1
+KeyOne=value 1.2
+
+[Section B]
+KeyThree=value 3
+
+[Section A]
+KeyTwo=value 2
+KeyOne=value 2.1";
+
+                let mut unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 2);
+
+                unit.prepend_entry("Section A", "KeyOne", "new value");
+                assert_eq!(unit.len(), 2);
+
+                let mut iter = unit.section_entries("Section A");
+                assert_eq!(iter.next(), Some(("KeyOne", "new value")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1.1")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1.2")));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 2.1")));
                 assert_eq!(iter.next(), None);
             }
         }
