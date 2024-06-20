@@ -87,7 +87,7 @@ pub(crate) fn from_container_unit(
         } else {
             // By default, We want to name the container by the service name
             if container.is_template_unit() {
-                "systemd-%P_%I"
+                "systemd-%p_%i"
             } else {
                 "systemd-%N"
             }
