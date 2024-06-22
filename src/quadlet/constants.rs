@@ -8,12 +8,14 @@ pub const UNIT_DIR_DISTRO: &str = "/usr/share/containers/systemd";
 pub const UNIT_DIR_TEMP: &str = "/run/containers/systemd";
 pub const SYSTEM_USER_DIR_LEVEL: usize = 5;
 
+pub const BUILD_SECTION: &str       = "Build";
 pub const CONTAINER_SECTION: &str   = "Container";
 pub const IMAGE_SECTION: &str       = "Image";
 pub const KUBE_SECTION: &str        = "Kube";
 pub const NETWORK_SECTION: &str     = "Network";
 pub const POD_SECTION: &str         = "Pod";
 pub const VOLUME_SECTION: &str      = "Volume";
+pub const X_BUILD_SECTION: &str     = "X-Build";
 pub const X_CONTAINER_SECTION: &str = "X-Container";
 pub const X_IMAGE_SECTION: &str     = "X-Image";
 pub const X_KUBE_SECTION: &str      = "X-Kube";
@@ -23,8 +25,34 @@ pub const X_VOLUME_SECTION: &str    = "X-Volume";
 
 pub const AUTO_UPDATE_LABEL: &str = "io.containers.autoupdate";
 
-pub static SUPPORTED_EXTENSIONS: [&str; 6] =
-    ["container", "image", "kube", "network", "pod", "volume"];
+pub static SUPPORTED_EXTENSIONS: [&str; 7] =
+    ["build", "container", "image", "kube", "network", "pod", "volume"];
+
+pub static SUPPORTED_BUILD_KEYS: [&str; 23] = [
+    "Annotation",
+    "Arch",
+    "AuthFile",
+    "ContainersConfModule",
+    "DNS",
+    "DNSOption",
+    "DNSSearch",
+    "Environment",
+    "File",
+    "ForceRM",
+    "GlobalArgs",
+    "GroupAdd",
+    "ImageTag",
+    "Label",
+    "Network",
+    "PodmanArgs",
+    "Pull",
+    "Secret",
+    "SetWorkingDirectory",
+    "Target",
+    "TLSVerify",
+    "Variant",
+    "Volume",
+];
 
 pub static SUPPORTED_CONTAINER_KEYS: [&str; 80] = [
     "AddCapability",
