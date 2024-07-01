@@ -22,7 +22,7 @@ pub const AUTO_UPDATE_LABEL: &str = "io.containers.autoupdate";
 pub static SUPPORTED_EXTENSIONS: [&str; 6] =
     ["container", "image", "kube", "network", "pod", "volume"];
 
-pub static SUPPORTED_CONTAINER_KEYS: [&str; 77] = [
+pub static SUPPORTED_CONTAINER_KEYS: [&str; 78] = [
     "AddCapability",
     "AddDevice",
     "Annotation",
@@ -60,6 +60,7 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 77] = [
     "IP6",
     "Label",
     "LogDriver",
+    "LogOpt",
     "Mask",
     "Mount",
     "Network",
@@ -119,7 +120,7 @@ pub static SUPPORTED_IMAGE_KEYS: [&str; 14] = [
     "Variant",
 ];
 
-pub static SUPPORTED_KUBE_KEYS: [&str; 17] = [
+pub static SUPPORTED_KUBE_KEYS: [&str; 18] = [
     "AutoUpdate",
     "ConfigMap",
     "ContainersConfModule",
@@ -127,6 +128,7 @@ pub static SUPPORTED_KUBE_KEYS: [&str; 17] = [
     "GlobalArgs",
     "KubeDownForce",
     "LogDriver",
+    "LogOpt",
     "Network",
     "PodmanArgs",
     "PublishPort",

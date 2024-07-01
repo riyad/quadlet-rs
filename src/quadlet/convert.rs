@@ -155,6 +155,7 @@ pub(crate) fn from_container_unit(
     podman.add("--rm");
 
     handle_log_driver(container, CONTAINER_SECTION, &mut podman);
+    handle_log_opt(container, CONTAINER_SECTION, &mut podman);
 
     // We delegate groups to the runtime
     service.append_entry(SERVICE_SECTION, "Delegate", "yes");
@@ -701,6 +702,7 @@ pub(crate) fn from_kube_unit(
     }
 
     handle_log_driver(kube, KUBE_SECTION, &mut podman_start);
+    handle_log_opt(kube, KUBE_SECTION, &mut podman_start);
 
     handle_user_mappings(kube, KUBE_SECTION, &mut podman_start, is_user, false)?;
 
@@ -1311,6 +1313,16 @@ fn handle_log_driver(unit_file: &SystemdUnit, section: &str, podman: &mut Podman
     if let Some(log_driver) = unit_file.lookup_last(section, "LogDriver") {
         podman.add_slice(&["--log-driver", log_driver]);
     }
+}
+
+fn handle_log_opt(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {
+    podman.extend(
+    unit_file
+        .lookup_all_strv(section, "LogOpt")
+        .iter()
+        .flat_map(|log_opt| ["--log-opt", log_opt])
+        .map(str::to_string)
+    )
 }
 
 fn handle_networks(
