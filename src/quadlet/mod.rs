@@ -56,16 +56,26 @@ pub(crate) enum ConversionError {
     InvalidPortFormat(String),
     #[error("invalid published port {0:?}")]
     InvalidPublishedPort(String),
+    #[error("relative path in File key requires SetWorkingDirectory key to be set")]
+    InvalidRelativeFile,
     #[error("{0}")]
     InvalidRemapUsers(String),
     #[error("invalid service Type {0:?}")]
     InvalidServiceType(String),
+    #[error("SetWorkingDirectory={0:?} is only supported in .{1} files")]
+    InvalidSetWorkingDirectory(String, String),
     #[error("{0}")]
     InvalidSubnet(String),
     #[error("invalid tmpfs format {0:?}")]
     InvalidTmpfs(String),
     #[error("{0}")]
     Io(#[from] io::Error),
+    #[error("no ImageTag key specified")]
+    NoImageTagKeySpecified,
+    #[error("no File key specified")]
+    NoFileKeySpecified,
+    #[error("neither SetWorkingDirectory, nor File key specified")]
+    NoSetWorkingDirectoryNorFileKeySpecified,
     #[error("no Yaml key specified")]
     NoYamlKeySpecified,
     #[error("failed parsing unit file: {0}")]
@@ -151,8 +161,35 @@ pub(crate) fn check_for_unknown_keys(
     Ok(())
 }
 
+fn get_built_image_name(built_unit: &SystemdUnitFile) -> Option<&str> {
+    if let Some(built_image_name) = built_unit.lookup(BUILD_SECTION, "Image") {
+        return Some(built_image_name);
+    }
+
+    None
+}
+
 pub fn get_podman_binary() -> String {
     env::var("PODMAN").unwrap_or(DEFAULT_PODMAN_BINARY.to_owned())
+}
+
+fn prefill_built_image_names(units: &Vec<SystemdUnitFile>, resource_names: &mut ResourceNameMap) {
+    for unit in units {
+        if !unit
+            .file_name()
+            .to_str()
+            .unwrap_or_default()
+            .ends_with(".build")
+        {
+            continue;
+        }
+
+        let image_name = get_built_image_name(unit);
+        // imageName := quadlet.GetBuiltImageName(unit)
+        // if len(imageName) > 0 {
+        // 	resourceNames[unit.Filename] = imageName
+        // }
+    }
 }
 
 fn is_image_id(image_name: &str) -> bool {
@@ -195,6 +232,11 @@ fn is_unambiguous_name(image_name: &str) -> bool {
     false
 }
 
+fn is_url(maybe_url: &str) -> bool {
+    // FIXME: in its simplest form `^((https?)|(git)://)|(github\.com/).+$` would be enough
+    unimplemented!()
+}
+
 // warns if input is an ambiguous name, i.e. a partial image id or a short
 // name (i.e. is missing a registry)
 //
@@ -207,7 +249,8 @@ fn is_unambiguous_name(image_name: &str) -> bool {
 // a huge dependency in the generator just for a warning.
 pub(crate) fn warn_if_ambiguous_image_name(unit: &SystemdUnitFile, section: &str) {
     if let Some(image_name) = unit.lookup_last(section, "Image") {
-        if unit.path().extension().unwrap_or_default() == "image" {
+        let unit_path_extension = unit.path().extension().unwrap_or_default();
+        if unit_path_extension == "build" || unit_path_extension == "image" {
             return;
         }
         if !is_unambiguous_name(image_name) {

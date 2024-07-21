@@ -22,6 +22,178 @@ fn get_base_podman_command(unit: &SystemdUnitFile, section: &str) -> PodmanComma
     podman
 }
 
+pub(crate) fn from_build_unit(
+    build: &SystemdUnitFile,
+    names: &mut ResourceNameMap,
+) -> Result<SystemdUnitFile, ConversionError> {
+    let mut service = SystemdUnitFile::new();
+
+    service.merge_from(build);
+    service.path = quad_replace_extension(build.path(), ".service", "", "-build");
+
+    // Add a dependency on network-online.target so the image pull does not happen
+    // before network is ready https://github.com/containers/podman/issues/21873
+    // Prepend the lines, so the user-provided values override the default ones.
+    service.prepend_entry(UNIT_SECTION, "After", "network-online.target");
+    service.prepend_entry(UNIT_SECTION, "Wants", "network-online.target");
+
+    // Need the containers filesystem mounted to start podman
+    service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
+
+    if !build.path().as_os_str().is_empty() {
+        service.append_entry(
+            UNIT_SECTION,
+            "SourcePath",
+            build
+                .path()
+                .to_str()
+                .expect("EnvironmentFile path is not a valid UTF-8 string"),
+        );
+    }
+
+    check_for_unknown_keys(build, BUILD_SECTION, &SUPPORTED_BUILD_KEYS)?;
+
+    // Rename old Build group to x-Build so that systemd ignores it
+    service.rename_section(BUILD_SECTION, X_BUILD_SECTION);
+
+    let mut podman = get_base_podman_command(build, BUILD_SECTION);
+    podman.add("build");
+
+    let string_keys = [
+        ("Arch", "--arch"),
+        ("AuthFile", "--authfile"),
+        ("Pull", "--pull"),
+        ("Target", "--target"),
+        ("Variant", "--variant"),
+    ];
+
+    let bool_keys = [("TLSVerify", "--tls-verify"), ("ForceRM", "--force-rm")];
+
+    for (key, flag) in string_keys {
+        lookup_and_add_string(build, BUILD_SECTION, key, flag, &mut podman)
+    }
+
+    for (key, flag) in bool_keys {
+        lookup_and_add_bool(build, BUILD_SECTION, key, flag, &mut podman)
+    }
+
+    let annotations = build.lookup_all_key_val(BUILD_SECTION, "Annotation");
+    podman.add_annotations(&annotations);
+
+    podman.extend(
+        build
+            .lookup_all(BUILD_SECTION, "DNS")
+            .iter()
+            .map(|ip_addr| format!("--dns={ip_addr}")),
+    );
+
+    podman.extend(
+        build
+            .lookup_all(BUILD_SECTION, "DNSOption")
+            .iter()
+            .map(|dns_option| format!("--dns-option={dns_option}")),
+    );
+
+    podman.extend(
+        build
+            .lookup_all(BUILD_SECTION, "DNSSearch")
+            .iter()
+            .map(|dns_search| format!("--dns-search={dns_search}")),
+    );
+
+    let podman_env = build.lookup_all_key_val(BUILD_SECTION, "Environment");
+    podman.add_env(&podman_env);
+
+    podman.extend(
+        build
+            .lookup_all(BUILD_SECTION, "GroupAdd")
+            .iter()
+            .filter_map(|group_add| {
+                if group_add.is_empty() {
+                    None
+                } else {
+                    Some(format!("--group-add={group_add}"))
+                }
+            }),
+    );
+
+    let labels = build.lookup_all_key_val(BUILD_SECTION, "Label");
+    podman.add_labels(&labels);
+
+    if let Some(built_image_name) = names.get(build.file_name()) {
+        let built_image_name = built_image_name
+            .to_str()
+            .expect("ImageTag is not a valid UTF-8 string");
+        podman.add(format!("--tag={built_image_name}"));
+    } else {
+        return Err(ConversionError::NoImageTagKeySpecified);
+    }
+
+    handle_networks(build, BUILD_SECTION, &mut service, names, &mut podman)?;
+
+    podman.extend(
+        build
+            .lookup_all_args(BUILD_SECTION, "Secret")
+            .iter()
+            .flat_map(|secret| ["--secret", secret])
+            .map(str::to_string),
+    );
+
+    handle_volumes(build, BUILD_SECTION, &mut service, names, &mut podman)?;
+
+    // In order to build an image locally, we need either a File key pointing directly at a
+    // Containerfile, or we need a context or WorkingDirectory containing all required files.
+    // SetWorkingDirectory= can also be a path, a URL to either a Containerfile, a Git repo, or
+    // an archive.
+    let context = handle_set_working_directory(build, &mut service, BUILD_SECTION)?;
+
+    let working_directory = service.lookup(SERVICE_SECTION, "WorkingDirectory");
+    let file_path = service.lookup(BUILD_SECTION, "File");
+    let (working_directory, file_path) = match (working_directory, file_path, context.as_str()) {
+        (None, None, "") => return Err(ConversionError::NoSetWorkingDirectoryNorFileKeySpecified),
+        (None, None, _) => ("", ""),
+        (Some(""), None, "") => {
+            return Err(ConversionError::NoSetWorkingDirectoryNorFileKeySpecified)
+        }
+        (Some(wd), None, _) => (wd, ""),
+        (None, Some(""), "") => {
+            return Err(ConversionError::NoSetWorkingDirectoryNorFileKeySpecified)
+        }
+        (None, Some(fp), _) => ("", fp),
+        (Some(wd), Some(fp), _) => (wd, fp),
+    };
+
+    if !file_path.is_empty() {
+        podman.add(format!("--file={file_path}"))
+    }
+
+    handle_podman_args(build, BUILD_SECTION, &mut podman);
+
+    // Context or WorkingDirectory has to be last argument
+    if !context.is_empty() {
+        podman.add(context);
+    } else if !PathBuf::from(file_path).is_absolute() && !is_url(file_path) {
+        // Special handling for relative filePaths
+        if working_directory.is_empty() {
+            return Err(ConversionError::InvalidRelativeFile);
+        }
+        podman.add(working_directory);
+    }
+
+    service.append_entry_value(
+        SERVICE_SECTION,
+        "ExecStart",
+        EntryValue::try_from_raw(podman.to_escaped_string().as_str())?,
+    );
+
+    service.append_entry(SERVICE_SECTION, "Type", "oneshot");
+    service.append_entry(SERVICE_SECTION, "RemainAfterExit", "yes");
+    // The default syslog identifier is the exec basename (podman)
+    // which isn't very useful here
+    service.append_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
+    return Ok(service);
+}
+
 // Convert a quadlet container file (unit file with a Container group) to a systemd
 // service file (unit file with Service group) based on the options in the Container group.
 // The original Container group is kept around as X-Container.
@@ -456,10 +628,13 @@ pub(crate) fn from_container_unit(
         podman.add_bool("--env-host", env_host);
     }
 
-    for secret in container.lookup_all_args(CONTAINER_SECTION, "Secret") {
-        podman.add("--secret");
-        podman.add(secret);
-    }
+    podman.extend(
+        container
+            .lookup_all_args(CONTAINER_SECTION, "Secret")
+            .iter()
+            .flat_map(|secret| ["--secret", secret])
+            .map(str::to_string),
+    );
 
     for mount in container.lookup_all_args(CONTAINER_SECTION, "Mount") {
         let mount_str = resolve_container_mount_params(container, &mut service, mount, names)?;
@@ -791,7 +966,7 @@ pub(crate) fn from_kube_unit(
         EntryValue::try_from_raw(podman_stop.to_escaped_string().as_str())?,
     );
 
-    handle_set_working_directory(kube, &mut service)?;
+    handle_set_working_directory(kube, &mut service, KUBE_SECTION)?;
 
     Ok(service)
 }
@@ -1299,33 +1474,33 @@ fn handle_image_source<'a>(
     service_unit_file: &mut SystemdUnitFile,
     names: &'a ResourceNameMap,
 ) -> Result<&'a str, ConversionError> {
-    if quadlet_image_name.ends_with(".image") {
-        //let quadlet_image_name = OsStr::new(quadlet_image_name);
+    for extension in ["build", "image"] {
+        if quadlet_image_name.ends_with(&format!(".{extension}")) {
+            // since there is no default name conversion, the actual image name must exist in the names map
+            let image_name = names.get(&OsString::from(quadlet_image_name));
+            if image_name.is_none() {
+                return Err(ConversionError::ImageNotFound(quadlet_image_name.into()));
+            }
 
-        // since there is no default name conversion, the actual image name must exist in the names map
-        let image_name = names.get(&OsString::from(quadlet_image_name));
-        if image_name.is_none() {
-            return Err(ConversionError::ImageNotFound(quadlet_image_name.into()));
-        }
-
-        // the systemd unit name is $name-image.service
-        let image_service_name = quad_replace_extension(
-            Path::new(image_name.expect("cannot be none")),
-            ".service",
-            "",
-            "-image",
-        )
-        .to_str()
-        .expect("image service name is not a valid UTF-8 string")
-        .to_string();
-        service_unit_file.append_entry(UNIT_SECTION, "Requires", &image_service_name);
-        service_unit_file.append_entry(UNIT_SECTION, "After", &image_service_name);
-
-        let image_name = image_name
-            .expect("cannot be none")
+            // the systemd unit name is $name-$suffix.service
+            let image_service_name = quad_replace_extension(
+                Path::new(image_name.expect("cannot be none")),
+                ".service",
+                "",
+                &format!("-{extension}"),
+            )
             .to_str()
-            .expect("image name is not a valid UTF-8 string");
-        return Ok(image_name);
+            .expect("image service name is not a valid UTF-8 string")
+            .to_string();
+            service_unit_file.append_entry(UNIT_SECTION, "Requires", &image_service_name);
+            service_unit_file.append_entry(UNIT_SECTION, "After", &image_service_name);
+
+            let image_name = image_name
+                .expect("cannot be none")
+                .to_str()
+                .expect("image name is not a valid UTF-8 string");
+            return Ok(image_name);
+        }
     }
 
     return Ok(quadlet_image_name);
@@ -1513,56 +1688,96 @@ fn handle_publish_ports(
 }
 
 fn handle_set_working_directory(
-    kube: &SystemdUnitFile,
+    quadlet_unit_file: &SystemdUnitFile,
     service_unit_file: &mut SystemdUnitFile,
-) -> Result<(), ConversionError> {
-    // If WorkingDirectory is already set in the Service section do not change it
-    if let Some(working_dir) = kube.lookup(SERVICE_SECTION, "WorkingDirectory") {
-        if !working_dir.is_empty() {
-            return Ok(());
-        }
-    }
-
+    quadlet_section: &str,
+) -> Result<String, ConversionError> {
     let set_working_directory;
-    if let Some(set_working_dir) = kube.lookup(KUBE_SECTION, "SetWorkingDirectory") {
+    if let Some(set_working_dir) = quadlet_unit_file.lookup(quadlet_section, "SetWorkingDirectory")
+    {
         if set_working_dir.is_empty() {
-            return Ok(());
+            return Ok(String::default());
         }
         set_working_directory = set_working_dir;
     } else {
-        return Ok(());
+        return Ok(String::default());
     }
 
-    let relative_to_file = match set_working_directory.to_ascii_lowercase().as_str() {
+    let mut context = "";
+    let relative_to_file;
+    match set_working_directory.to_ascii_lowercase().as_str() {
         "yaml" => {
-            if let Some(yaml) = kube.lookup(KUBE_SECTION, "Yaml") {
-                PathBuf::from(yaml)
+            if quadlet_section != KUBE_SECTION {
+                return Err(ConversionError::InvalidSetWorkingDirectory(
+                    set_working_directory.to_string(),
+                    "kube".to_string(),
+                ));
+            }
+
+            if let Some(yaml) = quadlet_unit_file.lookup(quadlet_section, "Yaml") {
+                relative_to_file = PathBuf::from(yaml)
             } else {
                 return Err(ConversionError::NoYamlKeySpecified);
             }
         }
-        "unit" => kube.path().clone(),
-        v => {
-            return Err(ConversionError::UnsupportedValueForKey(
-                "WorkingDirectory".to_string(),
-                v.to_string(),
-            ))
+        "file" => {
+            if quadlet_section != BUILD_SECTION {
+                return Err(ConversionError::InvalidSetWorkingDirectory(
+                    set_working_directory.to_string(),
+                    "build".to_string(),
+                ));
+            }
+
+            if let Some(file) = quadlet_unit_file.lookup(quadlet_section, "File") {
+                relative_to_file = PathBuf::from(file)
+            } else {
+                return Err(ConversionError::NoFileKeySpecified);
+            }
+        }
+        "unit" => relative_to_file = quadlet_unit_file.path().clone(),
+        _ => {
+            // Path / URL handling is for .build files only
+            if quadlet_section != BUILD_SECTION {
+                return Err(ConversionError::UnsupportedValueForKey(
+                    "SetWorkingDirectory".to_string(),
+                    set_working_directory.to_string(),
+                ));
+            }
+
+            // Any value other than the above cases will be returned as context
+            context = set_working_directory;
+
+            // If we have a relative path, set the WorkingDirectory to that of the quadlet_unit_file
+            if !PathBuf::from(context).is_absolute() {
+                relative_to_file = quadlet_unit_file.path().clone();
+            } else {
+                relative_to_file = PathBuf::default()
+            }
         }
     };
 
-    let file_in_workingdir = relative_to_file.absolute_from_unit(kube);
+    if !relative_to_file.as_os_str().is_empty() && !is_url(context) {
+        // If WorkingDirectory is already set in the Service section do not change it
+        if let Some(working_dir) = quadlet_unit_file.lookup(quadlet_section, "WorkingDirectory") {
+            if !working_dir.is_empty() {
+                return Ok(String::default());
+            }
+        }
 
-    service_unit_file.append_entry(
-        SERVICE_SECTION,
-        "WorkingDirectory",
-        file_in_workingdir
-            .parent()
-            .expect("should have a parent directory")
-            .display()
-            .to_string(),
-    );
+        let file_in_workingdir = relative_to_file.absolute_from_unit(quadlet_unit_file);
 
-    Ok(())
+        service_unit_file.append_entry(
+            SERVICE_SECTION,
+            "WorkingDirectory",
+            file_in_workingdir
+                .parent()
+                .expect("should have a parent directory")
+                .display()
+                .to_string(),
+        );
+    }
+
+    Ok(context.to_string())
 }
 
 fn handle_storage_source(

@@ -406,6 +406,7 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
             .map(|e| e.to_str().unwrap_or_default())
             .unwrap_or_default()
         {
+            "build" => convert::from_build_unit(&unit, &mut resource_names),
             "container" => {
                 warn_if_ambiguous_image_name(&unit, CONTAINER_SECTION);
                 convert::from_container_unit(
