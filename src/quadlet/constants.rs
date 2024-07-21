@@ -22,7 +22,7 @@ pub const AUTO_UPDATE_LABEL: &str = "io.containers.autoupdate";
 pub static SUPPORTED_EXTENSIONS: [&str; 6] =
     ["container", "image", "kube", "network", "pod", "volume"];
 
-pub static SUPPORTED_CONTAINER_KEYS: [&str; 78] = [
+pub static SUPPORTED_CONTAINER_KEYS: [&str; 79] = [
     "AddCapability",
     "AddDevice",
     "Annotation",
@@ -64,6 +64,7 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 78] = [
     "Mask",
     "Mount",
     "Network",
+    "NetworkAlias",
     "NoNewPrivileges",
     "Notify",
     "PidsLimit",
@@ -158,19 +159,18 @@ pub static SUPPORTED_NETWORK_KEYS: [&str; 15] = [
     "PodmanArgs",
     "Subnet",
 ];
-pub static SUPPORTED_POD_KEYS: [&str; 7] = [
+pub static SUPPORTED_POD_KEYS: [&str; 8] = [
     "ContainersConfModule",
     "GlobalArgs",
     "Network",
+    "NetworkAlias",
     "PodmanArgs",
     "PodName",
     "PublishPort",
     "Volume",
 ];
 
-pub static SUPPORTED_SERVICE_KEYS: [&str; 1] = [
-    "WorkingDirectory",
-];
+pub static SUPPORTED_SERVICE_KEYS: [&str; 1] = ["WorkingDirectory"];
 
 pub static SUPPORTED_VOLUME_KEYS: [&str; 13] = [
     "ContainersConfModule",

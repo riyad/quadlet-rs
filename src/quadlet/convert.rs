@@ -175,6 +175,14 @@ pub(crate) fn from_container_unit(
         &mut podman,
     )?;
 
+    podman.extend(
+        container
+            .lookup_all(CONTAINER_SECTION, "NetworkAlias")
+            .iter()
+            .flat_map(|network_alias| ["--network-alias", network_alias])
+            .map(str::to_string),
+    );
+
     // Run with a pid1 init to reap zombies by default (as most apps don't do that)
     if let Some(run_init) = container.lookup_bool(CONTAINER_SECTION, "RunInit") {
         podman.add_bool("--init", run_init);
@@ -1054,6 +1062,13 @@ pub(crate) fn from_pod_unit(
 
     handle_networks(pod, POD_SECTION, &mut service, names, &mut podman_start_pre)?;
 
+    podman_start_pre.extend(
+        pod.lookup_all(POD_SECTION, "NetworkAlias")
+            .iter()
+            .flat_map(|network_alias| ["--network-alias", network_alias])
+            .map(str::to_string),
+    );
+
     handle_volumes(pod, POD_SECTION, &mut service, names, &mut podman_start_pre)?;
 
     podman_start_pre.add(format!("--name={podman_pod_name}"));
@@ -1317,11 +1332,11 @@ fn handle_log_driver(unit_file: &SystemdUnit, section: &str, podman: &mut Podman
 
 fn handle_log_opt(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {
     podman.extend(
-    unit_file
-        .lookup_all_strv(section, "LogOpt")
-        .iter()
-        .flat_map(|log_opt| ["--log-opt", log_opt])
-        .map(str::to_string)
+        unit_file
+            .lookup_all_strv(section, "LogOpt")
+            .iter()
+            .flat_map(|log_opt| ["--log-opt", log_opt])
+            .map(str::to_string),
     )
 }
 
