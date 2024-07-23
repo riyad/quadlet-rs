@@ -4,6 +4,8 @@ pub mod iterators;
 pub(crate) mod logger;
 pub(crate) mod podman_command;
 
+use url::Url;
+
 use self::logger::*;
 use crate::systemd_unit;
 use crate::systemd_unit::SystemdUnitFile;
@@ -234,7 +236,7 @@ fn is_unambiguous_name(image_name: &str) -> bool {
 
 fn is_url(maybe_url: &str) -> bool {
     // FIXME: in its simplest form `^((https?)|(git)://)|(github\.com/).+$` would be enough
-    unimplemented!()
+    Url::parse(maybe_url).is_ok()
 }
 
 // warns if input is an ambiguous name, i.e. a partial image id or a short
@@ -304,6 +306,50 @@ mod tests {
             for input in inputs {
                 assert!(is_unambiguous_name(input), "{input}");
             }
+        }
+    }
+
+    mod is_url {
+        use super::*;
+
+        #[test]
+        fn fails_with_empty_string() {
+            assert!(!is_url(""))
+        }
+
+        #[test]
+        fn fails_with_basic_string() {
+            assert!(!is_url("some-string"))
+        }
+
+        #[test]
+        fn fails_with_relative_path() {
+            assert!(!is_url("dir/file"))
+        }
+
+        #[test]
+        fn fails_with_absolute_path() {
+            assert!(!is_url("/dir/file"))
+        }
+
+        #[test]
+        fn succeeds_with_just_domain() {
+            assert!(is_url("http://foo.tld/"))
+        }
+
+        #[test]
+        fn succeeds_with_domain_and_path() {
+            assert!(is_url("http://foo.tld/bar/baz"))
+        }
+
+        #[test]
+        fn succeeds_with_github_url() {
+            assert!(is_url("https://github.com/riyad/quadlet-rs"))
+        }
+
+        #[test]
+        fn succeeds_with_git_schema() {
+            assert!(is_url("git://github.com/riyad/quadlet-rs"))
         }
     }
 }
