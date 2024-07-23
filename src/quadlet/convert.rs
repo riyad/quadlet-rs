@@ -489,6 +489,13 @@ pub(crate) fn from_container_unit(
         &mut podman,
     )?;
 
+    if let Some(stop_signal) = container.lookup(CONTAINER_SECTION, "StopSignal") {
+        if !stop_signal.is_empty() {
+            podman.add("--stop-signal");
+            podman.add(stop_signal);
+        }
+    }
+
     if let Some(stop_timeout) = container.lookup(CONTAINER_SECTION, "StopTimeout") {
         if !stop_timeout.is_empty() {
             podman.add("--stop-timeout");
