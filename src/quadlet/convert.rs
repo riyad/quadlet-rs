@@ -239,14 +239,14 @@ pub(crate) fn from_container_unit(
         .lookup_bool(CONTAINER_SECTION, "SecurityLabelDisable")
         .unwrap_or(false);
     if security_label_disable {
-        podman.add_slice(&["--security-opt", "label:disable"]);
+        podman.add_slice(&["--security-opt", "label=disable"]);
     }
 
     let security_label_nested = container
         .lookup_bool(CONTAINER_SECTION, "SecurityLabelNested")
         .unwrap_or(false);
     if security_label_nested {
-        podman.add_slice(&["--security-opt", "label:nested"]);
+        podman.add_slice(&["--security-opt", "label=nested"]);
     }
 
     if let Some(pids_limit) = container.lookup(CONTAINER_SECTION, "PidsLimit") {
