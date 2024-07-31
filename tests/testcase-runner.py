@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 
 def match_sublist_at(full_list, pos, sublist):
     if len(sublist) > len(full_list) - pos:
@@ -127,7 +128,7 @@ class QuadletTestCase(unittest.TestCase):
 
     def listfiles(self, outdir):
         res = list()
-        for root, subdirs, files in os.walk(outdir):
+        for root, subdirs, files in outdir.walk():
             prefix = os.path.relpath(root, outdir)
             if prefix != ".":
                 res.append(prefix + "/")
@@ -442,13 +443,24 @@ class QuadletTestCase(unittest.TestCase):
             "assert-podman-stop-post-args-key-val-regex": assert_stop_post_podman_args_key_val_regex,
         }
 
-        servicepath = os.path.join(outdir, self.servicename)
+        outdir = Path(outdir)
+        servicepath = outdir.joinpath(self.servicename)
         if self.expect_fail:
-            if os.path.isfile(servicepath):
-                raise RuntimeError(self._err_msg("Unexpected success"))
+            if servicepath.is_file():
+                raise RuntimeError(self._err_msg(f"Unexpected success, found {servicepath}"))
 
-        if not os.path.isfile(servicepath) and not self.expect_fail:
-            raise FileNotFoundError(self._err_msg(f"Unexpected failure, can't find {servicepath}\n" + self.stdout))
+        if not servicepath.is_file():
+          # maybe it has another name ...
+          try:
+              # look for any .service file
+              servicepath = next(outdir.glob("*.service"))
+              self.servicename = servicepath.name
+              # but make sure there's only one'
+              assert len(list(outdir.glob("*.service"))) == 1
+          except StopIteration:
+              # no .service files found at all
+              if not self.expect_fail:
+                  raise FileNotFoundError(self._err_msg(f"Unexpected failure, can't find {servicepath}\n" + self.stdout))
 
         if not self.expect_fail:
             self.outdata = read_file(outdir, self.servicename)

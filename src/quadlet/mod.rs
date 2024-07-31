@@ -124,7 +124,11 @@ impl PodsInfoMap {
     }
 
     fn _get_pod_service_name(pod: &SystemdUnitFile) -> PathBuf {
-        convert::quad_replace_extension(&pod.path, "", "", "-pod")
+        if let Some(service_name) = pod.lookup(POD_SECTION, "ServiceName") {
+            service_name.into()
+        } else {
+            convert::quad_replace_extension(&pod.path, "", "", "-pod")
+        }
     }
 }
 
