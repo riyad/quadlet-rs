@@ -143,7 +143,7 @@ class QuadletTestCase(unittest.TestCase):
             Outcome(self, res, outdir).check()
 
 class Outcome:
-    def __init__(self, testcase :QuadletTestCase, process: subprocess.CompletedProcess, outdir: Path):
+    def __init__(self, testcase: QuadletTestCase, process: subprocess.CompletedProcess, outdir: Path):
         self.testcase = testcase
         self.outdir = outdir
         self.checks = self.get_checks_from_data()
@@ -157,6 +157,9 @@ class Outcome:
         # The generator should never fail, just log warnings
         if process.returncode != 0 and not self.expect_fail:
             raise RuntimeError(self._err_msg(f"Unexpected generator failure\n" + self.stdout))
+
+        for dependency_file in self.testcase.get_dependency_files():
+            self.expect_file(Path(to_servicefile_name(dependency_file)))
 
     def get_checks_from_data(self):
             return list(
