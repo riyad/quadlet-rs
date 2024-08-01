@@ -103,8 +103,10 @@ impl UnitSearchDirsBuilder {
             return UnitSearchDirs(iter.collect());
         }
 
-        let mut dirs: Vec<PathBuf> = Vec::with_capacity(3);
+        let mut dirs: Vec<PathBuf> = Vec::with_capacity(4);
         if self.rootless {
+            let runtime_dir = dirs::runtime_dir().expect("could not determine runtime dir");
+            dirs.extend(self.subdirs_for_search_dir(runtime_dir.join("containers/systemd"), None));
             let config_dir = dirs::config_dir().expect("could not determine config dir");
             dirs.extend(self.subdirs_for_search_dir(config_dir.join("containers/systemd"), None));
             dirs.extend(self.subdirs_for_search_dir(
@@ -120,14 +122,17 @@ impl UnitSearchDirsBuilder {
                 ),
             );
             dirs.push(PathBuf::from(UNIT_DIR_ADMIN).join("users"));
-            return UnitSearchDirs(dirs);
+        } else {
+            dirs.extend(self.subdirs_for_search_dir(
+                PathBuf::from(UNIT_DIR_TEMP),
+                Some(Box::new(_user_level_filter)),
+            ));
+            dirs.extend(self.subdirs_for_search_dir(
+                PathBuf::from(UNIT_DIR_ADMIN),
+                Some(Box::new(_user_level_filter)),
+            ));
+            dirs.extend(self.subdirs_for_search_dir(PathBuf::from(UNIT_DIR_DISTRO), None));
         }
-
-        dirs.extend(self.subdirs_for_search_dir(
-            PathBuf::from(UNIT_DIR_ADMIN),
-            Some(Box::new(_user_level_filter)),
-        ));
-        dirs.extend(self.subdirs_for_search_dir(PathBuf::from(UNIT_DIR_DISTRO), None));
 
         UnitSearchDirs(dirs)
     }
@@ -153,8 +158,8 @@ impl UnitSearchDirsBuilder {
                 Err(e) => {
                     debug!("Error occurred resolving path {path:?}: {e}");
                     // Despite the failure add the path to the list for logging purposes
-                    return vec![path]
-                },
+                    return vec![path];
+                }
             }
         } else {
             path
@@ -252,16 +257,21 @@ mod tests {
         use super::*;
 
         #[test]
+        #[ignore = "fails when run as ordinary user, because /run/containers is only root-accessible"]
         fn rootful() {
-            let expected = ["/etc/containers/systemd", "/usr/share/containers/systemd"]
-                .iter()
-                .map(PathBuf::from)
-                .collect::<Vec<_>>();
+            let expected = [
+                "/run/containers/systemd", // might only be accessible for root :/
+                "/etc/containers/systemd",
+                "/usr/share/containers/systemd",
+            ]
+            .iter()
+            .map(PathBuf::from)
+            .collect::<Vec<_>>();
 
-            // NOTE: directories must exists
+            // NOTE: directories must exists and be reachable
             for path in &expected {
                 if !path.exists() {
-                    panic!("{path:?} must exist to run tests");
+                    panic!("{path:?} must exist and be reachable to run tests");
                 }
             }
 
@@ -280,10 +290,17 @@ mod tests {
             let expected = [
                 format!(
                     "{}/containers/systemd",
+                    dirs::runtime_dir()
+                        .expect("could not determine runtime dir")
+                        .to_str()
+                        .expect("runtime dir is not a valid UTF-8 string")
+                ),
+                format!(
+                    "{}/containers/systemd",
                     dirs::config_dir()
                         .expect("could not determine config dir")
                         .to_str()
-                        .expect("home dir is not valid UTF-8 string")
+                        .expect("config dir is not a valid UTF-8 string")
                 ),
                 format!("/etc/containers/systemd/users/{}", users::get_current_uid()),
                 format!("/etc/containers/systemd/users"),
