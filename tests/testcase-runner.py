@@ -107,6 +107,18 @@ class QuadletTestCase(unittest.TestCase):
                 dot_dir_dest = indir.joinpath(snippetdir)
                 shutil.copytree(dot_dir, dot_dir_dest)
 
+        # Also copy quadlet dependencies
+        for dependency_file_name in self.get_dependency_files():
+            dep_file_src = testcases_dir.joinpath(dependency_file_name)
+            dep_file_dst = indir.joinpath(dependency_file_name)
+            shutil.copyfile(dep_file_src, dep_file_dst)
+
+    def get_dependency_files(self):
+        return list(itertools.chain.from_iterable(
+            filter(lambda line: len(line) > 0,
+                map(lambda line: shlex.split(line.lstrip("## depends-on ")),
+                    filter(lambda line: line.startswith("## depends-on "), self.data.split("\n"))))))
+
     def runTest(self):
         res = None
         with tempfile.TemporaryDirectory(prefix="podman-e2e-") as basedir:
@@ -149,7 +161,7 @@ class Outcome:
     def get_checks_from_data(self):
             return list(
                 filter(lambda line: len(line) > 0,
-                      map(lambda line: shlex.split(line[2:]),
+                      map(lambda line: shlex.split(line.lstrip("##")),
                           filter(lambda line: line.startswith("## assert-"),
                                   self.testcase.data.split("\n")))))
 
