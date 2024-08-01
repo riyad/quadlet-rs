@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import csv
+import itertools
 import os
 import re
 import shlex
@@ -49,7 +50,7 @@ def find_sublist_regex(full_list, sublist):
             return i
     return -1
 
-def to_service(filename):
+def to_servicefile_name(filename):
     (base, ext) = os.path.splitext(filename)
     if ext == ".build":
         base = base + "-build"
@@ -74,31 +75,6 @@ def get_generic_template_file(filename):
         return f"{parts[0]}@{ext}"
     return None
 
-def write_file(indir, filename, data):
-    # Write the tested file to the quadlet dir
-    os.makedirs(os.path.dirname(os.path.join(indir, filename)), exist_ok=True)
-    with open(os.path.join(indir, filename), "w") as f:
-        f.write(data)
-
-    # Also copy any extra snippets
-    snippetdirs = [f"{filename}.d"]
-    generic_file_name = get_generic_template_file(filename)
-    if generic_file_name is not None:
-        snippetdirs.append(f"{generic_file_name}.d")
-
-    for snippetdir in snippetdirs:
-        dot_dir = os.path.join(testcases_dir, snippetdir)
-        if os.path.isdir(dot_dir):
-            dot_dir_dest = os.path.join(indir, snippetdir)
-            shutil.copytree(dot_dir, dot_dir_dest)
-
-def get_checks_from_data(data):
-    return list(
-        filter(lambda line: len(line) > 0,
-               map(lambda line: shlex.split(line[2:]),
-                   filter(lambda line: line.startswith ("##"),
-                          data.split("\n")))))
-
 def find_check(checks, checkname):
     for check in checks:
         if check[0] == checkname:
@@ -109,402 +85,40 @@ class QuadletTestCase(unittest.TestCase):
     def __init__(self, filename):
         super().__init__()
         self._testMethodDoc = filename
-        self.filename = filename
-        self.servicename = to_service(os.path.basename(filename))
+        self.filename = Path(filename)
+        self.servicename = to_servicefile_name(self.filename.name)
         self.data = read_file(testcases_dir, filename)
-        self.checks = get_checks_from_data(self.data)
-        self.expect_fail = find_check(self.checks, "assert-failed") is not None
-        self.outdata = ""
         self.unit = {}
-        self.expected_files = set()
 
-    def lookup(self, group, key):
-        return self.sections.get(group, {}).get(key, None)
-
-    def expect_file(self, path):
-        self.expected_files.add(path)
-        path = os.path.dirname(path)
-        while path:
-            self.expected_files.add(path + "/")
-            path = os.path.dirname(path)
-
-    def listfiles(self, outdir):
-        res = list()
-        for root, subdirs, files in outdir.walk():
-            prefix = os.path.relpath(root, outdir)
-            if prefix != ".":
-                res.append(prefix + "/")
-            for f in files:
-                if prefix == ".":
-                    res.append(f)
-                else:
-                    res.append(os.path.join(prefix, f))
-        return res
-
-    def check(self, outdir):
-        def assert_failed(args, testcase):
-            return True # We already handled this specially in runTest() and check()
-
-        def assert_stderr_contains(args, testcase):
-            # We've combined STDOUT and STDERR when running the test
-            return args[0] in testcase.stdout
-
-        def assert_key_is(args, testcase):
-            if len(args) < 3:
-                return False
-            group = args[0]
-            key = args[1]
-            values = args[2:]
-
-            real_values = testcase.lookup(group, key)
-            return real_values == values
-
-        def assert_key_is_regex(args, testcase):
-            if len(args) < 3:
-                return False
-            group = args[0]
-            key = args[1]
-            values = args[2:]
-
-            real_values = testcase.lookup(group, key)
-            if len(real_values) != len(values):
-                return False
-
-            for (needle, haystack) in zip(values, real_values):
-                if re.search(needle, haystack) is None:
-                    return False
-
-            return True
-
-        def assert_last_key_is_regex(args, testcase):
-            if len(args) != 3:
-                return False
-            group = args[0]
-            key = args[1]
-            value = args[2]
-
-            real_values = testcase.lookup(group, key)
-            last_value = real_values[-1]
-
-            if re.search(value, last_value) is None:
-                return False
-
-            return True
-
-        def assert_key_contains(args, testcase):
-            if len(args) != 3:
-                return False
-            group = args[0]
-            key = args[1]
-            value = args[2]
-
-            real_values = testcase.lookup(group, key)
-            last_value = real_values[-1]
-            return value in last_value
-
-        def assert_podman_args(args, testcase, key, allow_regex, global_only):
-            podman_args = getattr(testcase, key)
-            if global_only:
-                podman_cmd_location = find_sublist(podman_args, [args[0]])
-                if podman_cmd_location == 1:
-                    return False
-                podman_args = podman_args[:podman_cmd_location]
-                args = args[1:]
-
-            location = -1
-            if allow_regex:
-                location = find_sublist_regex(podman_args, args)
-            else:
-                location = find_sublist(podman_args, args)
-
-            return location != -1
-
-        def key_value_string_to_map(key_value_string, separator):
-            key_val_map = dict()
-            csv_reader = csv.reader(key_value_string, delimiter=separator)
-            key_var_list = list(csv_reader)
-            for param in key_var_list[0]:
-                val = ""
-                kv = param.split('=', maxsplit=2)
-                if len(kv) == 2:
-                    val = kv[1]
-                key_val_map[kv[0]] = val
-
-            return key_val_map
-
-        def _key_val_map_equal_regex(expected_key_val_map, actual_key_val_map):
-            if len(expected_key_val_map) != len(actual_key_val_map):
-                return False
-            for key, expected_value in expected_key_val_map.items():
-                if key not in actual_key_val_map:
-                    return False
-                actual_value = actual_key_val_map[key]
-                if re.search(expected_value, actual_value) is None:
-                    return False
-            return True
-
-        def assert_podman_args_key_val(args, testcase, key, allow_regex, global_only):
-            if len(args) != 3:
-                return False
-            opt = args[0]
-            separator = args[1]
-            values = args[2]
-            podman_args = getattr(testcase, key)
-
-            if global_only:
-                podman_cmd_location = find_sublist(podman_args, [args[0]])
-                if podman_cmd_location == -1:
-                    return False
-
-                podman_args = podman_args[:podman_cmd_location]
-                args = args[1:]
-
-            expected_key_val_map = key_value_string_to_map(values, separator)
-            arg_key_location = 0
-            while True:
-                sub_list_location = find_sublist(podman_args[arg_key_location:], [opt])
-                if sub_list_location == -1:
-                    break
-
-                arg_key_location += sub_list_location
-                actual_key_val_map = key_value_string_to_map(podman_args[arg_key_location+1], separator)
-                if allow_regex:
-                    if _key_val_map_equal_regex(expected_key_val_map, actual_key_val_map):
-                        return True
-                elif expected_key_val_map == actual_key_val_map:
-                    return True
-
-                arg_key_location += 2
-
-                if arg_key_location > len(podman_args):
-                    break
-
-            return False
-
-        def assert_podman_final_args(args, testcase, key):
-            if len(getattr(testcase, key)) < len(args):
-                return False
-            return match_sublist_at(getattr(testcase, key), len(getattr(testcase, key)) - len(args), args)
-
-        def assert_podman_final_args_regex(args, testcase, key):
-            if len(getattr(testcase, key)) < len(args):
-                return False
-            return match_sublist_regex_at(getattr(testcase, key), len(getattr(testcase, key)) - len(args), args)
-
-        def assert_start_podman_args(*args):
-            return assert_podman_args(*args, '_Service_ExecStart', False, False)
-
-        def assert_start_podman_args_regex(*args):
-            return assert_podman_args(*args, '_Service_ExecStart', True, False)
-
-        def assert_start_podman_global_args(*args):
-            return assert_podman_args(*args, '_Service_ExecStart', False, True)
-
-        def assert_start_podman_global_args_regex(*args):
-            return assert_podman_args(*args, '_Service_ExecStart', True, True)
-
-        def assert_start_podman_args_key_val(*args):
-            return assert_podman_args_key_val(*args, '_Service_ExecStart', False, False)
-
-        def assert_start_podman_args_key_val_regex(*args):
-            return assert_podman_args_key_val(*args, '_Service_ExecStart', True, False)
-
-        def assert_start_podman_global_args_key_val(*args):
-            return assert_podman_args_key_val(*args, '_Service_ExecStart', False, True)
-
-        def assert_start_podman_global_args_key_val_regex(*args):
-            return assert_podman_args_key_val(*args, '_Service_ExecStart', True, True)
-
-        def assert_start_podman_final_args(*args):
-            return assert_podman_final_args(*args, '_Service_ExecStart')
-
-        def assert_start_podman_final_args_regex(*args):
-            return assert_podman_final_args_regex(*args, '_Service_ExecStart')
-
-        def assert_start_pre_podman_args(*args):
-            return assert_podman_args(*args, '_Service_ExecStartPre', False, False)
-
-        def assert_start_pre_podman_args_regex(*args):
-            return assert_podman_args(*args, '_Service_ExecStartPre', True, False)
-
-        def assert_start_pre_podman_global_args(*args):
-            return assert_podman_args(*args, '_Service_ExecStartPre', False, True)
-
-        def assert_start_pre_podman_global_args_regex(*args):
-            return assert_podman_args(*args, '_Service_ExecStartPre', True, True)
-
-        def assert_start_pre_podman_args_key_val(*args):
-            return assert_podman_args_key_val(*args, '_Service_ExecStartPre', False, False)
-
-        def assert_start_pre_podman_args_key_val_regex(*args):
-            return assert_podman_args_key_val(*args, '_Service_ExecStartPre', True, False)
-
-        def assert_start_pre_podman_global_args_key_val(*args):
-            return assert_podman_args_key_val(*args, '_Service_ExecStartPre', False, True)
-
-        def assert_start_pre_podman_global_args_key_val_regex(*args):
-            return assert_podman_args_key_val(*args, '_Service_ExecStartPre', True, True)
-
-        def assert_start_pre_podman_final_args(*args):
-            return assert_podman_final_args(*args, '_Service_ExecStartPre')
-
-        def assert_start_pre_podman_final_args_regex(*args):
-            return assert_podman_final_args_regex(*args, '_Service_ExecStartPre')
-
-        def assert_stop_podman_args(*args):
-            return assert_podman_args(*args, '_Service_ExecStop', False, False)
-
-        def assert_stop_podman_global_args(*args):
-            return assert_podman_args(*args, '_Service_ExecStop', False, True)
-
-        def assert_stop_podman_final_args(*args):
-            return assert_podman_final_args(*args, '_Service_ExecStop')
-
-        def assert_stop_podman_final_args_regex(*args):
-            return assert_podman_final_args_regex(*args, '_Service_ExecStop')
-
-        def assert_stop_podman_args_key_val(*args):
-            return assert_podman_args_key_val(*args, '_Service_ExecStop', False, False)
-
-        def assert_stop_podman_args_key_val_regex(*args):
-            return assert_podman_args_key_val(*args, '_Service_ExecStop', True, False)
-
-        def assert_stop_post_podman_args(*args):
-            return assert_podman_args(*args, '_Service_ExecStopPost', False, False)
-
-        def assert_stop_post_podman_global_args(*args):
-            return assert_podman_args(*args, '_Service_ExecStopPost', False, True)
-
-        def assert_stop_post_podman_final_args(*args):
-            return assert_podman_final_args(*args, '_Service_ExecStopPost')
-
-        def assert_stop_post_podman_final_args_regex(*args):
-            return assert_podman_final_args_regex(*args, '_Service_ExecStopPost')
-
-        def assert_stop_post_podman_args_key_val(*args):
-            return assert_podman_args_key_val(*args, '_Service_ExecStopPost', False, False)
-
-        def assert_stop_post_podman_args_key_val_regex(*args):
-            return assert_podman_args_key_val(*args, '_Service_ExecStopPost', True, False)
-
-        def assert_symlink(args, testcase):
-            if len(args) != 2:
-                return False
-            symlink = args[0]
-            expected_target = args[1]
-
-            testcase.expect_file(symlink)
-
-            p = os.path.join (outdir, symlink)
-            if not os.path.islink(p):
-                return False
-
-            target = os.readlink(p)
-            return target == expected_target
-
-
-        ops = {
-            "assert-failed": assert_failed,
-            "assert-stderr-contains": assert_stderr_contains,
-            "assert-key-is": assert_key_is,
-            "assert-key-is-regex": assert_key_is_regex,
-            "assert-last-key-is-regex": assert_last_key_is_regex,
-            "assert-key-contains": assert_key_contains,
-            "assert-podman-args": assert_start_podman_args,
-            "assert-podman-args-regex": assert_start_podman_args_regex,
-            "assert-podman-args-key-val": assert_start_podman_args_key_val,
-            "assert-podman-args-key-val-regex": assert_start_podman_args_key_val_regex,
-            "assert-podman-global-args": assert_start_podman_global_args,
-            "assert-podman-global-args-regex": assert_start_podman_global_args_regex,
-            "assert-podman-global-args-key-val": assert_start_podman_global_args_key_val,
-            "assert-podman-global-args-key-val-regex": assert_start_podman_global_args_key_val_regex,
-            "assert-podman-final-args": assert_start_podman_final_args,
-            "assert-podman-final-args-regex": assert_start_podman_final_args_regex,
-            "assert-podman-pre-args": assert_start_pre_podman_args,
-            "assert-podman-pre-args-regex": assert_start_pre_podman_args_regex,
-            "assert-podman-pre-args-key-val": assert_start_pre_podman_args_key_val,
-            "assert-podman-pre-args-key-val-regex": assert_start_pre_podman_args_key_val_regex,
-            "assert-podman-pre-global-args": assert_start_pre_podman_global_args,
-            "assert-podman-pre-global-args-regex": assert_start_pre_podman_global_args_regex,
-            "assert-podman-pre-global-args-key-val": assert_start_pre_podman_global_args_key_val,
-            "assert-podman-pre-global-args-key-val-regex": assert_start_pre_podman_global_args_key_val_regex,
-            "assert-podman-pre-final-args": assert_start_pre_podman_final_args,
-            "assert-podman-pre-final-args-regex": assert_start_pre_podman_final_args_regex,
-            "assert-symlink": assert_symlink,
-            "assert-podman-stop-args": assert_stop_podman_args,
-            "assert-podman-stop-global-args": assert_stop_podman_global_args,
-            "assert-podman-stop-final-args": assert_stop_podman_final_args,
-            "assert-podman-stop-final-args-regex": assert_stop_podman_final_args_regex,
-            "assert-podman-stop-args-key-val": assert_stop_podman_args_key_val,
-            "assert-podman-stop-args-key-val-regex": assert_stop_podman_args_key_val_regex,
-            "assert-podman-stop-post-args": assert_stop_post_podman_args,
-            "assert-podman-stop-post-global-args": assert_stop_post_podman_global_args,
-            "assert-podman-stop-post-final-args": assert_stop_post_podman_final_args,
-            "assert-podman-stop-post-final-args-regex": assert_stop_post_podman_final_args_regex,
-            "assert-podman-stop-post-args-key-val": assert_stop_post_podman_args_key_val,
-            "assert-podman-stop-post-args-key-val-regex": assert_stop_post_podman_args_key_val_regex,
-        }
-
-        outdir = Path(outdir)
-        servicepath = outdir.joinpath(self.servicename)
-        if self.expect_fail:
-            if servicepath.is_file():
-                raise RuntimeError(self._err_msg(f"Unexpected success, found {servicepath}"))
-
-        if not servicepath.is_file():
-          # maybe it has another name ...
-          try:
-              # look for any .service file
-              servicepath = next(outdir.glob("*.service"))
-              self.servicename = servicepath.name
-              # but make sure there's only one'
-              assert len(list(outdir.glob("*.service"))) == 1
-          except StopIteration:
-              # no .service files found at all
-              if not self.expect_fail:
-                  raise FileNotFoundError(self._err_msg(f"Unexpected failure, can't find {servicepath}\n" + self.stdout))
-
-        if not self.expect_fail:
-            self.outdata = read_file(outdir, self.servicename)
-            self.sections = parse_unitfile(canonicalize_unitfile(self.outdata))
-            self._Service_ExecStart = shlex.split(self.sections.get("Service", {}).get("ExecStart", ["podman"])[0])
-            self._Service_ExecStartPre = shlex.split(self.sections.get("Service", {}).get("ExecStartPre", ["podman"])[0])
-            self._Service_ExecStop = shlex.split(self.sections.get("Service", {}).get("ExecStop", ["podman"])[0])
-            self._Service_ExecStopPost = shlex.split(self.sections.get("Service", {}).get("ExecStopPost", ["podman"])[0])
-            self.expect_file(self.servicename)
-
-        for check in self.checks:
-            op = check[0]
-            args = check[1:]
-            invert = False
-            if op[0] == '!':
-                invert = True
-                op = op[1:]
-            if not op in ops:
-                raise NameError(self._err_msg(f"unknown assertion {op}"))
-            ok = ops[op](args, self)
-            if invert:
-                ok = not ok
-            if not ok:
-                raise AssertionError(self._err_msg(shlex.join(check)))
-
-        files = self.listfiles(outdir)
-        for f in self.expected_files:
-            files.remove(f)
-        if len(files) != 0:
-            raise FileExistsError(self._err_msg(f"Unexpected files in output directory: " + str(files)))
+    def write_testfile_to(self, indir: Path):
+        # Write the tested file to the quadlet dir
+        indir.joinpath(self.filename).parent.mkdir(parents=True, exist_ok=True)
+        indir.joinpath(self.filename).write_text(self.data)
+
+        # Also copy any extra snippets
+        snippetdirs = [f"{self.filename}.d"]
+        generic_file_name = get_generic_template_file(self.filename)
+        if generic_file_name is not None:
+            snippetdirs.append(f"{generic_file_name}.d")
+
+        for snippetdir in snippetdirs:
+            dot_dir = testcases_dir.joinpath(snippetdir)
+            if dot_dir.is_dir():
+                dot_dir_dest = indir.joinpath(snippetdir)
+                shutil.copytree(dot_dir, dot_dir_dest)
 
     def runTest(self):
         res = None
         with tempfile.TemporaryDirectory(prefix="podman-e2e-") as basedir:
+            basedir = Path(basedir)
             # match directory structure from podman-quadlet
-            basedir = os.path.join(basedir, "subtest-0")
-            os.mkdir(basedir)
-            indir = os.path.join(basedir, "quadlet")
-            os.mkdir(indir)
-            outdir = os.path.join(basedir, "out")
-            os.mkdir(outdir)
-            write_file(indir, self.filename, self.data);
+            basedir = basedir.joinpath("subtest-0")
+            basedir.mkdir()
+            indir = basedir.joinpath("quadlet")
+            indir.mkdir()
+            outdir = basedir.joinpath("out")
+            outdir.mkdir()
+            self.write_testfile_to(indir);
             cmd = [generator_bin, '--user', '--no-kmsg-log', '-v', outdir]
 
             env = {
@@ -514,22 +128,411 @@ class QuadletTestCase(unittest.TestCase):
                 env['PODMAN'] = os.getenv('PODMAN')
             res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env)
 
-            # NOTE: STDOUT includes STDERR
-            self.stdout = res.stdout.decode('utf8')
+            Outcome(self, res, outdir).check()
 
-            # The generator should never fail, just log warnings
-            if res.returncode != 0 and not self.expect_fail:
-                raise RuntimeError(self._err_msg(f"Unexpected generator failure\n" + self.stdout))
+class Outcome:
+    def __init__(self, testcase :QuadletTestCase, process: subprocess.CompletedProcess, outdir: Path):
+        self.testcase = testcase
+        self.outdir = outdir
+        self.checks = self.get_checks_from_data()
+        self.expect_fail = find_check(self.checks, "assert-failed") is not None
+        self.outdata = ""
+        self.expected_files = set()
 
-            self.check(outdir)
+        # NOTE: STDOUT includes STDERR
+        self.stdout = process.stdout.decode('utf8')
 
+        # The generator should never fail, just log warnings
+        if process.returncode != 0 and not self.expect_fail:
+            raise RuntimeError(self._err_msg(f"Unexpected generator failure\n" + self.stdout))
+
+    def get_checks_from_data(self):
+            return list(
+                filter(lambda line: len(line) > 0,
+                      map(lambda line: shlex.split(line[2:]),
+                          filter(lambda line: line.startswith("## assert-"),
+                                  self.testcase.data.split("\n")))))
+
+    def listfiles(self):
+        res = list()
+        for root, subdirs, files in self.outdir.walk():
+            prefix = root.relative_to(self.outdir)
+            if prefix != Path("."):
+                res.append(f"{prefix}/")
+            for f in files:
+                if prefix == Path("."):
+                    res.append(str(f))
+                else:
+                    res.append(str(prefix.joinpath(f)))
+        return res
+
+    def lookup(self, group, key):
+        return self.sections.get(group, {}).get(key, None)
+
+    def expect_file(self, path: Path):
+        self.expected_files.add(str(path))
+        for path in path.parents:
+            if path != Path('.'):
+              self.expected_files.add(f"{path}/")
+
+    def assert_failed(self, args):
+        return True # We already handled this specially in runTest() and check()
+
+    def assert_stderr_contains(self, args):
+        # We've combined STDOUT and STDERR when running the test
+        return args[0] in self.stdout
+
+    def assert_key_is(self, args):
+        if len(args) < 3:
+            return False
+        group = args[0]
+        key = args[1]
+        values = args[2:]
+
+        real_values = self.lookup(group, key)
+        return real_values == values
+
+    def assert_key_is_regex(self, args):
+        if len(args) < 3:
+            return False
+        group = args[0]
+        key = args[1]
+        values = args[2:]
+
+        real_values = self.lookup(group, key)
+        if len(real_values) != len(values):
+            return False
+
+        for (needle, haystack) in zip(values, real_values):
+            if re.search(needle, haystack) is None:
+                return False
+
+        return True
+
+    def assert_last_key_is_regex(self, args):
+        if len(args) != 3:
+            return False
+        group = args[0]
+        key = args[1]
+        value = args[2]
+
+        real_values = self.lookup(group, key)
+        last_value = real_values[-1]
+
+        if re.search(value, last_value) is None:
+            return False
+
+        return True
+
+    def assert_key_contains(self, args):
+        if len(args) != 3:
+            return False
+        group = args[0]
+        key = args[1]
+        value = args[2]
+
+        real_values = self.lookup(group, key)
+        last_value = real_values[-1]
+        return value in last_value
+
+    def assert_podman_args(self, args, key, allow_regex, global_only):
+        podman_args = getattr(self, key)
+        if global_only:
+            podman_cmd_location = find_sublist(podman_args, [args[0]])
+            if podman_cmd_location == 1:
+                return False
+            podman_args = podman_args[:podman_cmd_location]
+            args = args[1:]
+
+        location = -1
+        if allow_regex:
+            location = find_sublist_regex(podman_args, args)
+        else:
+            location = find_sublist(podman_args, args)
+
+        return location != -1
+
+    def key_value_string_to_map(self, key_value_string, separator):
+        key_val_map = dict()
+        csv_reader = csv.reader(key_value_string, delimiter=separator)
+        key_var_list = list(csv_reader)
+        for param in key_var_list[0]:
+            val = ""
+            kv = param.split('=', maxsplit=2)
+            if len(kv) == 2:
+                val = kv[1]
+            key_val_map[kv[0]] = val
+
+        return key_val_map
+
+    def _key_val_map_equal_regex(self, expected_key_val_map, actual_key_val_map):
+        if len(expected_key_val_map) != len(actual_key_val_map):
+            return False
+        for key, expected_value in expected_key_val_map.items():
+            if key not in actual_key_val_map:
+                return False
+            actual_value = actual_key_val_map[key]
+            if re.search(expected_value, actual_value) is None:
+                return False
+        return True
+
+    def assert_podman_args_key_val(self, args, key, allow_regex, global_only):
+        if len(args) != 3:
+            return False
+        opt = args[0]
+        separator = args[1]
+        values = args[2]
+        podman_args = getattr(self, key)
+
+        if global_only:
+            podman_cmd_location = find_sublist(podman_args, [args[0]])
+            if podman_cmd_location == -1:
+                return False
+
+            podman_args = podman_args[:podman_cmd_location]
+            args = args[1:]
+
+        expected_key_val_map = self.key_value_string_to_map(values, separator)
+        arg_key_location = 0
+        while True:
+            sub_list_location = find_sublist(podman_args[arg_key_location:], [opt])
+            if sub_list_location == -1:
+                break
+
+            arg_key_location += sub_list_location
+            actual_key_val_map = self.key_value_string_to_map(podman_args[arg_key_location+1], separator)
+            if allow_regex:
+                if self._key_val_map_equal_regex(expected_key_val_map, actual_key_val_map):
+                    return True
+            elif expected_key_val_map == actual_key_val_map:
+                return True
+
+            arg_key_location += 2
+
+            if arg_key_location > len(podman_args):
+                break
+
+        return False
+
+    def assert_podman_final_args(self, args, key):
+        if len(getattr(self, key)) < len(args):
+            return False
+        return match_sublist_at(getattr(self, key), len(getattr(self, key)) - len(args), args)
+
+    def assert_podman_final_args_regex(self, args, key):
+        if len(getattr(self, key)) < len(args):
+            return False
+        return match_sublist_regex_at(getattr(self, key), len(getattr(self, key)) - len(args), args)
+
+    def assert_start_podman_args(self, *args):
+        return self.assert_podman_args(*args, '_Service_ExecStart', False, False)
+
+    def assert_start_podman_args_regex(self, *args):
+        return self.assert_podman_args(*args, '_Service_ExecStart', True, False)
+
+    def assert_start_podman_global_args(self, *args):
+        return self.assert_podman_args(*args, '_Service_ExecStart', False, True)
+
+    def assert_start_podman_global_args_regex(self, *args):
+        return self.assert_podman_args(*args, '_Service_ExecStart', True, True)
+
+    def assert_start_podman_args_key_val(self, *args):
+        return self.assert_podman_args_key_val(*args, '_Service_ExecStart', False, False)
+
+    def assert_start_podman_args_key_val_regex(self, *args):
+        return self.assert_podman_args_key_val(*args, '_Service_ExecStart', True, False)
+
+    def assert_start_podman_global_args_key_val(self, *args):
+        return self.assert_podman_args_key_val(*args, '_Service_ExecStart', False, True)
+
+    def assert_start_podman_global_args_key_val_regex(self, *args):
+        return self.assert_podman_args_key_val(*args, '_Service_ExecStart', True, True)
+
+    def assert_start_podman_final_args(self, *args):
+        return self.assert_podman_final_args(*args, '_Service_ExecStart')
+
+    def assert_start_podman_final_args_regex(self, *args):
+        return self.assert_podman_final_args_regex(*args, '_Service_ExecStart')
+
+    def assert_start_pre_podman_args(self, *args):
+        return self.assert_podman_args(*args, '_Service_ExecStartPre', False, False)
+
+    def assert_start_pre_podman_args_regex(self, *args):
+        return self.assert_podman_args(*args, '_Service_ExecStartPre', True, False)
+
+    def assert_start_pre_podman_global_args(self, *args):
+        return self.assert_podman_args(*args, '_Service_ExecStartPre', False, True)
+
+    def assert_start_pre_podman_global_args_regex(self, *args):
+        return self.assert_podman_args(*args, '_Service_ExecStartPre', True, True)
+
+    def assert_start_pre_podman_args_key_val(self, *args):
+        return self.assert_podman_args_key_val(*args, '_Service_ExecStartPre', False, False)
+
+    def assert_start_pre_podman_args_key_val_regex(self, *args):
+        return self.assert_podman_args_key_val(*args, '_Service_ExecStartPre', True, False)
+
+    def assert_start_pre_podman_global_args_key_val(self, *args):
+        return self.assert_podman_args_key_val(*args, '_Service_ExecStartPre', False, True)
+
+    def assert_start_pre_podman_global_args_key_val_regex(self, *args):
+        return self.assert_podman_args_key_val(*args, '_Service_ExecStartPre', True, True)
+
+    def assert_start_pre_podman_final_args(self, *args):
+        return self.assert_podman_final_args(*args, '_Service_ExecStartPre')
+
+    def assert_start_pre_podman_final_args_regex(self, *args):
+        return self.assert_podman_final_args_regex(*args, '_Service_ExecStartPre')
+
+    def assert_stop_podman_args(self, *args):
+        return self.assert_podman_args(*args, '_Service_ExecStop', False, False)
+
+    def assert_stop_podman_global_args(self, *args):
+        return self.assert_podman_args(*args, '_Service_ExecStop', False, True)
+
+    def assert_stop_podman_final_args(self, *args):
+        return self.assert_podman_final_args(*args, '_Service_ExecStop')
+
+    def assert_stop_podman_final_args_regex(self, *args):
+        return self.assert_podman_final_args_regex(*args, '_Service_ExecStop')
+
+    def assert_stop_podman_args_key_val(self, *args):
+        return self.assert_podman_args_key_val(*args, '_Service_ExecStop', False, False)
+
+    def assert_stop_podman_args_key_val_regex(self, *args):
+        return self.assert_podman_args_key_val(*args, '_Service_ExecStop', True, False)
+
+    def assert_stop_post_podman_args(self, *args):
+        return self.assert_podman_args(*args, '_Service_ExecStopPost', False, False)
+
+    def assert_stop_post_podman_global_args(self, *args):
+        return self.assert_podman_args(*args, '_Service_ExecStopPost', False, True)
+
+    def assert_stop_post_podman_final_args(self, *args):
+        return self.assert_podman_final_args(*args, '_Service_ExecStopPost')
+
+    def assert_stop_post_podman_final_args_regex(self, *args):
+        return self.assert_podman_final_args_regex(*args, '_Service_ExecStopPost')
+
+    def assert_stop_post_podman_args_key_val(self, *args):
+        return self.assert_podman_args_key_val(*args, '_Service_ExecStopPost', False, False)
+
+    def assert_stop_post_podman_args_key_val_regex(self, *args):
+        return self.assert_podman_args_key_val(*args, '_Service_ExecStopPost', True, False)
+
+    def assert_symlink(self, args):
+        if len(args) != 2:
+            return False
+        symlink = Path(args[0])
+        expected_target = Path(args[1])
+
+        self.expect_file(symlink)
+
+        p = self.outdir.joinpath(symlink)
+        if not p.is_symlink():
+            return False
+
+        target = p.readlink()
+        return target == expected_target
+
+    ops = {
+        "assert-failed": assert_failed,
+        "assert-stderr-contains": assert_stderr_contains,
+        "assert-key-is": assert_key_is,
+        "assert-key-is-regex": assert_key_is_regex,
+        "assert-last-key-is-regex": assert_last_key_is_regex,
+        "assert-key-contains": assert_key_contains,
+        "assert-podman-args": assert_start_podman_args,
+        "assert-podman-args-regex": assert_start_podman_args_regex,
+        "assert-podman-args-key-val": assert_start_podman_args_key_val,
+        "assert-podman-args-key-val-regex": assert_start_podman_args_key_val_regex,
+        "assert-podman-global-args": assert_start_podman_global_args,
+        "assert-podman-global-args-regex": assert_start_podman_global_args_regex,
+        "assert-podman-global-args-key-val": assert_start_podman_global_args_key_val,
+        "assert-podman-global-args-key-val-regex": assert_start_podman_global_args_key_val_regex,
+        "assert-podman-final-args": assert_start_podman_final_args,
+        "assert-podman-final-args-regex": assert_start_podman_final_args_regex,
+        "assert-podman-pre-args": assert_start_pre_podman_args,
+        "assert-podman-pre-args-regex": assert_start_pre_podman_args_regex,
+        "assert-podman-pre-args-key-val": assert_start_pre_podman_args_key_val,
+        "assert-podman-pre-args-key-val-regex": assert_start_pre_podman_args_key_val_regex,
+        "assert-podman-pre-global-args": assert_start_pre_podman_global_args,
+        "assert-podman-pre-global-args-regex": assert_start_pre_podman_global_args_regex,
+        "assert-podman-pre-global-args-key-val": assert_start_pre_podman_global_args_key_val,
+        "assert-podman-pre-global-args-key-val-regex": assert_start_pre_podman_global_args_key_val_regex,
+        "assert-podman-pre-final-args": assert_start_pre_podman_final_args,
+        "assert-podman-pre-final-args-regex": assert_start_pre_podman_final_args_regex,
+        "assert-symlink": assert_symlink,
+        "assert-podman-stop-args": assert_stop_podman_args,
+        "assert-podman-stop-global-args": assert_stop_podman_global_args,
+        "assert-podman-stop-final-args": assert_stop_podman_final_args,
+        "assert-podman-stop-final-args-regex": assert_stop_podman_final_args_regex,
+        "assert-podman-stop-args-key-val": assert_stop_podman_args_key_val,
+        "assert-podman-stop-args-key-val-regex": assert_stop_podman_args_key_val_regex,
+        "assert-podman-stop-post-args": assert_stop_post_podman_args,
+        "assert-podman-stop-post-global-args": assert_stop_post_podman_global_args,
+        "assert-podman-stop-post-final-args": assert_stop_post_podman_final_args,
+        "assert-podman-stop-post-final-args-regex": assert_stop_post_podman_final_args_regex,
+        "assert-podman-stop-post-args-key-val": assert_stop_post_podman_args_key_val,
+        "assert-podman-stop-post-args-key-val-regex": assert_stop_post_podman_args_key_val_regex,
+    }
+
+    def check(self):
+        outdir = self.outdir
+        servicepath = outdir.joinpath(self.testcase.servicename)
+        if self.expect_fail:
+            if servicepath.is_file():
+                raise RuntimeError(self._err_msg(f"Unexpected success, found {servicepath}"))
+
+        if not servicepath.is_file():
+          # maybe it has another name ...
+          try:
+              # look for any .service file
+              servicepath = next(outdir.glob("*.service"))
+              self.testcase.servicename = servicepath.name
+              # but make sure there's only one'
+              assert len(list(outdir.glob("*.service"))) == 1
+          except StopIteration:
+              # no .service files found at all
+              if not self.expect_fail:
+                  raise FileNotFoundError(self._err_msg(f"Unexpected failure, can't find {servicepath}\n" + self.stdout))
+
+        if not self.expect_fail:
+            self.outdata = read_file(outdir, self.testcase.servicename)
+            self.sections = parse_unitfile(canonicalize_unitfile(self.outdata))
+            self._Service_ExecStart = shlex.split(self.sections.get("Service", {}).get("ExecStart", ["podman"])[0])
+            self._Service_ExecStartPre = shlex.split(self.sections.get("Service", {}).get("ExecStartPre", ["podman"])[0])
+            self._Service_ExecStop = shlex.split(self.sections.get("Service", {}).get("ExecStop", ["podman"])[0])
+            self._Service_ExecStopPost = shlex.split(self.sections.get("Service", {}).get("ExecStopPost", ["podman"])[0])
+            self.expect_file(Path(self.testcase.servicename))
+
+        for check in self.checks:
+            op = check[0]
+            args = check[1:]
+            invert = False
+            if op[0] == '!':
+                invert = True
+                op = op[1:]
+            if not op in self.ops:
+                raise NameError(self._err_msg(f"unknown assertion {op}"))
+            ok = self.ops[op](self, args)
+            if invert:
+                ok = not ok
+            if not ok:
+                raise AssertionError(self._err_msg(shlex.join(check)))
+
+        files = self.listfiles()
+        for f in self.expected_files:
+            files.remove(f)
+        if len(files) != 0:
+            raise FileExistsError(self._err_msg(f"Unexpected files in output directory: " + str(files)))
 
     def _err_msg(self, msg):
         err_msg = msg
         if self.stdout:
             err_msg += f"\n--- STDOUT/ERR ---\n{self.stdout}"
         if self.outdata:
-            err_msg += f"\n---------- contents of {self.servicename} ----------\n{self.outdata}"
+            err_msg += f"\n---------- contents of {self.testcase.servicename} ----------\n{self.outdata}"
         return err_msg
 
 # Removes comments and merges lines
@@ -567,7 +570,7 @@ def load_test_suite():
         print("No dir arg given", file=sys.stderr)
         sys.exit(1)
     global testcases_dir
-    testcases_dir = sys.argv[1]
+    testcases_dir = Path(sys.argv[1])
 
     if len(sys.argv) < 3:
         print("No generator arg given", file=sys.stderr)
@@ -576,8 +579,8 @@ def load_test_suite():
     generator_bin = sys.argv[2]
 
     test_suite = unittest.TestSuite()
-    for (dirpath, _dirnames, filenames) in os.walk(testcases_dir):
-        rel_dirpath = dirpath.removeprefix(testcases_dir).removeprefix('/')
+    for (dirpath, _dirnames, filenames) in testcases_dir.walk():
+        rel_dirpath = dirpath.relative_to(testcases_dir)
         for name in filenames:
             if (name.endswith(".build") or
                 name.endswith(".container") or
