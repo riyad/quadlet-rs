@@ -177,7 +177,9 @@ pub(crate) fn prefill_built_image_names(
         }
 
         if let Some(image_name) = unit.lookup(BUILD_SECTION, "ImageTag") {
-            resource_names.insert(unit.path().as_os_str().to_os_string(), image_name.into());
+            if !image_name.is_empty() {
+                resource_names.insert(unit.path().as_os_str().to_os_string(), image_name.into());
+            }
         }
     }
 }

@@ -406,7 +406,7 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
             .get(a_ext)
             .unwrap_or(&usize::MAX)
             .partial_cmp(sorting_priority.get(b_ext).unwrap_or(&usize::MAX))
-            .unwrap_or(Ordering::Equal)
+            .unwrap_or(Ordering::Less)
     });
 
     // Generate the PodsInfoMap to allow containers to link to their pods and add themselves to the pod's containers list

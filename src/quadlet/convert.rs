@@ -194,7 +194,7 @@ pub(crate) fn from_build_unit(
     service.append_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
 
     names.insert(
-        service.path().as_os_str().to_os_string(),
+        build.path().as_os_str().to_os_string(),
         built_image_name.into(),
     );
 
@@ -803,7 +803,7 @@ pub(crate) fn from_image_unit(
     };
 
     names.insert(
-        service.path().as_os_str().to_os_string(),
+        image.path().as_os_str().to_os_string(),
         podman_image_name.into(),
     );
 
@@ -1132,7 +1132,7 @@ pub(crate) fn from_network_unit(
     service.append_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
 
     names.insert(
-        service.path().as_os_str().to_os_string(),
+        network.path().as_os_str().to_os_string(),
         podman_network_name.into(),
     );
 
@@ -1444,7 +1444,7 @@ pub(crate) fn from_volume_unit(
     service.append_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
 
     names.insert(
-        service.path().as_os_str().to_os_string(),
+        volume.path().as_os_str().to_os_string(),
         podman_volume_name.into(),
     );
 
@@ -1484,14 +1484,19 @@ fn handle_image_source<'a>(
     for extension in ["build", "image"] {
         if quadlet_image_name.ends_with(&format!(".{extension}")) {
             // since there is no default name conversion, the actual image name must exist in the names map
-            let image_name = names.get(&OsString::from(quadlet_image_name));
+            let image_name = names.get(
+                service_unit_file
+                    .path()
+                    .with_file_name(quadlet_image_name)
+                    .as_os_str(),
+            );
             if image_name.is_none() {
                 return Err(ConversionError::ImageNotFound(quadlet_image_name.into()));
             }
 
             // the systemd unit name is $name-$suffix.service
             let image_service_name = quad_replace_extension(
-                Path::new(image_name.expect("cannot be none")),
+                Path::new(quadlet_image_name),
                 ".service",
                 "",
                 &format!("-{extension}"),
