@@ -50,26 +50,24 @@ def find_sublist_regex(full_list, sublist):
             return i
     return -1
 
-def to_servicefile_name(filename):
-    (base, ext) = os.path.splitext(filename)
+def to_servicefile_name(filename: Path):
+    base = filename.stem
+    ext = filename.suffix
     if ext == ".build":
-        base = base + "-build"
+        base =  f"{base}-build"
     elif ext == ".image":
-        base = base + "-image"
+        base = f"{base}-image"
     elif ext == ".network":
-        base = base + "-network"
+        base = f"{base}-network"
     elif ext == ".pod":
-        base = base + "-pod"
+        base = f"{base}-pod"
     elif ext == ".volume":
-        base = base + "-volume"
-    return base + ".service"
+        base = f"{base}-volume"
+    return f"{base}.service"
 
-def read_file(dir, filename):
-    with open(os.path.join(dir, filename), "r") as f:
-        return f.read()
-
-def get_generic_template_file(filename):
-    (base, ext) = os.path.splitext(os.path.basename(filename))
+def get_generic_template_file(filename: Path):
+    base = filename.stem
+    ext = filename.suffix
     parts = base.split('@', 2)
     if len(parts) == 2 and len(parts[1]) > 0:
         return f"{parts[0]}@{ext}"
@@ -82,12 +80,12 @@ def find_check(checks, checkname):
     return None
 
 class QuadletTestCase(unittest.TestCase):
-    def __init__(self, filename):
+    def __init__(self, filename: Path):
         super().__init__()
-        self._testMethodDoc = filename
+        self._testMethodDoc = str(filename)
         self.filename = Path(filename)
-        self.servicename = to_servicefile_name(self.filename.name)
-        self.data = read_file(testcases_dir, filename)
+        self.servicename = to_servicefile_name(Path(self.filename.name))
+        self.data = testcases_dir.joinpath(filename).read_text()
         self.unit = {}
 
     def write_testfile_to(self, indir: Path):
@@ -108,12 +106,12 @@ class QuadletTestCase(unittest.TestCase):
                 shutil.copytree(dot_dir, dot_dir_dest)
 
         # Also copy quadlet dependencies
-        for dependency_file_name in self.get_dependency_files():
+        for dependency_file_name in self.get_dependency_data():
             dep_file_src = testcases_dir.joinpath(dependency_file_name)
             dep_file_dst = indir.joinpath(dependency_file_name)
             shutil.copyfile(dep_file_src, dep_file_dst)
 
-    def get_dependency_files(self):
+    def get_dependency_data(self):
         return list(itertools.chain.from_iterable(
             filter(lambda line: len(line) > 0,
                 map(lambda line: shlex.split(line.lstrip("## depends-on ")),
@@ -158,8 +156,8 @@ class Outcome:
         if process.returncode != 0 and not self.expect_fail:
             raise RuntimeError(self._err_msg(f"Unexpected generator failure\n" + self.stdout))
 
-        for dependency_file in self.testcase.get_dependency_files():
-            self.expect_file(Path(to_servicefile_name(dependency_file)))
+        for dependency_file in self.testcase.get_dependency_data():
+            self.add_expected_file(Path(to_servicefile_name(Path(dependency_file))))
 
     def get_checks_from_data(self):
             return list(
@@ -168,7 +166,7 @@ class Outcome:
                           filter(lambda line: line.startswith("## assert-"),
                                   self.testcase.data.split("\n")))))
 
-    def listfiles(self):
+    def list_outdir_files(self):
         res = list()
         for root, subdirs, files in self.outdir.walk():
             prefix = root.relative_to(self.outdir)
@@ -184,7 +182,7 @@ class Outcome:
     def lookup(self, group, key):
         return self.sections.get(group, {}).get(key, None)
 
-    def expect_file(self, path: Path):
+    def add_expected_file(self, path: Path):
         self.expected_files.add(str(path))
         for path in path.parents:
             if path != Path('.'):
@@ -441,7 +439,7 @@ class Outcome:
         symlink = Path(args[0])
         expected_target = Path(args[1])
 
-        self.expect_file(symlink)
+        self.add_expected_file(symlink)
 
         p = self.outdir.joinpath(symlink)
         if not p.is_symlink():
@@ -513,13 +511,13 @@ class Outcome:
                   raise FileNotFoundError(self._err_msg(f"Unexpected failure, can't find {servicepath}\n" + self.stdout))
 
         if not self.expect_fail:
-            self.outdata = read_file(outdir, self.testcase.servicename)
+            self.outdata = outdir.joinpath(self.testcase.servicename).read_text()
             self.sections = parse_unitfile(canonicalize_unitfile(self.outdata))
             self._Service_ExecStart = shlex.split(self.sections.get("Service", {}).get("ExecStart", ["podman"])[0])
             self._Service_ExecStartPre = shlex.split(self.sections.get("Service", {}).get("ExecStartPre", ["podman"])[0])
             self._Service_ExecStop = shlex.split(self.sections.get("Service", {}).get("ExecStop", ["podman"])[0])
             self._Service_ExecStopPost = shlex.split(self.sections.get("Service", {}).get("ExecStopPost", ["podman"])[0])
-            self.expect_file(Path(self.testcase.servicename))
+            self.add_expected_file(Path(self.testcase.servicename))
 
         for check in self.checks:
             op = check[0]
@@ -536,7 +534,7 @@ class Outcome:
             if not ok:
                 raise AssertionError(self._err_msg(shlex.join(check)))
 
-        files = self.listfiles()
+        files = self.list_outdir_files()
         for f in self.expected_files:
             files.remove(f)
         if len(files) != 0:
@@ -591,7 +589,7 @@ def load_test_suite():
         print("No generator arg given", file=sys.stderr)
         sys.exit(1)
     global generator_bin
-    generator_bin = sys.argv[2]
+    generator_bin = Path(sys.argv[2])
 
     test_suite = unittest.TestSuite()
     for (dirpath, _dirnames, filenames) in testcases_dir.walk():
@@ -604,7 +602,7 @@ def load_test_suite():
                 name.endswith(".network") or
                 name.endswith(".pod") or
                 name.endswith(".volume")) and not name.startswith("."):
-                test_suite.addTest(QuadletTestCase(os.path.join(rel_dirpath, name)))
+                test_suite.addTest(QuadletTestCase(rel_dirpath.joinpath(name)))
 
     return test_suite
 
