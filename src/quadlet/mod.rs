@@ -4,7 +4,7 @@ pub mod iterators;
 pub(crate) mod logger;
 pub(crate) mod podman_command;
 
-use url::Url;
+use regex_lite::Regex;
 
 use self::logger::*;
 use crate::systemd_unit;
@@ -225,8 +225,9 @@ fn is_unambiguous_name(image_name: &str) -> bool {
 }
 
 fn is_url(maybe_url: &str) -> bool {
-    // FIXME: in its simplest form `^((https?)|(git)://)|(github\.com/).+$` would be enough
-    Url::parse(maybe_url).is_ok()
+    // this is a shortcut to keep binary size small, we don't need a full URL parser here
+    let re = Regex::new("^((https?)|(git)://)|(github\\.com/).+$").unwrap();
+    re.is_match(maybe_url)
 }
 
 // warns if input is an ambiguous name, i.e. a partial image id or a short
