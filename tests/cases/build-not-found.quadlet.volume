@@ -1,5 +1,5 @@
 ## assert-failed
-## assert-stderr-contains "requested Quadlet image not-found.build was not found"
+## assert-stderr-contains "requested Quadlet image \"not-found.build\" was not found"
 
 [Volume]
 Driver=image

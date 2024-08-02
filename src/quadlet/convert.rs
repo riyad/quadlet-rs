@@ -120,14 +120,15 @@ pub(crate) fn from_build_unit(
     let labels = build.lookup_all_key_val(BUILD_SECTION, "Label");
     podman.add_labels(&labels);
 
-    if let Some(built_image_name) = names.get(build.file_name()) {
+    let built_image_name = if let Some(built_image_name) = names.get(build.path().as_os_str()) {
         let built_image_name = built_image_name
             .to_str()
             .expect("ImageTag is not a valid UTF-8 string");
         podman.add(format!("--tag={built_image_name}"));
+        built_image_name
     } else {
         return Err(ConversionError::NoImageTagKeySpecified);
-    }
+    };
 
     handle_networks(build, BUILD_SECTION, &mut service, names, &mut podman)?;
 
@@ -148,7 +149,7 @@ pub(crate) fn from_build_unit(
     let context = handle_set_working_directory(build, &mut service, BUILD_SECTION)?;
 
     let working_directory = service.lookup(SERVICE_SECTION, "WorkingDirectory");
-    let file_path = service.lookup(BUILD_SECTION, "File");
+    let file_path = build.lookup(BUILD_SECTION, "File");
     let (working_directory, file_path) = match (working_directory, file_path, context.as_str()) {
         (None, None, "") => return Err(ConversionError::NoSetWorkingDirectoryNorFileKeySpecified),
         (None, None, _) => ("", ""),
@@ -191,6 +192,12 @@ pub(crate) fn from_build_unit(
     // The default syslog identifier is the exec basename (podman)
     // which isn't very useful here
     service.append_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
+
+    names.insert(
+        service.path().as_os_str().to_os_string(),
+        built_image_name.into(),
+    );
+
     return Ok(service);
 }
 
@@ -1692,16 +1699,16 @@ fn handle_set_working_directory(
     service_unit_file: &mut SystemdUnitFile,
     quadlet_section: &str,
 ) -> Result<String, ConversionError> {
-    let set_working_directory;
-    if let Some(set_working_dir) = quadlet_unit_file.lookup(quadlet_section, "SetWorkingDirectory")
+    let set_working_directory = if let Some(set_working_dir) =
+        quadlet_unit_file.lookup(quadlet_section, "SetWorkingDirectory")
     {
         if set_working_dir.is_empty() {
             return Ok(String::default());
         }
-        set_working_directory = set_working_dir;
+        set_working_dir
     } else {
         return Ok(String::default());
-    }
+    };
 
     let mut context = "";
     let relative_to_file;
@@ -1758,7 +1765,7 @@ fn handle_set_working_directory(
 
     if !relative_to_file.as_os_str().is_empty() && !is_url(context) {
         // If WorkingDirectory is already set in the Service section do not change it
-        if let Some(working_dir) = quadlet_unit_file.lookup(quadlet_section, "WorkingDirectory") {
+        if let Some(working_dir) = quadlet_unit_file.lookup(SERVICE_SECTION, "WorkingDirectory") {
             if !working_dir.is_empty() {
                 return Ok(String::default());
             }

@@ -383,14 +383,30 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
         }
     }
 
+    // Key: Extension
+    // Value: Processing order for resource naming dependencies
+    let sorting_priority: HashMap<OsString, usize> = HashMap::from([
+        ("container".into(), 4),
+        ("volume".into(), 2),
+        ("kube".into(), 4),
+        ("network".into(), 2),
+        ("image".into(), 1),
+        ("build".into(), 3),
+        ("pod".into(), 5),
+    ]);
+
     // Sort unit files according to potential inter-dependencies, with Image, Volume and Network
     // units taking precedence over all others.
-    // resulting order: .image < (.network | .volume) < (.container | .kube)
-    units.sort_unstable_by(|a, _| match a.path().extension() {
-        // this works as long as we have only 3 tiers
-        Some(ext) if ext == "image" => Ordering::Less,
-        Some(ext) if ext == "network" || ext == "volume" => Ordering::Equal,
-        _ => Ordering::Greater,
+    // resulting order: .image < (.network | .volume) < .build < (.container | .kube) < .pod
+    units.sort_unstable_by(|a, b| {
+        let a_ext = a.path().extension().unwrap_or_default();
+        let b_ext = b.path().extension().unwrap_or_default();
+
+        sorting_priority
+            .get(a_ext)
+            .unwrap_or(&usize::MAX)
+            .partial_cmp(sorting_priority.get(b_ext).unwrap_or(&usize::MAX))
+            .unwrap_or(Ordering::Equal)
     });
 
     // Generate the PodsInfoMap to allow containers to link to their pods and add themselves to the pod's containers list
@@ -398,6 +414,12 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
 
     // A map of network/volume unit file-names, against their calculated names, as needed by Podman.
     let mut resource_names = HashMap::with_capacity(units.len());
+
+    // Prefill resouceNames for .build files. This is significantly less complex than
+    // pre-computing all resourceNames for all Quadlet types (which is rather complex for a few
+    // types), but still breaks the dependency cycle between .volume and .build ([Volume] can
+    // have Image=some.build, and [Build] can have Volume=some.volume:/some-volume)
+    prefill_built_image_names(&units, &mut resource_names);
 
     for unit in units {
         let ext = unit.path().extension();

@@ -163,34 +163,22 @@ pub(crate) fn check_for_unknown_keys(
     Ok(())
 }
 
-fn get_built_image_name(built_unit: &SystemdUnitFile) -> Option<&str> {
-    if let Some(built_image_name) = built_unit.lookup(BUILD_SECTION, "Image") {
-        return Some(built_image_name);
-    }
-
-    None
-}
-
 pub fn get_podman_binary() -> String {
     env::var("PODMAN").unwrap_or(DEFAULT_PODMAN_BINARY.to_owned())
 }
 
-fn prefill_built_image_names(units: &Vec<SystemdUnitFile>, resource_names: &mut ResourceNameMap) {
+pub(crate) fn prefill_built_image_names(
+    units: &Vec<SystemdUnitFile>,
+    resource_names: &mut ResourceNameMap,
+) {
     for unit in units {
-        if !unit
-            .file_name()
-            .to_str()
-            .unwrap_or_default()
-            .ends_with(".build")
-        {
+        if !unit.path().extension().unwrap_or_default().eq("build") {
             continue;
         }
 
-        let image_name = get_built_image_name(unit);
-        // imageName := quadlet.GetBuiltImageName(unit)
-        // if len(imageName) > 0 {
-        // 	resourceNames[unit.Filename] = imageName
-        // }
+        if let Some(image_name) = unit.lookup(BUILD_SECTION, "ImageTag") {
+            resource_names.insert(unit.path().as_os_str().to_os_string(), image_name.into());
+        }
     }
 }
 
