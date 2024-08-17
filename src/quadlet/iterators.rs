@@ -65,7 +65,7 @@ impl UnitSearchDirs {
         &self.0
     }
 
-    pub(crate) fn new() -> UnitSearchDirsBuilder {
+    pub(crate) fn from_env() -> UnitSearchDirsBuilder {
         UnitSearchDirsBuilder {
             recursive: false,
             rootless: false,
@@ -276,7 +276,7 @@ mod tests {
             }
 
             assert_eq!(
-                UnitSearchDirs::new()
+                UnitSearchDirs::from_env()
                     .rootless(false)
                     .recursive(false)
                     .build()
@@ -317,7 +317,7 @@ mod tests {
             }
 
             assert_eq!(
-                UnitSearchDirs::new()
+                UnitSearchDirs::from_env()
                     .rootless(true)
                     .recursive(false)
                     .build()
