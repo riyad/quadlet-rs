@@ -67,6 +67,20 @@ impl UnitSearchDirs {
 
     pub(crate) fn from_env() -> UnitSearchDirsBuilder {
         UnitSearchDirsBuilder {
+            // Allow overdiding source dir, this is mainly for the CI tests
+            dirs: env::var("QUADLET_UNIT_DIRS").ok().map(|unit_dirs_env| {
+                env::split_paths(&unit_dirs_env)
+                    .map(PathBuf::from)
+                    .collect()
+            }),
+            recursive: false,
+            rootless: false,
+        }
+    }
+
+    pub(crate) fn new(dirs: Vec<PathBuf>) -> UnitSearchDirsBuilder {
+        UnitSearchDirsBuilder {
+            dirs: Some(dirs),
             recursive: false,
             rootless: false,
         }
@@ -80,16 +94,23 @@ impl UnitSearchDirs {
 }
 
 pub(crate) struct UnitSearchDirsBuilder {
+    dirs: Option<Vec<PathBuf>>,
     recursive: bool,
     rootless: bool,
 }
 
 impl UnitSearchDirsBuilder {
-    pub(crate) fn build(&self) -> UnitSearchDirs {
-        // Allow overdiding source dir, this is mainly for the CI tests
-        if let Ok(unit_dirs_env) = std::env::var("QUADLET_UNIT_DIRS") {
-            let iter = env::split_paths(&unit_dirs_env)
-                .map(PathBuf::from)
+    pub(crate) fn build(mut self) -> UnitSearchDirs {
+        if let Some(dirs) = self.dirs.take() {
+            self.build_from_dirs(dirs)
+        } else {
+            self.build_from_env()
+        }
+    }
+
+    pub(crate) fn build_from_dirs(self, dirs: Vec<PathBuf>) -> UnitSearchDirs {
+        UnitSearchDirs(
+            dirs.into_iter()
                 .filter(|p| {
                     if p.is_absolute() {
                         return true;
@@ -98,11 +119,12 @@ impl UnitSearchDirsBuilder {
                     log!("{p:?} is not a valid file path");
                     false
                 })
-                .flat_map(|p| self.subdirs_for_search_dir(p, None));
+                .flat_map(|p| self.subdirs_for_search_dir(p, None))
+                .collect(),
+        )
+    }
 
-            return UnitSearchDirs(iter.collect());
-        }
-
+    pub(crate) fn build_from_env(self) -> UnitSearchDirs {
         let mut dirs: Vec<PathBuf> = Vec::with_capacity(4);
         if self.rootless {
             let runtime_dir = dirs::runtime_dir().expect("could not determine runtime dir");
