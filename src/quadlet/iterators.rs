@@ -278,74 +278,117 @@ mod tests {
     mod unit_search_dirs {
         use super::*;
 
-        #[test]
-        #[ignore = "fails when run as ordinary user, because /run/containers is only root-accessible"]
-        fn rootful() {
-            let expected = [
-                "/run/containers/systemd", // might only be accessible for root :/
-                "/etc/containers/systemd",
-                "/usr/share/containers/systemd",
-            ]
-            .iter()
-            .map(PathBuf::from)
-            .collect::<Vec<_>>();
+        mod from_env {
+            use super::*;
+            use tempfile;
 
-            // NOTE: directories must exists and be reachable
-            for path in &expected {
-                if !path.exists() {
-                    panic!("{path:?} must exist and be reachable to run tests");
+            #[test]
+            #[serial_test::parallel]
+            #[ignore = "fails when run as ordinary user, because /run/containers is only root-accessible"]
+            fn rootful() {
+                let expected = [
+                    "/run/containers/systemd", // might only be accessible for root :/
+                    "/etc/containers/systemd",
+                    "/usr/share/containers/systemd",
+                ]
+                .iter()
+                .map(PathBuf::from)
+                .collect::<Vec<_>>();
+
+                // NOTE: directories must exists and be reachable
+                for path in &expected {
+                    if !path.exists() {
+                        panic!("{path:?} must exist and be reachable to run tests");
+                    }
                 }
+
+                assert_eq!(
+                    UnitSearchDirs::from_env()
+                        .rootless(false)
+                        .recursive(false)
+                        .build()
+                        .0,
+                    expected,
+                )
             }
 
-            assert_eq!(
-                UnitSearchDirs::from_env()
-                    .rootless(false)
-                    .recursive(false)
-                    .build()
-                    .0,
-                expected,
-            )
+            #[test]
+            #[serial_test::parallel]
+            fn rootless() {
+                let expected = [
+                    format!(
+                        "{}/containers/systemd",
+                        dirs::runtime_dir()
+                            .expect("could not determine runtime dir")
+                            .to_str()
+                            .expect("runtime dir is not a valid UTF-8 string")
+                    ),
+                    format!(
+                        "{}/containers/systemd",
+                        dirs::config_dir()
+                            .expect("could not determine config dir")
+                            .to_str()
+                            .expect("config dir is not a valid UTF-8 string")
+                    ),
+                    format!("/etc/containers/systemd/users"),
+                    format!("/etc/containers/systemd/users/{}", users::get_current_uid()),
+                ]
+                .iter()
+                .map(PathBuf::from)
+                .collect::<Vec<_>>();
+
+                // NOTE: directories must exists
+                for path in &expected {
+                    if !path.exists() {
+                        panic!("{path:?} must exist to run tests");
+                    }
+                }
+
+                assert_eq!(
+                    UnitSearchDirs::from_env()
+                        .rootless(true)
+                        .recursive(false)
+                        .build()
+                        .0,
+                    expected
+                )
+            }
+
+            #[test]
+            #[serial_test::serial]
+            fn use_dirs_from_env_var() {
+                // remember global state
+                let _quadlet_unit_dirs = env::var("QUADLET_UNIT_DIRS");
+
+                let temp_dir = tempfile::tempdir().expect("cannot create temp dir");
+                env::set_var("QUADLET_UNIT_DIRS", temp_dir.path());
+
+                let expected = [temp_dir.path()];
+
+                assert_eq!(UnitSearchDirs::from_env().build().0, expected);
+
+                // restore global setate
+                match _quadlet_unit_dirs {
+                    Ok(val) => env::set_var("QUADLET_UNIT_DIRS", val),
+                    Err(_) => env::remove_var("QUADLET_UNIT_DIRS"),
+                }
+            }
         }
 
-        #[test]
-        fn rootless() {
-            let expected = [
-                format!(
-                    "{}/containers/systemd",
-                    dirs::runtime_dir()
-                        .expect("could not determine runtime dir")
-                        .to_str()
-                        .expect("runtime dir is not a valid UTF-8 string")
-                ),
-                format!(
-                    "{}/containers/systemd",
-                    dirs::config_dir()
-                        .expect("could not determine config dir")
-                        .to_str()
-                        .expect("config dir is not a valid UTF-8 string")
-                ),
-                format!("/etc/containers/systemd/users"),
-                format!("/etc/containers/systemd/users/{}", users::get_current_uid()),
-            ]
-            .iter()
-            .map(PathBuf::from)
-            .collect::<Vec<_>>();
+        mod new {
+            use super::*;
 
-            // NOTE: directories must exists
-            for path in &expected {
-                if !path.exists() {
-                    panic!("{path:?} must exist to run tests");
-                }
+            #[test]
+            fn specify_dirs() {
+                let temp_dir = tempfile::tempdir().expect("cannot create temp dir");
+
+                let dirs = vec![temp_dir.path().into()];
+
+                let expected = [temp_dir.path()];
+
+                assert_eq!(UnitSearchDirs::new(dirs).build().0, expected);
             }
 
-            assert_eq!(
-                UnitSearchDirs::from_env()
-                    .rootless(true)
-                    .recursive(false)
-                    .build()
-                    .0,
-                expected
-            )
         }
     }
 }
