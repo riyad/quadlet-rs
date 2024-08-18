@@ -109,6 +109,7 @@ impl UnitSearchDirsBuilder {
             dirs.extend(self.subdirs_for_search_dir(runtime_dir.join("containers/systemd"), None));
             let config_dir = dirs::config_dir().expect("could not determine config dir");
             dirs.extend(self.subdirs_for_search_dir(config_dir.join("containers/systemd"), None));
+            dirs.push(PathBuf::from(UNIT_DIR_ADMIN).join("users"));
             dirs.extend(self.subdirs_for_search_dir(
                 PathBuf::from(UNIT_DIR_ADMIN).join("users"),
                 Some(Box::new(_non_numeric_filter)),
@@ -121,7 +122,6 @@ impl UnitSearchDirsBuilder {
                     Some(Box::new(_user_level_filter)),
                 ),
             );
-            dirs.push(PathBuf::from(UNIT_DIR_ADMIN).join("users"));
         } else {
             dirs.extend(self.subdirs_for_search_dir(
                 PathBuf::from(UNIT_DIR_TEMP),
@@ -302,8 +302,8 @@ mod tests {
                         .to_str()
                         .expect("config dir is not a valid UTF-8 string")
                 ),
-                format!("/etc/containers/systemd/users/{}", users::get_current_uid()),
                 format!("/etc/containers/systemd/users"),
+                format!("/etc/containers/systemd/users/{}", users::get_current_uid()),
             ]
             .iter()
             .map(PathBuf::from)
