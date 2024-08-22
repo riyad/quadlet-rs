@@ -6,7 +6,6 @@ pub const UNIT_DIR_ADMIN: &str = "/etc/containers/systemd";
 pub const UNIT_DIR_DISTRO: &str = "/usr/share/containers/systemd";
 /// Directory for temporary Quadlet files (sysadmin owned)
 pub const UNIT_DIR_TEMP: &str = "/run/containers/systemd";
-pub const SYSTEM_USER_DIR_LEVEL: usize = 5;
 
 pub const BUILD_SECTION: &str       = "Build";
 pub const CONTAINER_SECTION: &str   = "Container";

@@ -1,3 +1,4 @@
+use std::cell::LazyCell;
 use std::ffi::OsStr;
 use std::os::unix::prelude::OsStrExt;
 use std::path::{Path, PathBuf};
@@ -9,6 +10,22 @@ use super::constants::*;
 use super::logger::*;
 
 use super::RuntimeError;
+
+const UNIT_DIR_ADMIN_USER: LazyCell<PathBuf> =
+    LazyCell::new(|| PathBuf::from(UNIT_DIR_ADMIN).join("users"));
+const RESOLVED_UNIT_DIR_ADMIN_USER: LazyCell<PathBuf> =
+    LazyCell::new(|| match UNIT_DIR_ADMIN_USER.read_link() {
+        Ok(resolved_path) => resolved_path,
+        Err(err) => {
+            debug!(
+                "Error occurred resolving path {:?}: {err}",
+                &UNIT_DIR_ADMIN_USER
+            );
+            UNIT_DIR_ADMIN_USER.clone()
+        }
+    });
+const SYSTEM_USER_DIR_LEVEL: LazyCell<usize> =
+    LazyCell::new(|| RESOLVED_UNIT_DIR_ADMIN_USER.components().count());
 
 pub(crate) struct UnitFiles {
     inner: Box<dyn Iterator<Item = Result<fs::DirEntry, RuntimeError>>>,
@@ -217,11 +234,8 @@ fn _non_numeric_filter(
 ) -> bool {
     // when running in rootless, only recrusive walk directories that are non numeric
     // ignore sub dirs under the user directory that may correspond to a user id
-    if entry
-        .path()
-        .starts_with(PathBuf::from(UNIT_DIR_ADMIN).join("users"))
-    {
-        if entry.path().components().count() > SYSTEM_USER_DIR_LEVEL {
+    if entry.path().starts_with(&*RESOLVED_UNIT_DIR_ADMIN_USER) {
+        if entry.path().components().count() > *SYSTEM_USER_DIR_LEVEL {
             if !entry
                 .path()
                 .components()
@@ -245,10 +259,7 @@ fn _non_numeric_filter(
 fn _user_level_filter(unit_search_dirs: &UnitSearchDirsBuilder, entry: &walkdir::DirEntry) -> bool {
     // if quadlet generator is run rootless, do not recurse other user sub dirs
     // if quadlet generator is run as root, ignore users sub dirs
-    if entry
-        .path()
-        .starts_with(PathBuf::from(UNIT_DIR_ADMIN).join("users"))
-    {
+    if entry.path().starts_with(&*RESOLVED_UNIT_DIR_ADMIN_USER) {
         if unit_search_dirs.rootless {
             return true;
         }
@@ -280,6 +291,7 @@ mod tests {
 
         mod from_env {
             use super::*;
+            use std::os;
             use tempfile;
 
             #[test]
@@ -373,10 +385,42 @@ mod tests {
                     Err(_) => env::remove_var("QUADLET_UNIT_DIRS"),
                 }
             }
+
+            #[test]
+            #[serial_test::parallel]
+            fn should_follow_symlinks() {
+                // remember global state
+                let _quadlet_unit_dirs = env::var("QUADLET_UNIT_DIRS");
+
+                // setup
+                let temp_dir = tempfile::tempdir().expect("cannot create temp dir");
+                let actual_dir = &temp_dir.path().join("actual");
+                let inner_dir = &actual_dir.as_path().join("inner");
+                let symlink = &temp_dir.path().join("symlink");
+                fs::create_dir(actual_dir).expect("cannot create actual dir");
+                fs::create_dir(inner_dir).expect("cannot create inner dir");
+                os::unix::fs::symlink(actual_dir, symlink).expect("cannot create symlink");
+
+                env::set_var("QUADLET_UNIT_DIRS", symlink);
+
+                let expected = [actual_dir.as_path(), inner_dir.as_path()];
+
+                assert_eq!(UnitSearchDirs::from_env().build().0, expected);
+
+                // cleanup
+                fs::remove_dir_all(temp_dir.path()).expect("cannot remove temp dir");
+
+                // restore global setate
+                match _quadlet_unit_dirs {
+                    Ok(val) => env::set_var("QUADLET_UNIT_DIRS", val),
+                    Err(_) => env::remove_var("QUADLET_UNIT_DIRS"),
+                }
+            }
         }
 
         mod new {
             use super::*;
+            use std::os;
 
             #[test]
             fn specify_dirs() {
@@ -389,6 +433,26 @@ mod tests {
                 assert_eq!(UnitSearchDirs::new(dirs).build().0, expected);
             }
 
+            #[test]
+            fn should_follow_symlinks() {
+                // setup
+                let temp_dir = tempfile::tempdir().expect("cannot create temp dir");
+                let actual_dir = &temp_dir.path().join("actual");
+                let inner_dir = &actual_dir.as_path().join("inner");
+                let symlink = &temp_dir.path().join("symlink");
+                fs::create_dir(actual_dir).expect("cannot create actual dir");
+                fs::create_dir(inner_dir).expect("cannot create inner dir");
+                os::unix::fs::symlink(actual_dir, symlink).expect("cannot create symlink");
+
+                let dirs = vec![symlink.into()];
+
+                let expected = [actual_dir.as_path(), inner_dir.as_path()];
+
+                assert_eq!(UnitSearchDirs::new(dirs).build().0, expected);
+
+                // cleanup
+                fs::remove_dir_all(temp_dir.path()).expect("cannot remove temp dir");
+            }
         }
     }
 }
