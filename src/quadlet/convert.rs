@@ -1260,6 +1260,7 @@ pub(crate) fn from_pod_unit(
 
     handle_volumes(pod, POD_SECTION, &mut service, names, &mut podman_start_pre)?;
 
+    podman_start_pre.add(format!("--infra-name={podman_pod_name}-infra"));
     podman_start_pre.add(format!("--name={podman_pod_name}"));
 
     handle_podman_args(pod, POD_SECTION, &mut podman_start_pre);
