@@ -1154,6 +1154,7 @@ pub(crate) fn from_pod_unit(
     pod: &SystemdUnitFile,
     names: &mut ResourceNameMap,
     pods_info_map: &PodsInfoMap,
+    is_user: bool,
 ) -> Result<SystemdUnitFile, ConversionError> {
     let pod_info = pods_info_map.0.get(&pod.path);
     if pod_info.is_none() {
@@ -1257,6 +1258,8 @@ pub(crate) fn from_pod_unit(
     podman_start_pre.add("--pod-id-file=%t/%N.pod-id");
     podman_start_pre.add("--exit-policy=stop");
     podman_start_pre.add("--replace");
+
+    handle_user_mappings(pod, POD_SECTION, &mut podman_start_pre, is_user, true)?;
 
     handle_publish_ports(pod, POD_SECTION, &mut podman_start_pre)?;
 

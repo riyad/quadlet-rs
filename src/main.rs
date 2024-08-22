@@ -444,7 +444,9 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
             }
             "kube" => convert::from_kube_unit(&unit, &resource_names, cfg.is_user),
             "network" => convert::from_network_unit(&unit, &mut resource_names),
-            "pod" => convert::from_pod_unit(&unit, &mut resource_names, &pods_info_map),
+            "pod" => {
+                convert::from_pod_unit(&unit, &mut resource_names, &pods_info_map, cfg.is_user)
+            }
             "volume" => {
                 warn_if_ambiguous_image_name(&unit, VOLUME_SECTION);
                 convert::from_volume_unit(&unit, &mut resource_names)

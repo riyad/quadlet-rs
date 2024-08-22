@@ -1,0 +1,6 @@
+## assert-podman-pre-args "--subuidname" "utest"
+## assert-podman-pre-args "--subgidname" "gtest"
+
+[Pod]
+SubUIDMap=utest
+SubGIDMap=gtest

@@ -192,15 +192,24 @@ pub static SUPPORTED_NETWORK_KEYS: [&str; 15] = [
     "PodmanArgs",
     "Subnet",
 ];
-pub static SUPPORTED_POD_KEYS: [&str; 9] = [
+pub static SUPPORTED_POD_KEYS: [&str; 18] = [
     "ContainersConfModule",
+    "GIDMap",
     "GlobalArgs",
     "Network",
     "NetworkAlias",
     "PodmanArgs",
     "PodName",
     "PublishPort",
+    "RemapGid",     // deprecated, use UserNS instead
+    "RemapUid",     // deprecated, use UserNS instead
+    "RemapUidSize", // deprecated, use UserNS instead
+    "RemapUsers",   // deprecated, use UserNS instead
     "ServiceName",
+    "SubGIDMap",
+    "SubUIDMap",
+    "UIDMap",
+    "UserNS",
     "Volume",
 ];
 
