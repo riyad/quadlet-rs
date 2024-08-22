@@ -208,7 +208,7 @@ pub(crate) fn from_container_unit(
     container: &SystemdUnitFile,
     names: &ResourceNameMap,
     is_user: bool,
-    pods_info_map: &mut PodsInfoMap,
+    pods_info_map: &mut UnitsInfoMap,
 ) -> Result<SystemdUnitFile, ConversionError> {
     let mut service = SystemdUnitFile::new();
 
@@ -1153,7 +1153,7 @@ pub(crate) fn from_network_unit(
 pub(crate) fn from_pod_unit(
     pod: &SystemdUnitFile,
     names: &mut ResourceNameMap,
-    pods_info_map: &PodsInfoMap,
+    pods_info_map: &UnitsInfoMap,
     is_user: bool,
 ) -> Result<SystemdUnitFile, ConversionError> {
     let pod_info = pods_info_map.0.get(&pod.path);
@@ -1621,7 +1621,7 @@ fn handle_pod(
     quadlet_unit: &SystemdUnit,
     service_unit_file: &mut SystemdUnitFile,
     section: &str,
-    pods_info_map: &mut PodsInfoMap,
+    pods_info_map: &mut UnitsInfoMap,
     podman: &mut PodmanCommand,
 ) -> Result<(), ConversionError> {
     if let Some(pod) = quadlet_unit.lookup(section, "Pod") {

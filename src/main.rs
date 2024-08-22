@@ -410,7 +410,7 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
     });
 
     // Generate the PodsInfoMap to allow containers to link to their pods and add themselves to the pod's containers list
-    let mut pods_info_map = PodsInfoMap::from_units(&units);
+    let mut units_info_map = UnitsInfoMap::from_units(&units);
 
     // A map of network/volume unit file-names, against their calculated names, as needed by Podman.
     let mut resource_names = HashMap::with_capacity(units.len());
@@ -435,7 +435,7 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
                     &unit,
                     &resource_names,
                     cfg.is_user,
-                    &mut pods_info_map,
+                    &mut units_info_map,
                 )
             }
             "image" => {
@@ -445,7 +445,7 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
             "kube" => convert::from_kube_unit(&unit, &resource_names, cfg.is_user),
             "network" => convert::from_network_unit(&unit, &mut resource_names),
             "pod" => {
-                convert::from_pod_unit(&unit, &mut resource_names, &pods_info_map, cfg.is_user)
+                convert::from_pod_unit(&unit, &mut resource_names, &units_info_map, cfg.is_user)
             }
             "volume" => {
                 warn_if_ambiguous_image_name(&unit, VOLUME_SECTION);

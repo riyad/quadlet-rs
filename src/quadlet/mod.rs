@@ -4,6 +4,7 @@ pub mod iterators;
 pub(crate) mod logger;
 pub(crate) mod podman_command;
 
+use convert::quad_replace_extension;
 use regex_lite::Regex;
 
 use self::logger::*;
@@ -100,47 +101,92 @@ impl From<systemd_unit::IoError> for ConversionError {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct PodInfo {
+pub(crate) struct UnitInfo {
+    // The name of the generated systemd service unit
     pub(crate) service_name: String,
+    // The name of the podman resource created by the service
+    pub(crate) resource_name: String,
+
+    // For .pod units
+    // List of containers in a pod
     pub(crate) containers: Vec<PathBuf>,
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct PodsInfoMap(HashMap<PathBuf, PodInfo>);
+pub(crate) struct UnitsInfoMap(HashMap<PathBuf, UnitInfo>);
 
-impl PodsInfoMap {
-    pub(crate) fn from_units(units: &Vec<SystemdUnitFile>) -> PodsInfoMap {
-        let mut pods_info_map = PodsInfoMap::default();
+impl UnitsInfoMap {
+    pub(crate) fn from_units(units: &Vec<SystemdUnitFile>) -> UnitsInfoMap {
+        let mut units_info_map = UnitsInfoMap::default();
 
         for unit in units {
-            if let Some(ext) = unit.path.extension() {
-                if ext != "pod" {
+            let mut unit_info = UnitInfo::default();
+
+            match unit
+                .path
+                .extension()
+                .unwrap_or(OsString::from("").as_os_str())
+                .to_str()
+                .expect("unit path is not a valid UTF-8 string")
+            {
+                "container" => {
+                    unit_info.service_name = get_container_service_name(unit)
+                        .to_str()
+                        .expect("service name is not a valid UTF-8 string")
+                        .into();
+                }
+                "volume" => {
+                    unit_info.service_name = get_volume_service_name(unit)
+                        .to_str()
+                        .expect("service name is not a valid UTF-8 string")
+                        .into();
+                }
+                "kube" => {
+                    unit_info.service_name = get_kube_service_name(unit)
+                        .to_str()
+                        .expect("service name is not a valid UTF-8 string")
+                        .into();
+                }
+                "network" => {
+                    unit_info.service_name = get_network_service_name(unit)
+                        .to_str()
+                        .expect("service name is not a valid UTF-8 string")
+                        .into();
+                }
+                "image" => {
+                    unit_info.service_name = get_image_service_name(unit)
+                        .to_str()
+                        .expect("service name is not a valid UTF-8 string")
+                        .into();
+                }
+                "build" => {
+                    unit_info.service_name = get_build_service_name(unit)
+                        .to_str()
+                        .expect("service name is not a valid UTF-8 string")
+                        .into();
+
+                    // Prefill `resouce_name`s for .build files. This is significantly less complex than
+                    // pre-computing all `resource_name`s for all Quadlet types (which is rather complex for a few
+                    // types), but still breaks the dependency cycle between .volume and .build ([Volume] can
+                    // have Image=some.build, and [Build] can have Volume=some.volume:/some-volume)
+                    unit_info.resource_name = get_built_image_name(unit).unwrap_or_default();
+                }
+                "pod" => {
+                    unit_info.service_name = get_pod_service_name(unit)
+                        .to_str()
+                        .expect("service name is not a valid UTF-8 string")
+                        .into();
+                }
+                _ => {
+                    log!("Unsupported file type {:?}", unit.file_name());
                     continue;
                 }
             }
 
-            let service_name = PodsInfoMap::_get_pod_service_name(unit);
-            pods_info_map.0.insert(
-                unit.path.clone(),
-                PodInfo {
-                    service_name: service_name
-                        .to_str()
-                        .expect("pod service name is not a valid UTF-8 string")
-                        .to_string(),
-                    containers: Default::default(),
-                },
-            );
+            units_info_map.0.insert(unit.path.clone(), unit_info);
         }
 
-        pods_info_map
-    }
-
-    fn _get_pod_service_name(pod: &SystemdUnitFile) -> PathBuf {
-        if let Some(service_name) = pod.lookup(POD_SECTION, "ServiceName") {
-            service_name.into()
-        } else {
-            convert::quad_replace_extension(&pod.path, "", "", "-pod")
-        }
+        units_info_map
     }
 }
 
@@ -161,6 +207,46 @@ pub(crate) fn check_for_unknown_keys(
     }
 
     Ok(())
+}
+
+fn get_build_service_name(build: &SystemdUnitFile) -> PathBuf {
+    get_quadlet_service_name(build, BUILD_SECTION, "-build")
+}
+
+fn get_built_image_name(build: &SystemdUnitFile) -> Option<String> {
+    build.lookup(BUILD_SECTION, "ImageTag").map(str::to_string)
+}
+
+fn get_container_service_name(container: &SystemdUnitFile) -> PathBuf {
+    get_quadlet_service_name(container, CONTAINER_SECTION, "")
+}
+
+fn get_image_service_name(image: &SystemdUnitFile) -> PathBuf {
+    get_quadlet_service_name(image, IMAGE_SECTION, "-image")
+}
+
+fn get_kube_service_name(kube: &SystemdUnitFile) -> PathBuf {
+    get_quadlet_service_name(kube, KUBE_SECTION, "")
+}
+
+fn get_network_service_name(network: &SystemdUnitFile) -> PathBuf {
+    get_quadlet_service_name(network, NETWORK_SECTION, "-network")
+}
+
+fn get_pod_service_name(pod: &SystemdUnitFile) -> PathBuf {
+    get_quadlet_service_name(pod, POD_SECTION, "-pod")
+}
+
+fn get_quadlet_service_name(unit: &SystemdUnitFile, section: &str, name_suffix: &str) -> PathBuf {
+    if let Some(service_name) = unit.lookup(section, "ServiceName") {
+        return PathBuf::from(service_name);
+    }
+
+    quad_replace_extension(unit.path(), "", "", name_suffix)
+}
+
+fn get_volume_service_name(volume: &SystemdUnitFile) -> PathBuf {
+    get_quadlet_service_name(volume, VOLUME_SECTION, "-volume")
 }
 
 pub fn get_podman_binary() -> String {
