@@ -24,12 +24,24 @@ fn get_base_podman_command(unit: &SystemdUnitFile, section: &str) -> PodmanComma
 
 pub(crate) fn from_build_unit(
     build: &SystemdUnitFile,
-    names: &mut ResourceNameMap,
+    units_info_map: &mut UnitsInfoMap,
 ) -> Result<SystemdUnitFile, ConversionError> {
+    let unit_info = units_info_map
+        .0
+        .get(build.path().as_os_str())
+        .ok_or_else(|| {
+            ConversionError::InternalQuadletError("build".to_string(), build.path().to_path_buf())
+        })?;
+
+    // fail fast if resource name is not set
+    if unit_info.resource_name.is_empty() {
+        return Err(ConversionError::NoImageTagKeySpecified);
+    }
+
     let mut service = SystemdUnitFile::new();
 
     service.merge_from(build);
-    service.path = quad_replace_extension(build.path(), ".service", "", "-build");
+    service.path = unit_info.get_service_file_name();
 
     // Add a dependency on network-online.target so the image pull does not happen
     // before network is ready https://github.com/containers/podman/issues/21873
@@ -120,17 +132,15 @@ pub(crate) fn from_build_unit(
     let labels = build.lookup_all_key_val(BUILD_SECTION, "Label");
     podman.add_labels(&labels);
 
-    let built_image_name = if let Some(built_image_name) = names.get(build.path().as_os_str()) {
-        let built_image_name = built_image_name
-            .to_str()
-            .expect("ImageTag is not a valid UTF-8 string");
-        podman.add(format!("--tag={built_image_name}"));
-        built_image_name
-    } else {
-        return Err(ConversionError::NoImageTagKeySpecified);
-    };
+    podman.add(format!("--tag={}", unit_info.resource_name));
 
-    handle_networks(build, BUILD_SECTION, &mut service, names, &mut podman)?;
+    handle_networks(
+        build,
+        BUILD_SECTION,
+        &mut service,
+        units_info_map,
+        &mut podman,
+    )?;
 
     podman.extend(
         build
@@ -140,7 +150,13 @@ pub(crate) fn from_build_unit(
             .map(str::to_string),
     );
 
-    handle_volumes(build, BUILD_SECTION, &mut service, names, &mut podman)?;
+    handle_volumes(
+        build,
+        BUILD_SECTION,
+        &mut service,
+        units_info_map,
+        &mut podman,
+    )?;
 
     // In order to build an image locally, we need either a File key pointing directly at a
     // Containerfile, or we need a context or WorkingDirectory containing all required files.
@@ -193,11 +209,6 @@ pub(crate) fn from_build_unit(
     // which isn't very useful here
     service.append_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
 
-    names.insert(
-        build.path().as_os_str().to_os_string(),
-        built_image_name.into(),
-    );
-
     return Ok(service);
 }
 
@@ -206,14 +217,23 @@ pub(crate) fn from_build_unit(
 // The original Container group is kept around as X-Container.
 pub(crate) fn from_container_unit(
     container: &SystemdUnitFile,
-    names: &ResourceNameMap,
+    units_info_map: &mut UnitsInfoMap,
     is_user: bool,
-    pods_info_map: &mut UnitsInfoMap,
 ) -> Result<SystemdUnitFile, ConversionError> {
+    let unit_info = units_info_map
+        .0
+        .get(container.path().as_os_str())
+        .ok_or_else(|| {
+            ConversionError::InternalQuadletError(
+                "container".to_string(),
+                container.path().to_path_buf(),
+            )
+        })?;
+
     let mut service = SystemdUnitFile::new();
 
     service.merge_from(container);
-    service.path = quad_replace_extension(container.path(), ".service", "", "");
+    service.path = unit_info.get_service_file_name();
 
     // Add a dependency on network-online.target so the image pull does not happen
     // before network is ready https://github.com/containers/podman/issues/21873
@@ -255,7 +275,7 @@ pub(crate) fn from_container_unit(
     }
 
     let image = if !image.is_empty() {
-        handle_image_source(&image, &mut service, names)?.to_string()
+        handle_image_source(&image, &mut service, units_info_map)?.to_string()
     } else {
         image
     };
@@ -361,7 +381,7 @@ pub(crate) fn from_container_unit(
         container,
         CONTAINER_SECTION,
         &mut service,
-        names,
+        units_info_map,
         &mut podman,
     )?;
 
@@ -572,7 +592,7 @@ pub(crate) fn from_container_unit(
         &container,
         CONTAINER_SECTION,
         &mut service,
-        names,
+        units_info_map,
         &mut podman,
     )?;
 
@@ -655,7 +675,8 @@ pub(crate) fn from_container_unit(
     );
 
     for mount in container.lookup_all_args(CONTAINER_SECTION, "Mount") {
-        let mount_str = resolve_container_mount_params(container, &mut service, mount, names)?;
+        let mount_str =
+            resolve_container_mount_params(container, &mut service, mount, units_info_map)?;
         podman.add("--mount");
         podman.add(mount_str);
     }
@@ -678,7 +699,7 @@ pub(crate) fn from_container_unit(
         container,
         &mut service,
         CONTAINER_SECTION,
-        pods_info_map,
+        units_info_map,
         &mut podman,
     )?;
 
@@ -722,12 +743,19 @@ pub(crate) fn from_container_unit(
 
 pub(crate) fn from_image_unit(
     image: &SystemdUnitFile,
-    names: &mut ResourceNameMap,
+    units_info_map: &mut UnitsInfoMap,
     _is_user: bool,
 ) -> Result<SystemdUnitFile, ConversionError> {
+    let unit_info = units_info_map
+        .0
+        .get_mut(image.path().as_os_str())
+        .ok_or_else(|| {
+            ConversionError::InternalQuadletError("image".into(), image.path().into())
+        })?;
+
     let mut service = SystemdUnitFile::new();
     service.merge_from(image);
-    service.path = quad_replace_extension(image.path(), ".service", "", "-image");
+    service.path = unit_info.get_service_file_name();
 
     // Add a dependency on network-online.target so the image pull does not happen
     // before network is ready https://github.com/containers/podman/issues/21873
@@ -813,22 +841,25 @@ pub(crate) fn from_image_unit(
         image_name
     };
 
-    names.insert(
-        image.path().as_os_str().to_os_string(),
-        podman_image_name.into(),
-    );
+    // Store the name of the created resource
+    unit_info.resource_name = podman_image_name.to_string();
 
     Ok(service)
 }
 
 pub(crate) fn from_kube_unit(
     kube: &SystemdUnitFile,
-    names: &ResourceNameMap,
+    units_info_map: &mut UnitsInfoMap,
     is_user: bool,
 ) -> Result<SystemdUnitFile, ConversionError> {
+    let unit_info = units_info_map
+        .0
+        .get(kube.path().as_os_str())
+        .ok_or_else(|| ConversionError::InternalQuadletError("kube".into(), kube.path().into()))?;
+
     let mut service = SystemdUnitFile::new();
     service.merge_from(kube);
-    service.path = quad_replace_extension(kube.path(), ".service", "", "");
+    service.path = unit_info.get_service_file_name();
 
     if !kube.path().as_os_str().is_empty() {
         service.append_entry(
@@ -914,7 +945,13 @@ pub(crate) fn from_kube_unit(
 
     handle_user_mappings(kube, KUBE_SECTION, &mut podman_start, is_user, false)?;
 
-    handle_networks(kube, KUBE_SECTION, &mut service, names, &mut podman_start)?;
+    handle_networks(
+        kube,
+        KUBE_SECTION,
+        &mut service,
+        units_info_map,
+        &mut podman_start,
+    )?;
 
     for update in kube.lookup_all_strv(KUBE_SECTION, "AutoUpdate") {
         let annotation_suffix;
@@ -996,11 +1033,18 @@ pub(crate) fn from_kube_unit(
 // NetworkName key-value.
 pub(crate) fn from_network_unit(
     network: &SystemdUnitFile,
-    names: &mut ResourceNameMap,
+    units_info_map: &mut UnitsInfoMap,
 ) -> Result<SystemdUnitFile, ConversionError> {
+    let unit_info = units_info_map
+        .0
+        .get_mut(network.path().as_os_str())
+        .ok_or_else(|| {
+            ConversionError::InternalQuadletError("network".into(), network.path().into())
+        })?;
+
     let mut service = SystemdUnitFile::new();
     service.merge_from(network);
-    service.path = quad_replace_extension(network.path(), ".service", "", "-network");
+    service.path = unit_info.get_service_file_name();
 
     if !network.path().as_os_str().is_empty() {
         service.append_entry(
@@ -1142,34 +1186,32 @@ pub(crate) fn from_network_unit(
     // The default syslog identifier is the exec basename (podman) which isn't very useful here
     service.append_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
 
-    names.insert(
-        network.path().as_os_str().to_os_string(),
-        podman_network_name.into(),
-    );
+    // Store the name of the created resource
+    unit_info.resource_name = podman_network_name;
 
     Ok(service)
 }
 
 pub(crate) fn from_pod_unit(
     pod: &SystemdUnitFile,
-    names: &mut ResourceNameMap,
-    pods_info_map: &UnitsInfoMap,
+    units_info_map: &mut UnitsInfoMap,
     is_user: bool,
 ) -> Result<SystemdUnitFile, ConversionError> {
-    let pod_info = pods_info_map.0.get(&pod.path);
-    if pod_info.is_none() {
-        return Err(ConversionError::InternalPodError(
-            pod.path()
-                .to_str()
-                .expect("pod unit path is not a valid UTF-8 string")
-                .to_string(),
-        ));
-    }
-    let pod_info = pod_info.expect("should not be none");
+    let unit_info = units_info_map
+        .0
+        .get(pod.path().as_os_str())
+        .ok_or_else(|| {
+            ConversionError::InternalPodError(
+                pod.path()
+                    .to_str()
+                    .expect("pod unit path is not a valid UTF-8 string")
+                    .to_string(),
+            )
+        })?;
 
     let mut service = SystemdUnitFile::new();
     service.merge_from(pod);
-    service.path = format!("{}.service", pod_info.service_name).into();
+    service.path = unit_info.get_service_file_name();
 
     if !pod.path().as_os_str().is_empty() {
         service.append_entry(
@@ -1202,7 +1244,7 @@ pub(crate) fn from_pod_unit(
     // Need the containers filesystem mounted to start podman
     service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
 
-    for container_service in &pod_info.containers {
+    for container_service in &unit_info.containers {
         let container_service = container_service
             .to_str()
             .expect("container service path is not a valid UTF-8 string");
@@ -1263,7 +1305,13 @@ pub(crate) fn from_pod_unit(
 
     handle_publish_ports(pod, POD_SECTION, &mut podman_start_pre)?;
 
-    handle_networks(pod, POD_SECTION, &mut service, names, &mut podman_start_pre)?;
+    handle_networks(
+        pod,
+        POD_SECTION,
+        &mut service,
+        units_info_map,
+        &mut podman_start_pre,
+    )?;
 
     podman_start_pre.extend(
         pod.lookup_all(POD_SECTION, "NetworkAlias")
@@ -1272,7 +1320,13 @@ pub(crate) fn from_pod_unit(
             .map(str::to_string),
     );
 
-    handle_volumes(pod, POD_SECTION, &mut service, names, &mut podman_start_pre)?;
+    handle_volumes(
+        pod,
+        POD_SECTION,
+        &mut service,
+        units_info_map,
+        &mut podman_start_pre,
+    )?;
 
     podman_start_pre.add(format!("--infra-name={podman_pod_name}-infra"));
     podman_start_pre.add(format!("--name={podman_pod_name}"));
@@ -1300,11 +1354,18 @@ pub(crate) fn from_pod_unit(
 // key-value.
 pub(crate) fn from_volume_unit(
     volume: &SystemdUnitFile,
-    names: &mut ResourceNameMap,
+    units_info_map: &mut UnitsInfoMap,
 ) -> Result<SystemdUnitFile, ConversionError> {
+    let unit_info = units_info_map
+        .0
+        .get_mut(volume.path().as_os_str())
+        .ok_or_else(|| {
+            ConversionError::InternalQuadletError("volume".into(), volume.path().into())
+        })?;
+
     let mut service = SystemdUnitFile::new();
     service.merge_from(volume);
-    service.path = quad_replace_extension(volume.path(), ".service", "", "-volume");
+    service.path = unit_info.get_service_file_name();
 
     if !volume.path().as_os_str().is_empty() {
         service.append_entry(
@@ -1336,6 +1397,8 @@ pub(crate) fn from_volume_unit(
     } else {
         podman_volume_name.to_string()
     };
+    // Store the name of the created resource
+    unit_info.resource_name = podman_volume_name.clone();
 
     // Need the containers filesystem mounted to start podman
     service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
@@ -1364,7 +1427,7 @@ pub(crate) fn from_volume_unit(
         }
 
         let image_name = image_name.expect("cannot be none");
-        let image_name = handle_image_source(image_name, &mut service, &names)?;
+        let image_name = handle_image_source(image_name, &mut service, &units_info_map)?;
 
         podman.add("--opt");
         podman.add(format!("image={image_name}"));
@@ -1458,11 +1521,6 @@ pub(crate) fn from_volume_unit(
     // The default syslog identifier is the exec basename (podman) which isn't very useful here
     service.append_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
 
-    names.insert(
-        volume.path().as_os_str().to_os_string(),
-        podman_volume_name.into(),
-    );
-
     Ok(service)
 }
 
@@ -1494,38 +1552,31 @@ fn handle_health(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanComm
 fn handle_image_source<'a>(
     quadlet_image_name: &'a str,
     service_unit_file: &mut SystemdUnitFile,
-    names: &'a ResourceNameMap,
+    units_info_map: &'a UnitsInfoMap,
 ) -> Result<&'a str, ConversionError> {
     for extension in ["build", "image"] {
         if quadlet_image_name.ends_with(&format!(".{extension}")) {
             // since there is no default name conversion, the actual image name must exist in the names map
-            let image_name = names.get(
-                service_unit_file
-                    .path()
-                    .with_file_name(quadlet_image_name)
-                    .as_os_str(),
-            );
-            if image_name.is_none() {
-                return Err(ConversionError::ImageNotFound(quadlet_image_name.into()));
-            }
+            let unit_info = units_info_map
+                .0
+                .get(
+                    service_unit_file
+                        .path()
+                        .with_file_name(quadlet_image_name)
+                        .as_os_str(),
+                )
+                .ok_or_else(|| ConversionError::ImageNotFound(quadlet_image_name.into()))?;
 
             // the systemd unit name is $name-$suffix.service
-            let image_service_name = quad_replace_extension(
-                Path::new(quadlet_image_name),
-                ".service",
-                "",
-                &format!("-{extension}"),
-            )
-            .to_str()
-            .expect("image service name is not a valid UTF-8 string")
-            .to_string();
+            let image_service_name = unit_info
+                .get_service_file_name()
+                .to_str()
+                .expect("image service name is not a valid UTF-8 string")
+                .to_string();
             service_unit_file.append_entry(UNIT_SECTION, "Requires", &image_service_name);
             service_unit_file.append_entry(UNIT_SECTION, "After", &image_service_name);
 
-            let image_name = image_name
-                .expect("cannot be none")
-                .to_str()
-                .expect("image name is not a valid UTF-8 string");
+            let image_name = unit_info.resource_name.as_str();
             return Ok(image_name);
         }
     }
@@ -1553,11 +1604,10 @@ fn handle_networks(
     quadlet_unit_file: &SystemdUnit,
     section: &str,
     service_unit_file: &mut SystemdUnit,
-    names: &ResourceNameMap,
+    units_info_map: &UnitsInfoMap,
     podman: &mut PodmanCommand,
 ) -> Result<(), ConversionError> {
-    let networks = quadlet_unit_file.lookup_all(section, "Network");
-    for network in networks {
+    for network in quadlet_unit_file.lookup_all(section, "Network") {
         if !network.is_empty() {
             let mut network_name = network.to_string();
             let mut options: Option<&str> = None;
@@ -1568,26 +1618,15 @@ fn handle_networks(
 
             if network_name.ends_with(".network") {
                 // the podman network name is systemd-$name if none is specified by the user.
-                let podman_network_name = names
+                let network_unit_info = units_info_map
+                    .0
                     .get(&OsString::from(&network_name))
-                    .map(|s| s.to_os_string())
-                    .unwrap_or_default();
-                let podman_network_name = if podman_network_name.is_empty() {
-                    quad_replace_extension(&PathBuf::from(&network_name), "", "systemd-", "")
-                        .as_os_str()
-                        .to_os_string()
-                } else {
-                    podman_network_name
-                };
+                    .ok_or_else(|| {
+                        ConversionError::InternalQuadletError("image".into(), network_name.into())
+                    })?;
 
                 // the systemd unit name is $name-network.service
-                let network_service_name = quad_replace_extension(
-                    &PathBuf::from(&network_name),
-                    ".service",
-                    "",
-                    "-network",
-                );
-
+                let network_service_name = network_unit_info.get_service_file_name();
                 service_unit_file.append_entry(
                     UNIT_SECTION,
                     "Requires",
@@ -1599,7 +1638,7 @@ fn handle_networks(
                     network_service_name.to_str().unwrap(),
                 );
 
-                network_name = podman_network_name.to_str().unwrap().to_string();
+                network_name = network_unit_info.resource_name.clone();
             }
 
             if options.is_some() {
@@ -1621,7 +1660,7 @@ fn handle_pod(
     quadlet_unit: &SystemdUnit,
     service_unit_file: &mut SystemdUnitFile,
     section: &str,
-    pods_info_map: &mut UnitsInfoMap,
+    units_info_map: &mut UnitsInfoMap,
     podman: &mut PodmanCommand,
 ) -> Result<(), ConversionError> {
     if let Some(pod) = quadlet_unit.lookup(section, "Pod") {
@@ -1630,11 +1669,15 @@ fn handle_pod(
                 return Err(ConversionError::InvalidPod(pod.into()));
             }
 
-            if let Some(pod_info) = pods_info_map.0.get_mut(&PathBuf::from(pod)) {
+            if let Some(pod_info) = units_info_map.0.get_mut(&OsString::from(pod)) {
                 podman.add("--pod-id-file");
                 podman.add(format!("%t/{}.pod-id", pod_info.service_name));
 
-                let pod_service_name = format!("{}.service", pod_info.service_name);
+                let pod_service_name = pod_info
+                    .get_service_file_name()
+                    .to_str()
+                    .expect("pod service name is not a valid UTF-8 string")
+                    .to_string();
                 service_unit_file.append_entry(UNIT_SECTION, "BindsTo", &pod_service_name);
                 service_unit_file.append_entry(UNIT_SECTION, "After", &pod_service_name);
 
@@ -1811,8 +1854,8 @@ fn handle_storage_source(
     quadlet_unit_file: &SystemdUnitFile,
     service_unit_file: &mut SystemdUnitFile,
     source: &str,
-    names: &ResourceNameMap,
-) -> String {
+    units_info_map: &UnitsInfoMap,
+) -> Result<String, ConversionError> {
     let mut source = source.to_owned();
 
     if source.starts_with('.') {
@@ -1827,25 +1870,13 @@ fn handle_storage_source(
         // Absolute path
         service_unit_file.append_entry(UNIT_SECTION, "RequiresMountsFor", &source);
     } else if source.ends_with(".volume") {
-        // the podman volume name is systemd-$name if none has been provided by the user.
-        let volume_name = names
+        let volume_unit_info = units_info_map
+            .0
             .get(&OsString::from(&source))
-            .map(|s| PathBuf::from(s))
-            .unwrap_or_default();
-        let volume_name = if volume_name.as_os_str().is_empty() {
-            quad_replace_extension(&PathBuf::from(&source), "", "systemd-", "")
-        } else {
-            volume_name
-        };
+            .ok_or_else(|| ConversionError::ImageNotFound(source))?;
 
         // the systemd unit name is $name-volume.service
-        let volume_service_name =
-            quad_replace_extension(&PathBuf::from(&source), ".service", "", "-volume");
-
-        source = volume_name
-            .to_str()
-            .expect("volume name ist not valid UTF-8 string")
-            .to_string();
+        let volume_service_name = volume_unit_info.get_service_file_name();
 
         service_unit_file.append_entry(
             UNIT_SECTION,
@@ -1857,9 +1888,11 @@ fn handle_storage_source(
             "After",
             volume_service_name.to_str().unwrap(),
         );
+
+        source = volume_unit_info.resource_name.clone();
     }
 
-    source
+    Ok(source)
 }
 
 fn handle_user(
@@ -2056,7 +2089,7 @@ fn handle_volumes(
     quadlet_unit_file: &SystemdUnitFile,
     section: &str,
     service_unit_file: &mut SystemdUnitFile,
-    names: &ResourceNameMap,
+    units_info_map: &UnitsInfoMap,
     podman: &mut PodmanCommand,
 ) -> Result<(), ConversionError> {
     for volume in quadlet_unit_file.lookup_all(section, "Volume") {
@@ -2077,7 +2110,12 @@ fn handle_volumes(
         }
 
         if !source.is_empty() {
-            source = handle_storage_source(quadlet_unit_file, service_unit_file, &source, names);
+            source = handle_storage_source(
+                quadlet_unit_file,
+                service_unit_file,
+                &source,
+                units_info_map,
+            )?;
         }
 
         podman.add("-v");
@@ -2244,7 +2282,7 @@ fn resolve_container_mount_params(
     container_unit_file: &SystemdUnitFile,
     service_unit_file: &mut SystemdUnitFile,
     mount: String,
-    names: &ResourceNameMap,
+    units_info_map: &mut UnitsInfoMap,
 ) -> Result<String, ConversionError> {
     let (mount_type, tokens) = find_mount_type(mount.as_str())?;
 
@@ -2258,8 +2296,12 @@ fn resolve_container_mount_params(
     for token in tokens.iter() {
         if token.starts_with("source=") || token.starts_with("src=") {
             if let Some((_k, v)) = token.split_once('=') {
-                let resolved_source =
-                    handle_storage_source(container_unit_file, service_unit_file, v, names);
+                let resolved_source = handle_storage_source(
+                    container_unit_file,
+                    service_unit_file,
+                    v,
+                    units_info_map,
+                )?;
                 csv_writer.write_field(format!("source={resolved_source}"))?;
             } else {
                 return Err(ConversionError::InvalidMountSource);

@@ -412,15 +412,6 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
     // Generate the PodsInfoMap to allow containers to link to their pods and add themselves to the pod's containers list
     let mut units_info_map = UnitsInfoMap::from_units(&units);
 
-    // A map of network/volume unit file-names, against their calculated names, as needed by Podman.
-    let mut resource_names = HashMap::with_capacity(units.len());
-
-    // Prefill resouceNames for .build files. This is significantly less complex than
-    // pre-computing all resourceNames for all Quadlet types (which is rather complex for a few
-    // types), but still breaks the dependency cycle between .volume and .build ([Volume] can
-    // have Image=some.build, and [Build] can have Volume=some.volume:/some-volume)
-    prefill_built_image_names(&units, &mut resource_names);
-
     for unit in units {
         let ext = unit.path().extension();
 
@@ -428,28 +419,21 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
             .map(|e| e.to_str().unwrap_or_default())
             .unwrap_or_default()
         {
-            "build" => convert::from_build_unit(&unit, &mut resource_names),
+            "build" => convert::from_build_unit(&unit, &mut units_info_map),
             "container" => {
                 warn_if_ambiguous_image_name(&unit, CONTAINER_SECTION);
-                convert::from_container_unit(
-                    &unit,
-                    &resource_names,
-                    cfg.is_user,
-                    &mut units_info_map,
-                )
+                convert::from_container_unit(&unit, &mut units_info_map, cfg.is_user)
             }
             "image" => {
                 warn_if_ambiguous_image_name(&unit, IMAGE_SECTION);
-                convert::from_image_unit(&unit, &mut resource_names, cfg.is_user)
+                convert::from_image_unit(&unit, &mut units_info_map, cfg.is_user)
             }
-            "kube" => convert::from_kube_unit(&unit, &resource_names, cfg.is_user),
-            "network" => convert::from_network_unit(&unit, &mut resource_names),
-            "pod" => {
-                convert::from_pod_unit(&unit, &mut resource_names, &units_info_map, cfg.is_user)
-            }
+            "kube" => convert::from_kube_unit(&unit, &mut units_info_map, cfg.is_user),
+            "network" => convert::from_network_unit(&unit, &mut units_info_map),
+            "pod" => convert::from_pod_unit(&unit, &mut units_info_map, cfg.is_user),
             "volume" => {
                 warn_if_ambiguous_image_name(&unit, VOLUME_SECTION);
-                convert::from_volume_unit(&unit, &mut resource_names)
+                convert::from_volume_unit(&unit, &mut units_info_map)
             }
             _ => {
                 log!("Unsupported file type {:?}", unit.path());

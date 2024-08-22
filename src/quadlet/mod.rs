@@ -35,6 +35,8 @@ pub(crate) enum RuntimeError {
 pub(crate) enum ConversionError {
     #[error("requested Quadlet image {0:?} was not found")]
     ImageNotFound(String),
+    #[error("internal error while processing {0} {1:?}")]
+    InternalQuadletError(String, PathBuf),
     #[error("internal error while processing pod {0:?}")]
     InternalPodError(String),
     #[error("key Options can't be used without Device")]
@@ -112,8 +114,14 @@ pub(crate) struct UnitInfo {
     pub(crate) containers: Vec<PathBuf>,
 }
 
+impl UnitInfo {
+    pub(crate) fn get_service_file_name(&self) -> PathBuf {
+        PathBuf::from(format!("{}.service", self.service_name))
+    }
+}
+
 #[derive(Debug, Default)]
-pub(crate) struct UnitsInfoMap(HashMap<PathBuf, UnitInfo>);
+pub(crate) struct UnitsInfoMap(HashMap<OsString, UnitInfo>);
 
 impl UnitsInfoMap {
     pub(crate) fn from_units(units: &Vec<SystemdUnitFile>) -> UnitsInfoMap {
@@ -183,14 +191,14 @@ impl UnitsInfoMap {
                 }
             }
 
-            units_info_map.0.insert(unit.path.clone(), unit_info);
+            units_info_map
+                .0
+                .insert(unit.path().as_os_str().to_os_string(), unit_info);
         }
 
         units_info_map
     }
 }
-
-pub(crate) type ResourceNameMap = HashMap<OsString, OsString>;
 
 pub(crate) fn check_for_unknown_keys(
     unit: &SystemdUnitFile,
@@ -251,23 +259,6 @@ fn get_volume_service_name(volume: &SystemdUnitFile) -> PathBuf {
 
 pub fn get_podman_binary() -> String {
     env::var("PODMAN").unwrap_or(DEFAULT_PODMAN_BINARY.to_owned())
-}
-
-pub(crate) fn prefill_built_image_names(
-    units: &Vec<SystemdUnitFile>,
-    resource_names: &mut ResourceNameMap,
-) {
-    for unit in units {
-        if !unit.path().extension().unwrap_or_default().eq("build") {
-            continue;
-        }
-
-        if let Some(image_name) = unit.lookup(BUILD_SECTION, "ImageTag") {
-            if !image_name.is_empty() {
-                resource_names.insert(unit.path().as_os_str().to_os_string(), image_name.into());
-            }
-        }
-    }
 }
 
 fn is_image_id(image_name: &str) -> bool {
