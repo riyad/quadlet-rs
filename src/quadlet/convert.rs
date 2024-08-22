@@ -338,7 +338,18 @@ pub(crate) fn from_container_unit(
 
     // We delegate groups to the runtime
     service.append_entry(SERVICE_SECTION, "Delegate", "yes");
-    podman.add_slice(&["--cgroups=split"]);
+
+    let cgroups_mode =
+        container
+            .lookup(CONTAINER_SECTION, "CgroupsMode")
+            .map_or("split", |cgroups_mode| {
+                if cgroups_mode.is_empty() {
+                    return "split";
+                }
+
+                cgroups_mode
+            });
+    podman.add(format!("--cgroups={}", cgroups_mode));
 
     if let Some(timezone) = container.lookup_last(CONTAINER_SECTION, "Timezone") {
         if !timezone.is_empty() {
