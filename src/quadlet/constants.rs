@@ -27,7 +27,7 @@ pub const AUTO_UPDATE_LABEL: &str = "io.containers.autoupdate";
 pub static SUPPORTED_EXTENSIONS: [&str; 7] =
     ["build", "container", "image", "kube", "network", "pod", "volume"];
 
-pub static SUPPORTED_BUILD_KEYS: [&str; 23] = [
+pub static SUPPORTED_BUILD_KEYS: [&str; 24] = [
     "Annotation",
     "Arch",
     "AuthFile",
@@ -46,6 +46,7 @@ pub static SUPPORTED_BUILD_KEYS: [&str; 23] = [
     "PodmanArgs",
     "Pull",
     "Secret",
+    "ServiceName",
     "SetWorkingDirectory",
     "Target",
     "TLSVerify",
@@ -53,7 +54,7 @@ pub static SUPPORTED_BUILD_KEYS: [&str; 23] = [
     "Volume",
 ];
 
-pub static SUPPORTED_CONTAINER_KEYS: [&str; 81] = [
+pub static SUPPORTED_CONTAINER_KEYS: [&str; 82] = [
     "AddCapability",
     "AddDevice",
     "Annotation",
@@ -119,6 +120,7 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 81] = [
     "SecurityLabelNested",
     "SecurityLabelType",
     "Secret",
+    "ServiceName",
     "ShmSize",
     "StopSignal",
     "StopTimeout",
@@ -137,7 +139,7 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 81] = [
     "WorkingDir",
 ];
 
-pub static SUPPORTED_IMAGE_KEYS: [&str; 14] = [
+pub static SUPPORTED_IMAGE_KEYS: [&str; 15] = [
     "AllTags",
     "Arch",
     "AuthFile",
@@ -150,11 +152,12 @@ pub static SUPPORTED_IMAGE_KEYS: [&str; 14] = [
     "ImageTag",
     "PodmanArgs",
     "OS",
+    "ServiceName",
     "TLSVerify",
     "Variant",
 ];
 
-pub static SUPPORTED_KUBE_KEYS: [&str; 18] = [
+pub static SUPPORTED_KUBE_KEYS: [&str; 19] = [
     "AutoUpdate",
     "ConfigMap",
     "ContainersConfModule",
@@ -170,12 +173,13 @@ pub static SUPPORTED_KUBE_KEYS: [&str; 18] = [
     "RemapUid",     // deprecated, use UserNS instead
     "RemapUidSize", // deprecated, use UserNS instead
     "RemapUsers",   // deprecated, use UserNS instead
+    "ServiceName",
     "SetWorkingDirectory",
     "UserNS",
     "Yaml",
 ];
 
-pub static SUPPORTED_NETWORK_KEYS: [&str; 15] = [
+pub static SUPPORTED_NETWORK_KEYS: [&str; 16] = [
     "ContainersConfModule",
     "DisableDNS",
     "DNS",
@@ -190,6 +194,7 @@ pub static SUPPORTED_NETWORK_KEYS: [&str; 15] = [
     "NetworkName",
     "Options",
     "PodmanArgs",
+    "ServiceName",
     "Subnet",
 ];
 pub static SUPPORTED_POD_KEYS: [&str; 18] = [
@@ -215,7 +220,7 @@ pub static SUPPORTED_POD_KEYS: [&str; 18] = [
 
 pub static SUPPORTED_SERVICE_KEYS: [&str; 1] = ["WorkingDirectory"];
 
-pub static SUPPORTED_VOLUME_KEYS: [&str; 13] = [
+pub static SUPPORTED_VOLUME_KEYS: [&str; 14] = [
     "ContainersConfModule",
     "Copy",
     "Device",
@@ -226,6 +231,7 @@ pub static SUPPORTED_VOLUME_KEYS: [&str; 13] = [
     "Label",
     "Options",
     "PodmanArgs",
+    "ServiceName",
     "Type",
     "User",
     "VolumeName",
