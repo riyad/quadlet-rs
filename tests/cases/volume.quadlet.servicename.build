@@ -1,3 +1,4 @@
+## depends-on service-name.volume
 ## assert-podman-args "-v" "test-volume:/volume/basic"
 ## assert-key-is "Unit" "Requires" "basic.service"
 ## assert-key-is "Unit" "After" "network-online.target" "basic.service"

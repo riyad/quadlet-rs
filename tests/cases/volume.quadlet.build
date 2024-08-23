@@ -1,3 +1,4 @@
+## depends-on basic.volume
 ## assert-podman-args "-v" "systemd-basic:/volume/basic"
 ## assert-key-is "Unit" "Requires" "basic-volume.service"
 ## assert-key-is "Unit" "After" "network-online.target" "basic-volume.service"

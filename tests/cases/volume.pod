@@ -1,3 +1,4 @@
+## depends-on basic.volume
 ## assert-podman-pre-args -v /host/dir:/container/volume
 ## assert-podman-pre-args -v /host/dir2:/container/volume2:Z
 ## assert-podman-pre-args-regex -v .*/podman-e2e-.*/subtest-.*/quadlet/host/dir3:/container/volume3
