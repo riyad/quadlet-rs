@@ -115,8 +115,11 @@ pub(crate) struct UnitInfo {
 }
 
 impl UnitInfo {
-    pub(crate) fn get_service_file_name(&self) -> PathBuf {
+    pub(crate) fn get_service_file_name(&self) -> OsString {
         PathBuf::from(format!("{}.service", self.service_name))
+            .file_name()
+            .expect("should have a file name")
+            .to_os_string()
     }
 }
 

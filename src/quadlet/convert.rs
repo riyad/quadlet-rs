@@ -38,7 +38,7 @@ pub(crate) fn from_build_unit(
     let mut service = SystemdUnitFile::new();
 
     service.merge_from(build);
-    service.path = unit_info.get_service_file_name();
+    service.path = unit_info.get_service_file_name().into();
 
     // Add a dependency on network-online.target so the image pull does not happen
     // before network is ready https://github.com/containers/podman/issues/21873
@@ -224,7 +224,7 @@ pub(crate) fn from_container_unit(
     let mut service = SystemdUnitFile::new();
 
     service.merge_from(container);
-    service.path = unit_info.get_service_file_name();
+    service.path = unit_info.get_service_file_name().into();
 
     // Add a dependency on network-online.target so the image pull does not happen
     // before network is ready https://github.com/containers/podman/issues/21873
@@ -743,7 +743,7 @@ pub(crate) fn from_image_unit(
 
     let mut service = SystemdUnitFile::new();
     service.merge_from(image);
-    service.path = unit_info.get_service_file_name();
+    service.path = unit_info.get_service_file_name().into();
 
     // Add a dependency on network-online.target so the image pull does not happen
     // before network is ready https://github.com/containers/podman/issues/21873
@@ -847,7 +847,7 @@ pub(crate) fn from_kube_unit(
 
     let mut service = SystemdUnitFile::new();
     service.merge_from(kube);
-    service.path = unit_info.get_service_file_name();
+    service.path = unit_info.get_service_file_name().into();
 
     if !kube.path().as_os_str().is_empty() {
         service.append_entry(
@@ -1032,7 +1032,7 @@ pub(crate) fn from_network_unit(
 
     let mut service = SystemdUnitFile::new();
     service.merge_from(network);
-    service.path = unit_info.get_service_file_name();
+    service.path = unit_info.get_service_file_name().into();
 
     if !network.path().as_os_str().is_empty() {
         service.append_entry(
@@ -1196,7 +1196,7 @@ pub(crate) fn from_pod_unit(
 
     let mut service = SystemdUnitFile::new();
     service.merge_from(pod);
-    service.path = unit_info.get_service_file_name();
+    service.path = unit_info.get_service_file_name().into();
 
     if !pod.path().as_os_str().is_empty() {
         service.append_entry(
@@ -1350,7 +1350,7 @@ pub(crate) fn from_volume_unit(
 
     let mut service = SystemdUnitFile::new();
     service.merge_from(volume);
-    service.path = unit_info.get_service_file_name();
+    service.path = unit_info.get_service_file_name().into();
 
     if !volume.path().as_os_str().is_empty() {
         service.append_entry(
@@ -1404,14 +1404,12 @@ pub(crate) fn from_volume_unit(
     }
 
     if driver.unwrap_or_default() == "image" {
-        let image_name = volume.lookup(VOLUME_SECTION, "Image");
-        if image_name.is_none() {
-            return Err(ConversionError::InvalidImageOrRootfs(
+        let image_name = volume.lookup(VOLUME_SECTION, "Image").ok_or_else(|| {
+            ConversionError::InvalidImageOrRootfs(
                 "the key Image is mandatory when using the image driver".into(),
-            ));
-        }
+            )
+        })?;
 
-        let image_name = image_name.expect("cannot be none");
         let image_name = handle_image_source(image_name, &mut service, &units_info_map)?;
 
         podman.add("--opt");
@@ -1656,13 +1654,13 @@ fn handle_pod(
             podman.add("--pod-id-file");
             podman.add(format!("%t/{}.pod-id", pod_info.service_name));
 
-                let pod_service_name = pod_info
-                    .get_service_file_name()
-                    .to_str()
-                    .expect("pod service name is not a valid UTF-8 string")
-                    .to_string();
-                service_unit_file.append_entry(UNIT_SECTION, "BindsTo", &pod_service_name);
-                service_unit_file.append_entry(UNIT_SECTION, "After", &pod_service_name);
+            let pod_service_name = pod_info
+                .get_service_file_name()
+                .to_str()
+                .expect("pod service name is not a valid UTF-8 string")
+                .to_string();
+            service_unit_file.append_entry(UNIT_SECTION, "BindsTo", &pod_service_name);
+            service_unit_file.append_entry(UNIT_SECTION, "After", &pod_service_name);
 
             pod_info.containers.push(service_unit_file.path.clone());
         }
