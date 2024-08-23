@@ -536,9 +536,11 @@ class Outcome:
 
         files = self.list_outdir_files()
         for f in self.expected_files:
+            if f not in files:
+                raise FileExistsError(self._err_msg(f"Expected file not found in output directory: {f}"))
             files.remove(f)
         if len(files) != 0:
-            raise FileExistsError(self._err_msg(f"Unexpected files in output directory: " + str(files)))
+            raise FileExistsError(self._err_msg(f"Unexpected files in output directory: {str(files)}"))
 
     def _err_msg(self, msg):
         err_msg = msg
