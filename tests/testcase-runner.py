@@ -50,19 +50,28 @@ def find_sublist_regex(full_list, sublist):
             return i
     return -1
 
-def to_servicefile_name(filename: Path):
-    base = filename.stem
-    ext = filename.suffix
+def to_servicefile_name(file_path: Path):
+    base = Path(file_path.name).stem
+    ext = Path(file_path.name).suffix
+    sections = parse_unitfile(file_path.read_text())
     if ext == ".build":
-        base =  f"{base}-build"
+        base = f"{base}-build"
+        base = sections.get('Build', {}).get('ServiceName', [base])[-1]
+    elif ext == ".container":
+        base = base
+        base = sections.get('Container', {}).get('ServiceName', [base])[-1]
     elif ext == ".image":
         base = f"{base}-image"
+        base = sections.get('Image', {}).get('ServiceName', [base])[-1]
     elif ext == ".network":
         base = f"{base}-network"
+        base = sections.get('Network', {}).get('ServiceName', [base])[-1]
     elif ext == ".pod":
         base = f"{base}-pod"
+        base = sections.get('Pod', {}).get('ServiceName', [base])[-1]
     elif ext == ".volume":
         base = f"{base}-volume"
+        base = sections.get('Volume', {}).get('ServiceName', [base])[-1]
     return f"{base}.service"
 
 def get_generic_template_file(filename: Path):
@@ -84,7 +93,7 @@ class QuadletTestCase(unittest.TestCase):
         super().__init__()
         self._testMethodDoc = str(filename)
         self.filename = Path(filename)
-        self.servicename = to_servicefile_name(Path(self.filename.name))
+        self.servicename = to_servicefile_name(testcases_dir.joinpath(filename))
         self.data = testcases_dir.joinpath(filename).read_text()
         self.unit = {}
 
@@ -157,7 +166,7 @@ class Outcome:
             raise RuntimeError(self._err_msg(f"Unexpected generator failure\n" + self.stdout))
 
         for dependency_file in self.testcase.get_dependency_data():
-            self.add_expected_file(Path(to_servicefile_name(Path(dependency_file))))
+            self.add_expected_file(Path(to_servicefile_name(testcases_dir.joinpath(dependency_file))))
 
     def get_checks_from_data(self):
             return list(
