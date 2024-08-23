@@ -387,7 +387,7 @@ mod tests {
             }
 
             #[test]
-            #[serial_test::parallel]
+            #[serial_test::serial]
             fn should_follow_symlinks() {
                 // remember global state
                 let _quadlet_unit_dirs = env::var("QUADLET_UNIT_DIRS");
