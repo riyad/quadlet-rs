@@ -26,12 +26,9 @@ pub(crate) fn from_build_unit(
     build: &SystemdUnitFile,
     units_info_map: &mut UnitsInfoMap,
 ) -> Result<SystemdUnitFile, ConversionError> {
-    let unit_info = units_info_map
-        .0
-        .get(build.path().as_os_str())
-        .ok_or_else(|| {
-            ConversionError::InternalQuadletError("build".to_string(), build.path().to_path_buf())
-        })?;
+    let unit_info = units_info_map.0.get(build.file_name()).ok_or_else(|| {
+        ConversionError::InternalQuadletError("build".to_string(), build.file_name().into())
+    })?;
 
     // fail fast if resource name is not set
     if unit_info.resource_name.is_empty() {
@@ -220,15 +217,9 @@ pub(crate) fn from_container_unit(
     units_info_map: &mut UnitsInfoMap,
     is_user: bool,
 ) -> Result<SystemdUnitFile, ConversionError> {
-    let unit_info = units_info_map
-        .0
-        .get(container.path().as_os_str())
-        .ok_or_else(|| {
-            ConversionError::InternalQuadletError(
-                "container".to_string(),
-                container.path().to_path_buf(),
-            )
-        })?;
+    let unit_info = units_info_map.0.get(container.file_name()).ok_or_else(|| {
+        ConversionError::InternalQuadletError("container".into(), container.file_name().into())
+    })?;
 
     let mut service = SystemdUnitFile::new();
 
@@ -746,12 +737,9 @@ pub(crate) fn from_image_unit(
     units_info_map: &mut UnitsInfoMap,
     _is_user: bool,
 ) -> Result<SystemdUnitFile, ConversionError> {
-    let unit_info = units_info_map
-        .0
-        .get_mut(image.path().as_os_str())
-        .ok_or_else(|| {
-            ConversionError::InternalQuadletError("image".into(), image.path().into())
-        })?;
+    let unit_info = units_info_map.0.get_mut(image.file_name()).ok_or_else(|| {
+        ConversionError::InternalQuadletError("image".into(), image.path().into())
+    })?;
 
     let mut service = SystemdUnitFile::new();
     service.merge_from(image);
@@ -854,7 +842,7 @@ pub(crate) fn from_kube_unit(
 ) -> Result<SystemdUnitFile, ConversionError> {
     let unit_info = units_info_map
         .0
-        .get(kube.path().as_os_str())
+        .get(kube.file_name())
         .ok_or_else(|| ConversionError::InternalQuadletError("kube".into(), kube.path().into()))?;
 
     let mut service = SystemdUnitFile::new();
@@ -1037,7 +1025,7 @@ pub(crate) fn from_network_unit(
 ) -> Result<SystemdUnitFile, ConversionError> {
     let unit_info = units_info_map
         .0
-        .get_mut(network.path().as_os_str())
+        .get_mut(network.file_name())
         .ok_or_else(|| {
             ConversionError::InternalQuadletError("network".into(), network.path().into())
         })?;
@@ -1197,17 +1185,14 @@ pub(crate) fn from_pod_unit(
     units_info_map: &mut UnitsInfoMap,
     is_user: bool,
 ) -> Result<SystemdUnitFile, ConversionError> {
-    let unit_info = units_info_map
-        .0
-        .get(pod.path().as_os_str())
-        .ok_or_else(|| {
-            ConversionError::InternalPodError(
-                pod.path()
-                    .to_str()
-                    .expect("pod unit path is not a valid UTF-8 string")
-                    .to_string(),
-            )
-        })?;
+    let unit_info = units_info_map.0.get(pod.file_name()).ok_or_else(|| {
+        ConversionError::InternalPodError(
+            pod.path()
+                .to_str()
+                .expect("pod unit path is not a valid UTF-8 string")
+                .to_string(),
+        )
+    })?;
 
     let mut service = SystemdUnitFile::new();
     service.merge_from(pod);
@@ -1358,7 +1343,7 @@ pub(crate) fn from_volume_unit(
 ) -> Result<SystemdUnitFile, ConversionError> {
     let unit_info = units_info_map
         .0
-        .get_mut(volume.path().as_os_str())
+        .get_mut(volume.file_name())
         .ok_or_else(|| {
             ConversionError::InternalQuadletError("volume".into(), volume.path().into())
         })?;
@@ -1559,12 +1544,7 @@ fn handle_image_source<'a>(
             // since there is no default name conversion, the actual image name must exist in the names map
             let unit_info = units_info_map
                 .0
-                .get(
-                    service_unit_file
-                        .path()
-                        .with_file_name(quadlet_image_name)
-                        .as_os_str(),
-                )
+                .get(&OsString::from(quadlet_image_name))
                 .ok_or_else(|| ConversionError::ImageNotFound(quadlet_image_name.into()))?;
 
             // the systemd unit name is $name-$suffix.service
@@ -1669,9 +1649,12 @@ fn handle_pod(
                 return Err(ConversionError::InvalidPod(pod.into()));
             }
 
-            if let Some(pod_info) = units_info_map.0.get_mut(&OsString::from(pod)) {
-                podman.add("--pod-id-file");
-                podman.add(format!("%t/{}.pod-id", pod_info.service_name));
+            let pod_info = units_info_map
+                .0
+                .get_mut(&OsString::from(pod))
+                .ok_or_else(|| ConversionError::PodNotFound(pod.into()))?;
+            podman.add("--pod-id-file");
+            podman.add(format!("%t/{}.pod-id", pod_info.service_name));
 
                 let pod_service_name = pod_info
                     .get_service_file_name()
@@ -1681,10 +1664,7 @@ fn handle_pod(
                 service_unit_file.append_entry(UNIT_SECTION, "BindsTo", &pod_service_name);
                 service_unit_file.append_entry(UNIT_SECTION, "After", &pod_service_name);
 
-                pod_info.containers.push(service_unit_file.path.clone());
-            } else {
-                return Err(ConversionError::PodNotFound(pod.into()));
-            }
+            pod_info.containers.push(service_unit_file.path.clone());
         }
     }
     Ok(())

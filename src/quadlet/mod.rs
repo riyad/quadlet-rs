@@ -36,7 +36,7 @@ pub(crate) enum ConversionError {
     #[error("requested Quadlet image {0:?} was not found")]
     ImageNotFound(String),
     #[error("internal error while processing {0} {1:?}")]
-    InternalQuadletError(String, PathBuf),
+    InternalQuadletError(String, OsString),
     #[error("internal error while processing pod {0:?}")]
     InternalPodError(String),
     #[error("key Options can't be used without Device")]
@@ -193,7 +193,7 @@ impl UnitsInfoMap {
 
             units_info_map
                 .0
-                .insert(unit.path().as_os_str().to_os_string(), unit_info);
+                .insert(unit.file_name().to_os_string(), unit_info);
         }
 
         units_info_map
