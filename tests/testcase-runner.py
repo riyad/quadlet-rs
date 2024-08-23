@@ -114,7 +114,7 @@ class QuadletTestCase(unittest.TestCase):
     def get_dependency_data(self):
         return list(itertools.chain.from_iterable(
             filter(lambda line: len(line) > 0,
-                map(lambda line: shlex.split(line.lstrip("## depends-on ")),
+                map(lambda line: shlex.split(line.removeprefix("## depends-on ")),
                     filter(lambda line: line.startswith("## depends-on "), self.data.split("\n"))))))
 
     def runTest(self):
@@ -162,7 +162,7 @@ class Outcome:
     def get_checks_from_data(self):
             return list(
                 filter(lambda line: len(line) > 0,
-                      map(lambda line: shlex.split(line.lstrip("##")),
+                      map(lambda line: shlex.split(line.removeprefix("##")),
                           filter(lambda line: line.startswith("## assert-"),
                                   self.testcase.data.split("\n")))))
 
