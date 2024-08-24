@@ -5,9 +5,9 @@ pub(crate) mod logger;
 pub(crate) mod podman_command;
 
 use convert::quad_replace_extension;
+use log::{info, warn};
 use regex_lite::Regex;
 
-use self::logger::*;
 use crate::systemd_unit;
 use crate::systemd_unit::SystemdUnitFile;
 
@@ -189,7 +189,7 @@ impl UnitsInfoMap {
                         .into();
                 }
                 _ => {
-                    log!("Unsupported file type {:?}", unit.file_name());
+                    warn!("Unsupported file type {:?}", unit.file_name());
                     continue;
                 }
             }
@@ -328,7 +328,7 @@ pub(crate) fn warn_if_ambiguous_image_name(unit: &SystemdUnitFile, section: &str
         }
         if !is_unambiguous_name(image_name) {
             let file_name = unit.file_name();
-            log!("Warning: {file_name:?} specifies the image {image_name:?} which not a fully qualified image name. This is not ideal for performance and security reasons. See the podman-pull manpage discussion of short-name-aliases.conf for details.");
+            warn!("{file_name:?} specifies the image {image_name:?} which not a fully qualified image name. This is not ideal for performance and security reasons. See the podman-pull manpage discussion of short-name-aliases.conf for details.");
         }
     }
 }

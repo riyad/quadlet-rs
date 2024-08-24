@@ -4,10 +4,10 @@ use std::os::unix::prelude::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::{env, fs};
 
+use log::{debug, error, info};
 use walkdir::WalkDir;
 
 use super::constants::*;
-use super::logger::*;
 
 use super::RuntimeError;
 
@@ -133,7 +133,7 @@ impl UnitSearchDirsBuilder {
                         return true;
                     }
 
-                    log!("{p:?} is not a valid file path");
+                    info!("{p:?} is not a valid file path");
                     false
                 })
                 .flat_map(|p| self.subdirs_for_search_dir(p, None))
@@ -195,7 +195,7 @@ impl UnitSearchDirsBuilder {
             match fs::read_link(&path) {
                 Ok(path) => path,
                 Err(e) => {
-                    debug!("Error occurred resolving path {path:?}: {e}");
+                    error!("Error occurred resolving path {path:?}: {e}");
                     // Despite the failure add the path to the list for logging purposes
                     return vec![path];
                 }

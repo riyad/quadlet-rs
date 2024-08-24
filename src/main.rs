@@ -1,6 +1,8 @@
 mod quadlet;
 mod systemd_unit;
 
+use log::{debug, error, warn};
+
 use self::quadlet::logger::*;
 use self::quadlet::*;
 
@@ -295,14 +297,14 @@ fn enable_service_file(output_path: &Path, service: &SystemdUnitFile) {
         let symlink_path = output_path.join(symlink_rel);
         let symlink_dir = symlink_path.parent().unwrap();
         if let Err(e) = fs::create_dir_all(symlink_dir) {
-            log!("Can't create dir {:?}: {e}", symlink_dir.to_str().unwrap());
+            warn!("Can't create dir {:?}: {e}", symlink_dir.to_str().unwrap());
             continue;
         }
 
         debug!("Creating symlink {symlink_path:?} -> {target:?}");
         fs::remove_file(&symlink_path).unwrap_or_default(); // overwrite existing symlinks
         if let Err(e) = os::unix::fs::symlink(target, &symlink_path) {
-            log!(
+            warn!(
                 "Failed creating symlink {:?}: {e}",
                 symlink_path.to_str().unwrap()
             );
@@ -318,7 +320,7 @@ fn main() {
         Ok(cfg) => cfg,
         Err(e) => {
             help();
-            log!("{e}");
+            error!("{e}");
             process::exit(1);
         }
     };
@@ -326,7 +328,7 @@ fn main() {
     let errs = process(cfg);
     if !errs.is_empty() {
         for e in errs {
-            log!("{e}");
+            error!("{e}");
         }
         process::exit(1);
     }
@@ -440,7 +442,7 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
                 convert::from_volume_unit(&unit, &mut units_info_map)
             }
             _ => {
-                log!("Unsupported file type {:?}", unit.path());
+                warn!("Unsupported file type {:?}", unit.path());
                 continue;
             }
         };

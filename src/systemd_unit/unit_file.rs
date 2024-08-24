@@ -6,9 +6,8 @@ use std::io;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 
+use log::debug;
 use walkdir::WalkDir;
-
-use crate::quadlet::logger::*;
 
 use super::path_buf_ext::PathBufExt;
 use super::unit::SystemdUnit;
