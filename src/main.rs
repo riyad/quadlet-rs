@@ -85,7 +85,7 @@ fn parse_args(args: Vec<String>) -> Result<CliOptions, RuntimeError> {
     Ok(cfg)
 }
 
-fn validate_args() -> Result<CliOptions, RuntimeError> {
+fn validate_args(mut kmsg_logger: KmsgLogger) -> Result<CliOptions, RuntimeError> {
     let args = env::args().collect();
 
     let cfg = match parse_args(args) {
@@ -97,13 +97,13 @@ fn validate_args() -> Result<CliOptions, RuntimeError> {
             }
 
             if cfg.dry_run {
-                logger::enable_dry_run();
+                kmsg_logger.dry_run = true;
             }
             if cfg.verbose || cfg.dry_run {
-                logger::enable_debug();
+                kmsg_logger.debug_enabled = true;
             }
             if cfg.no_kmsg || cfg.dry_run {
-                logger::disable_kmsg();
+                kmsg_logger.kmsg_enabled = false.into();
             }
 
             cfg
@@ -116,13 +116,13 @@ fn validate_args() -> Result<CliOptions, RuntimeError> {
             }
 
             if cfg.dry_run {
-                logger::enable_dry_run();
+                kmsg_logger.dry_run = true;
             }
             if cfg.verbose || cfg.dry_run {
-                logger::enable_debug();
+                kmsg_logger.debug_enabled = true;
             }
             if cfg.no_kmsg || cfg.dry_run {
-                logger::disable_kmsg();
+                kmsg_logger.kmsg_enabled = false.into();
             }
 
             // FIXME: DRY the code around
@@ -134,6 +134,8 @@ fn validate_args() -> Result<CliOptions, RuntimeError> {
         }
         Err(e) => return Err(e),
     };
+
+    kmsg_logger.init().expect("could not initialize logger");
 
     if !cfg.dry_run {
         debug!(
@@ -310,7 +312,9 @@ fn enable_service_file(output_path: &Path, service: &SystemdUnitFile) {
 }
 
 fn main() {
-    let cfg = match validate_args() {
+    let kmsg_logger = KmsgLogger::new();
+
+    let cfg = match validate_args(kmsg_logger) {
         Ok(cfg) => cfg,
         Err(e) => {
             help();
