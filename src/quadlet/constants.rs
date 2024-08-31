@@ -54,9 +54,10 @@ pub static SUPPORTED_BUILD_KEYS: [&str; 24] = [
     "Volume",
 ];
 
-pub static SUPPORTED_CONTAINER_KEYS: [&str; 82] = [
+pub static SUPPORTED_CONTAINER_KEYS: [&str; 83] = [
     "AddCapability",
     "AddDevice",
+    "AddHost",
     "Annotation",
     "AutoUpdate",
     "CgroupsMode",

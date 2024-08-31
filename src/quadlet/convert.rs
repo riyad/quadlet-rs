@@ -611,18 +611,22 @@ pub(crate) fn from_container_unit(
 
     podman.add_env(&podman_env);
 
-    if let Some(ip) = container.lookup_last(CONTAINER_SECTION, "IP") {
+    if let Some(ip) = container.lookup(CONTAINER_SECTION, "IP") {
         if !ip.is_empty() {
             podman.add("--ip");
             podman.add(ip);
         }
     }
 
-    if let Some(ip6) = container.lookup_last(CONTAINER_SECTION, "IP6") {
+    if let Some(ip6) = container.lookup(CONTAINER_SECTION, "IP6") {
         if !ip6.is_empty() {
             podman.add("--ip6");
             podman.add(ip6);
         }
+    }
+
+    for add_host in container.lookup_all(CONTAINER_SECTION, "AddHost") {
+        podman.add(format!("--add-host={add_host}"));
     }
 
     let labels = container.lookup_all_key_val(CONTAINER_SECTION, "Label");
