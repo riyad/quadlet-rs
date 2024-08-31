@@ -198,10 +198,13 @@ pub static SUPPORTED_NETWORK_KEYS: [&str; 16] = [
     "ServiceName",
     "Subnet",
 ];
-pub static SUPPORTED_POD_KEYS: [&str; 18] = [
+pub static SUPPORTED_POD_KEYS: [&str; 21] = [
+    "AddHost",
     "ContainersConfModule",
     "GIDMap",
     "GlobalArgs",
+    "IP",
+    "IP6",
     "Network",
     "NetworkAlias",
     "PodmanArgs",

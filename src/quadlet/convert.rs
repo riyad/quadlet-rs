@@ -1322,6 +1322,22 @@ pub(crate) fn from_pod_unit(
     podman_start_pre.add(format!("--infra-name={podman_pod_name}-infra"));
     podman_start_pre.add(format!("--name={podman_pod_name}"));
 
+    if let Some(ip) = pod.lookup(POD_SECTION, "IP") {
+        if !ip.is_empty() {
+            podman_start_pre.add(format!("--ip={ip}"));
+        }
+    }
+
+    if let Some(ip6) = pod.lookup(POD_SECTION, "IP6") {
+        if !ip6.is_empty() {
+            podman_start_pre.add(format!("--ip6={ip6}"));
+        }
+    }
+
+    for add_host in pod.lookup_all(POD_SECTION, "AddHost") {
+        podman_start_pre.add(format!("--add-host={add_host}"));
+    }
+
     handle_podman_args(pod, POD_SECTION, &mut podman_start_pre);
     service.append_entry_value(
         SERVICE_SECTION,
