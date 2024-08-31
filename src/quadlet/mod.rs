@@ -225,7 +225,17 @@ fn get_build_service_name(build: &SystemdUnitFile) -> PathBuf {
 }
 
 fn get_built_image_name(build: &SystemdUnitFile) -> Option<String> {
-    build.lookup(BUILD_SECTION, "ImageTag").map(str::to_string)
+    build
+        .lookup_all(BUILD_SECTION, "ImageTag")
+        .iter()
+        .filter_map(|s| {
+            if s.is_empty() {
+                None
+            } else {
+                Some(s.to_string())
+            }
+        })
+        .next()
 }
 
 fn get_container_service_name(container: &SystemdUnitFile) -> PathBuf {

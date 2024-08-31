@@ -129,7 +129,9 @@ pub(crate) fn from_build_unit(
     let labels = build.lookup_all_key_val(BUILD_SECTION, "Label");
     podman.add_labels(&labels);
 
-    podman.add(format!("--tag={}", unit_info.resource_name));
+    for image_tag in build.lookup_all(BUILD_SECTION, "ImageTag") {
+        podman.add(format!("--tag={}", image_tag));
+    }
 
     handle_networks(
         build,
