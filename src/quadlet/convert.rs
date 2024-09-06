@@ -1322,6 +1322,18 @@ pub(crate) fn from_pod_unit(
     podman_start_pre.add(format!("--infra-name={podman_pod_name}-infra"));
     podman_start_pre.add(format!("--name={podman_pod_name}"));
 
+    for ip_addr in pod.lookup_all(POD_SECTION, "DNS") {
+        podman_start_pre.add(format!("--dns={ip_addr}"))
+    }
+
+    for dns_option in pod.lookup_all(POD_SECTION, "DNSOption") {
+        podman_start_pre.add(format!("--dns-option={dns_option}"))
+    }
+
+    for dns_search in pod.lookup_all(POD_SECTION, "DNSSearch") {
+        podman_start_pre.add(format!("--dns-search={dns_search}"))
+    }
+
     if let Some(ip) = pod.lookup(POD_SECTION, "IP") {
         if !ip.is_empty() {
             podman_start_pre.add(format!("--ip={ip}"));
