@@ -35,6 +35,8 @@ impl KmsgLogger {
     }
 
     fn log(&self, record: &Record) {
+        // every now and then I thinks, wouldn't it by nice if we could use `format_args!()` here ...
+        // ... yes, it would ... but we can't: https://github.com/rust-lang/rust/issues/92698
         let msg = format!(
             "quadlet-rs-generator[{}]: {} - {}",
             process::id(),
