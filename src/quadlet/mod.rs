@@ -37,8 +37,6 @@ pub(crate) enum ConversionError {
     ImageNotFound(String),
     #[error("internal error while processing {0} {1:?}")]
     InternalQuadletError(String, OsString),
-    #[error("internal error while processing pod {0:?}")]
-    InternalPodError(String),
     #[error("key Options can't be used without Device")]
     InvalidDeviceOptions,
     #[error("key Type can't be used without Device")]

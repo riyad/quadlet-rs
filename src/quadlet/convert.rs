@@ -1174,11 +1174,9 @@ pub(crate) fn from_pod_unit(
     is_user: bool,
 ) -> Result<SystemdUnitFile, ConversionError> {
     let unit_info = units_info_map.0.get(pod.file_name()).ok_or_else(|| {
-        ConversionError::InternalPodError(
-            pod.path()
-                .to_str()
-                .expect("pod unit path is not a valid UTF-8 string")
-                .to_string(),
+        ConversionError::InternalQuadletError(
+            "pod".into(),
+            pod.path().into(),
         )
     })?;
 
