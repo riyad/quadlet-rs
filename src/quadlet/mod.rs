@@ -5,7 +5,7 @@ pub(crate) mod logger;
 pub(crate) mod podman_command;
 
 use convert::quad_replace_extension;
-use log::{info, warn};
+use log::warn;
 use regex_lite::Regex;
 
 use crate::systemd_unit;

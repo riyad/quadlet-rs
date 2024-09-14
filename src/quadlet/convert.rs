@@ -326,11 +326,6 @@ pub(crate) fn from_container_unit(
         EntryValue::try_from_raw(service_stop_cmd.to_escaped_string().as_str())?,
     );
 
-    // FIXME: (COMPAT) remove once we can rely on Podman v4.4.0 or newer being present
-    // Podman change in: https://github.com/containers/podman/pull/16394
-    // Quadlet change in: https://github.com/containers/podman/pull/17487
-    service.append_entry(SERVICE_SECTION, "ExecStopPost", "-rm -f %t/%N.cid");
-
     let mut podman = get_base_podman_command(container, CONTAINER_SECTION);
 
     podman.add("run");
@@ -1077,10 +1072,7 @@ pub(crate) fn from_network_unit(
     let mut podman = get_base_podman_command(network, NETWORK_SECTION);
     podman.add("network");
     podman.add("create");
-    // FIXME:  (COMPAT) add `--ignore` once we can rely on Podman v4.4.0 or newer being present
-    // Podman support added in: https://github.com/containers/podman/pull/16773
-    // Quadlet support added in: https://github.com/containers/podman/pull/16688
-    //podman.add("--ignore");
+    podman.add("--ignore");
 
     let disable_dns = network
         .lookup_bool(NETWORK_SECTION, "DisableDNS")
@@ -1167,16 +1159,6 @@ pub(crate) fn from_network_unit(
 
     service.append_entry(SERVICE_SECTION, "Type", "oneshot");
     service.append_entry(SERVICE_SECTION, "RemainAfterExit", "yes");
-
-    service.append_entry_value(
-        SERVICE_SECTION,
-        "ExecCondition",
-        EntryValue::try_from_raw(format!(
-            "/usr/bin/bash -c \"! {} network exists {podman_network_name}\"",
-            get_podman_binary()
-        ))?,
-    );
-
     // The default syslog identifier is the exec basename (podman) which isn't very useful here
     service.append_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
 
@@ -1427,10 +1409,7 @@ pub(crate) fn from_volume_unit(
     let mut podman = get_base_podman_command(volume, VOLUME_SECTION);
     podman.add("volume");
     podman.add("create");
-    // FIXME:  (COMPAT) add `--ignore` once we can rely on Podman v4.4.0 or newer being present
-    // Podman support added in: https://github.com/containers/podman/pull/16243
-    // Quadlet default changed in: https://github.com/containers/podman/pull/16243
-    //podman.add("--ignore")
+    podman.add("--ignore");
 
     let driver = volume.lookup(VOLUME_SECTION, "Driver");
     if let Some(driver) = driver {
@@ -1525,16 +1504,6 @@ pub(crate) fn from_volume_unit(
 
     service.append_entry(SERVICE_SECTION, "Type", "oneshot");
     service.append_entry(SERVICE_SECTION, "RemainAfterExit", "yes");
-
-    service.append_entry_value(
-        SERVICE_SECTION,
-        "ExecCondition",
-        EntryValue::try_from_raw(format!(
-            "/usr/bin/bash -c \"! {} volume exists {podman_volume_name}\"",
-            get_podman_binary()
-        ))?,
-    );
-
     // The default syslog identifier is the exec basename (podman) which isn't very useful here
     service.append_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
 
