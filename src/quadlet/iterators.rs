@@ -1,10 +1,11 @@
 use std::cell::LazyCell;
 use std::ffi::OsStr;
+use std::io::ErrorKind;
 use std::os::unix::prelude::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::{env, fs};
 
-use log::{debug, error, info};
+use log::{debug, info};
 use walkdir::WalkDir;
 
 use super::constants::*;
@@ -14,13 +15,21 @@ use super::RuntimeError;
 const UNIT_DIR_ADMIN_USER: LazyCell<PathBuf> =
     LazyCell::new(|| PathBuf::from(UNIT_DIR_ADMIN).join("users"));
 const RESOLVED_UNIT_DIR_ADMIN_USER: LazyCell<PathBuf> =
-    LazyCell::new(|| match UNIT_DIR_ADMIN_USER.read_link() {
-        Ok(resolved_path) => resolved_path,
-        Err(err) => {
-            debug!(
-                "Error occurred resolving path {:?}: {err}",
-                &UNIT_DIR_ADMIN_USER
-            );
+    LazyCell::new(|| {
+        if UNIT_DIR_ADMIN_USER.is_symlink() {
+            match UNIT_DIR_ADMIN_USER.read_link() {
+                Ok(resolved_path) => resolved_path,
+                Err(err) => {
+                    if err.kind() != ErrorKind::NotFound {
+                        debug!(
+                            "Error occurred resolving path {:?}: {err}",
+                            &UNIT_DIR_ADMIN_USER
+                        );
+                    }
+                    UNIT_DIR_ADMIN_USER.clone()
+                }
+            }
+        } else {
             UNIT_DIR_ADMIN_USER.clone()
         }
     });
@@ -192,10 +201,12 @@ impl UnitSearchDirsBuilder {
         filter_fn: Option<Box<dyn Fn(&UnitSearchDirsBuilder, &walkdir::DirEntry) -> bool>>,
     ) -> Vec<PathBuf> {
         let path = if path.is_symlink() {
-            match fs::read_link(&path) {
+            match path.read_link() {
                 Ok(path) => path,
-                Err(e) => {
-                    error!("Error occurred resolving path {path:?}: {e}");
+                Err(err) => {
+                    if err.kind() != ErrorKind::NotFound {
+                        debug!("Error occurred resolving path {path:?}: {err}");
+                    }
                     // Despite the failure add the path to the list for logging purposes
                     return vec![path];
                 }
