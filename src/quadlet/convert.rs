@@ -207,14 +207,17 @@ pub(crate) fn from_container_unit(
     units_info_map: &mut UnitsInfoMap,
     is_user: bool,
 ) -> Result<SystemdUnitFile, ConversionError> {
-    let unit_info = units_info_map.0.get(container.file_name()).ok_or_else(|| {
-        ConversionError::InternalQuadletError("container".into(), container.file_name().into())
-    })?;
-
     let mut service = SystemdUnitFile::new();
-
     service.merge_from(container);
-    service.path = unit_info.get_service_file_name().into();
+
+    // scope access to unit_info
+    {
+        let unit_info = units_info_map.0.get(container.file_name()).ok_or_else(|| {
+            ConversionError::InternalQuadletError("container".into(), container.file_name().into())
+        })?;
+
+        service.path = unit_info.get_service_file_name().into();
+    }
 
     handle_default_dependencies(&mut service, is_user);
 
@@ -255,18 +258,7 @@ pub(crate) fn from_container_unit(
         image
     };
 
-    let podman_container_name =
-        if let Some(container_name) = container.lookup(CONTAINER_SECTION, "ContainerName") {
-            container_name
-        } else {
-            // By default, We want to name the container by the service name
-            if container.is_template_unit() {
-                "systemd-%p_%i"
-            } else {
-                "systemd-%N"
-            }
-            .to_string()
-        };
+    let podman_container_name = get_container_name(container);
 
     // Set PODMAN_SYSTEMD_UNIT so that podman auto-update can restart the service.
     service.add(SERVICE_SECTION, "Environment", "PODMAN_SYSTEMD_UNIT=%n");
@@ -314,7 +306,7 @@ pub(crate) fn from_container_unit(
     podman.add("run");
 
     podman.add("--name");
-    podman.add(podman_container_name);
+    podman.add(&podman_container_name);
 
     // We store the container id so we can clean it up in case of failure
     podman.add("--cidfile=%t/%N.cid");
@@ -1438,44 +1430,61 @@ fn handle_networks(
 ) -> Result<(), ConversionError> {
     for network in quadlet_unit_file.lookup_all(section, "Network") {
         if !network.is_empty() {
-            let mut network_name = network.to_string();
+            let mut quadlet_network_name = network.as_str();
             let mut options: Option<&str> = None;
             if let Some((_network_name, _options)) = network.split_once(':') {
-                network_name = _network_name.to_string();
+                quadlet_network_name = _network_name;
                 options = Some(_options);
             }
 
-            if network_name.ends_with(".network") {
-                // the podman network name is systemd-$name if none is specified by the user.
-                let network_unit_info = units_info_map
+            let is_network_unit = quadlet_network_name.ends_with(".network");
+            let is_container_unit = quadlet_network_name.ends_with(".container");
+
+            if is_network_unit || is_container_unit {
+                let unit_info = units_info_map
                     .0
-                    .get(&OsString::from(&network_name))
+                    .get(&OsString::from(&quadlet_network_name))
                     .ok_or_else(|| {
-                        ConversionError::InternalQuadletError("image".into(), network_name.into())
+                        ConversionError::InternalQuadletError(
+                            "unit".into(),
+                            quadlet_network_name.into(),
+                        )
                     })?;
+                dbg!(&unit_info);
+
+                // XXX: this is usually because a '@' in service name
+                if unit_info.resource_name.is_empty() {
+                    return Err(ConversionError::InvalidResourceNameIn(quadlet_network_name.into()));
+                }
 
                 // the systemd unit name is $name-network.service
-                let network_service_name = network_unit_info.get_service_file_name();
+                let service_file_name = unit_info.get_service_file_name();
                 service_unit_file.add(
                     UNIT_SECTION,
                     "Requires",
-                    network_service_name.to_str().unwrap(),
+                    service_file_name.to_str().unwrap(),
                 );
                 service_unit_file.add(
                     UNIT_SECTION,
                     "After",
-                    network_service_name.to_str().unwrap(),
+                    service_file_name.to_str().unwrap(),
                 );
 
-                network_name = network_unit_info.resource_name.clone();
+                quadlet_network_name = unit_info.resource_name.as_str();
             }
 
-            if options.is_some() {
-                podman.add("--network");
-                podman.add(format!("{network_name}:{}", options.unwrap()));
+            podman.add("--network");
+            if let Some(options) = options {
+                if is_container_unit {
+                    return Err(ConversionError::InvalidNetworkOptions);
+                }
+                podman.add(format!("{quadlet_network_name}:{options}"));
             } else {
-                podman.add("--network");
-                podman.add(network_name);
+                if is_container_unit {
+                    podman.add(format!("container:{quadlet_network_name}"));
+                } else {
+                    podman.add(format!("{quadlet_network_name}"));
+                }
             }
         }
     }

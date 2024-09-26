@@ -56,6 +56,8 @@ pub(crate) enum ConversionError {
     InvalidMountFormat(String),
     #[error("source parameter does not include a value")]
     InvalidMountSource,
+    #[error("extra options are not supported when joining another container's network")]
+    InvalidNetworkOptions,
     #[error("pod {0:?} is not Quadlet based")]
     InvalidPod(String),
     #[error("invalid port format {0:?}")]
@@ -64,6 +66,8 @@ pub(crate) enum ConversionError {
     InvalidRelativeFile,
     #[error("{0}")]
     InvalidRemapUsers(String),
+    #[error("cannot get the resource name of {0}")]
+    InvalidResourceNameIn(String),
     #[error("invalid service Type {0:?}")]
     InvalidServiceType(String),
     #[error("SetWorkingDirectory={0:?} is only supported in .{1} files")]
@@ -161,14 +165,19 @@ impl QuadletUnitFile {
             QuadletType::Build => get_build_service_name(&unit_file).to_str().to_owned(),
             QuadletType::Pod => get_pod_service_name(&unit_file).to_str().to_owned(),
         };
-        let resource_name = if quadlet_type == QuadletType::Build {
-            // Prefill `resouce_name`s for .build files. This is significantly less complex than
-            // pre-computing all `resource_name`s for all Quadlet types (which is rather complex for a few
-            // types), but still breaks the dependency cycle between .volume and .build ([Volume] can
-            // have Image=some.build, and [Build] can have Volume=some.volume:/some-volume)
-            get_built_image_name(&unit_file).unwrap_or_default()
-        } else {
-            String::default()
+        let resource_name = match quadlet_type {
+            QuadletType::Build => {
+                // Prefill `resouce_name`s for .build files. This is significantly less complex than
+                // pre-computing all `resource_name`s for all Quadlet types (which is rather complex for a few
+                // types), but still breaks the dependency cycle between .volume and .build ([Volume] can
+                // have Image=some.build, and [Build] can have Volume=some.volume:/some-volume)
+                get_built_image_name(&unit_file).unwrap_or_default()
+            }
+            QuadletType::Container => {
+                // Prefill resouceNames for .container files. This solves network reusing.
+                get_container_resource_name(&unit_file)
+            }
+            _ => String::default(),
         };
 
         Ok(QuadletUnitFile {
@@ -221,6 +230,38 @@ fn get_built_image_name(build: &SystemdUnitFile) -> Option<String> {
             }
         })
         .next()
+}
+
+// Get the unresolved container name that may contain '%'.
+fn get_container_name(container: &SystemdUnitFile) -> String {
+    if let Some(container_name) = container.lookup(CONTAINER_SECTION, "ContainerName") {
+        container_name
+    } else {
+        // By default, We want to name the container by the service name
+        if container.is_template_unit() {
+            "systemd-%p_%i"
+        } else {
+            "systemd-%N"
+        }
+        .to_string()
+    }
+}
+
+// Get the resolved container name that contains no '%'.
+// Returns an empty string if not resolvable.
+fn get_container_resource_name(container: &SystemdUnitFile) -> String {
+    let container_name = get_container_name(container);
+
+    // XXX: only %N is handled.
+    // it is difficult to properly implement specifiers handling without consulting systemd.
+    let resource_name =
+        container_name.replace("%N", get_container_service_name(container).to_str());
+
+    if !resource_name.contains("%") {
+        resource_name
+    } else {
+        String::default()
+    }
 }
 
 fn get_container_service_name(container: &SystemdUnitFile) -> PathBuf {
