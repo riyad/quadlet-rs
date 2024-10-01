@@ -26,10 +26,11 @@ tempfile = "3.12.0"
 [profile.release]
 # unpotimized file size with rustc 1.76.0: 1.1M
 strip = true      # no changes to binary size
-lto = "fat"       # reduces binary size from 1.1M to 890K
-opt-level = "z"   # reduces binary size from 890K to 797K
-panic = "abort"   # reduces binary size from 797K to 741K
-codegen-units = 1 # reduces binary size from 741K to 729K
+lto = "fat"
+panic = "abort"
+codegen-units = 1
+opt-level = "s"
+inline-threshold = 7  # adapted from "Tighten Rust's Belt, Ayers et al., 2022"
 
 [profile.dev]
 split-debuginfo = "unpacked"
