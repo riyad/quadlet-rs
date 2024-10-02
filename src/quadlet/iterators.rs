@@ -1,4 +1,3 @@
-use std::cell::LazyCell;
 use std::ffi::OsStr;
 use std::io::ErrorKind;
 use std::os::unix::prelude::OsStrExt;
@@ -11,30 +10,6 @@ use walkdir::WalkDir;
 use super::constants::*;
 
 use super::RuntimeError;
-
-const UNIT_DIR_ADMIN_USER: LazyCell<PathBuf> =
-    LazyCell::new(|| PathBuf::from(UNIT_DIR_ADMIN).join("users"));
-const RESOLVED_UNIT_DIR_ADMIN_USER: LazyCell<PathBuf> =
-    LazyCell::new(|| {
-        if UNIT_DIR_ADMIN_USER.is_symlink() {
-            match UNIT_DIR_ADMIN_USER.read_link() {
-                Ok(resolved_path) => resolved_path,
-                Err(err) => {
-                    if err.kind() != ErrorKind::NotFound {
-                        debug!(
-                            "Error occurred resolving path {:?}: {err}",
-                            &UNIT_DIR_ADMIN_USER
-                        );
-                    }
-                    UNIT_DIR_ADMIN_USER.clone()
-                }
-            }
-        } else {
-            UNIT_DIR_ADMIN_USER.clone()
-        }
-    });
-const SYSTEM_USER_DIR_LEVEL: LazyCell<usize> =
-    LazyCell::new(|| RESOLVED_UNIT_DIR_ADMIN_USER.components().count());
 
 pub(crate) struct UnitFiles {
     inner: Box<dyn Iterator<Item = Result<fs::DirEntry, RuntimeError>>>,
@@ -104,6 +79,20 @@ impl UnitSearchDirs {
         }
     }
 
+    pub(crate) fn from_env_or_system() -> UnitSearchDirsBuilder {
+        if let Some(quadlet_unit_dirs) = env::var("QUADLET_UNIT_DIRS").ok() {
+            if !quadlet_unit_dirs.is_empty() {
+                return Self::from_env();
+            }
+        }
+
+        UnitSearchDirsBuilder {
+            dirs: None,
+            recursive: false,
+            rootless: false,
+        }
+    }
+
     pub(crate) fn new(dirs: Vec<PathBuf>) -> UnitSearchDirsBuilder {
         UnitSearchDirsBuilder {
             dirs: Some(dirs),
@@ -125,12 +114,14 @@ pub(crate) struct UnitSearchDirsBuilder {
     rootless: bool,
 }
 
+type FilterFn = Box<dyn Fn(&walkdir::DirEntry, bool) -> bool>;
+
 impl UnitSearchDirsBuilder {
     pub(crate) fn build(mut self) -> UnitSearchDirs {
         if let Some(dirs) = self.dirs.take() {
             self.build_from_dirs(dirs)
         } else {
-            self.build_from_env()
+            self.build_from_system()
         }
     }
 
@@ -139,50 +130,79 @@ impl UnitSearchDirsBuilder {
             dirs.into_iter()
                 .filter(|p| {
                     if p.is_absolute() {
-                        return true;
+                        true
+                    } else {
+                        info!("{p:?} is not a valid file path");
+                        false
                     }
-
-                    info!("{p:?} is not a valid file path");
-                    false
                 })
                 .flat_map(|p| self.subdirs_for_search_dir(p, None))
                 .collect(),
         )
     }
 
-    pub(crate) fn build_from_env(self) -> UnitSearchDirs {
-        let mut dirs: Vec<PathBuf> = Vec::with_capacity(4);
+    pub(crate) fn build_from_system(self) -> UnitSearchDirs {
+        let resolved_unit_dir_admin_user = Self::resolve_unit_dir_admin_user();
+        let user_level_filter = get_user_level_filter_func(resolved_unit_dir_admin_user.clone());
+
         if self.rootless {
-            let runtime_dir = dirs::runtime_dir().expect("could not determine runtime dir");
-            dirs.extend(self.subdirs_for_search_dir(runtime_dir.join("containers/systemd"), None));
-            let config_dir = dirs::config_dir().expect("could not determine config dir");
-            dirs.extend(self.subdirs_for_search_dir(config_dir.join("containers/systemd"), None));
-            dirs.push(PathBuf::from(UNIT_DIR_ADMIN).join("users"));
-            dirs.extend(self.subdirs_for_search_dir(
-                PathBuf::from(UNIT_DIR_ADMIN).join("users"),
-                Some(Box::new(_non_numeric_filter)),
-            ));
-            dirs.extend(
-                self.subdirs_for_search_dir(
-                    PathBuf::from(UNIT_DIR_ADMIN)
-                        .join("users")
-                        .join(users::get_current_uid().to_string()),
-                    Some(Box::new(_user_level_filter)),
-                ),
+            let system_user_dir_level = resolved_unit_dir_admin_user.components().count();
+            let non_numeric_filter = get_non_numeric_filter_func(
+                resolved_unit_dir_admin_user.clone(),
+                system_user_dir_level,
             );
-        } else {
-            dirs.extend(self.subdirs_for_search_dir(
-                PathBuf::from(UNIT_DIR_TEMP),
-                Some(Box::new(_user_level_filter)),
-            ));
-            dirs.extend(self.subdirs_for_search_dir(
-                PathBuf::from(UNIT_DIR_ADMIN),
-                Some(Box::new(_user_level_filter)),
-            ));
-            dirs.extend(self.subdirs_for_search_dir(PathBuf::from(UNIT_DIR_DISTRO), None));
+
+            return UnitSearchDirs(self.get_rootless_dirs(&non_numeric_filter, &user_level_filter));
         }
 
-        UnitSearchDirs(dirs)
+        UnitSearchDirs(self.get_root_dirs(&user_level_filter))
+    }
+
+    fn get_root_dirs(&self, user_level_filter: &FilterFn) -> Vec<PathBuf> {
+        let mut dirs: Vec<PathBuf> = Vec::with_capacity(4);
+
+        dirs.extend(
+            self.subdirs_for_search_dir(PathBuf::from(UNIT_DIR_TEMP), Some(user_level_filter)),
+        );
+        dirs.extend(
+            self.subdirs_for_search_dir(PathBuf::from(UNIT_DIR_ADMIN), Some(user_level_filter)),
+        );
+        dirs.extend(self.subdirs_for_search_dir(PathBuf::from(UNIT_DIR_DISTRO), None));
+
+        dirs
+    }
+
+    fn get_rootless_dirs(
+        &self,
+        non_numeric_filter: &FilterFn,
+        user_level_filter: &FilterFn,
+    ) -> Vec<PathBuf> {
+        let mut dirs: Vec<PathBuf> = Vec::with_capacity(4);
+
+        if let Some(runtime_dir) = dirs::runtime_dir() {
+            dirs.extend(self.subdirs_for_search_dir(runtime_dir.join("containers/systemd"), None));
+        }
+
+        if let Some(config_dir) = dirs::config_dir() {
+            dirs.extend(self.subdirs_for_search_dir(config_dir.join("containers/systemd"), None));
+        }
+
+        dirs.extend(self.subdirs_for_search_dir(
+            PathBuf::from(UNIT_DIR_ADMIN).join("users"),
+            Some(non_numeric_filter),
+        ));
+        dirs.extend(
+            self.subdirs_for_search_dir(
+                PathBuf::from(UNIT_DIR_ADMIN)
+                    .join("users")
+                    .join(users::get_current_uid().to_string()),
+                Some(user_level_filter),
+            ),
+        );
+
+        dirs.push(PathBuf::from(UNIT_DIR_ADMIN).join("users"));
+
+        dirs
     }
 
     pub(crate) fn recursive(mut self, recursive: bool) -> Self {
@@ -195,10 +215,31 @@ impl UnitSearchDirsBuilder {
         self
     }
 
+    fn resolve_unit_dir_admin_user() -> PathBuf {
+        let unit_dir_admin_user = PathBuf::from(UNIT_DIR_ADMIN).join("users");
+
+        if unit_dir_admin_user.is_symlink() {
+            match unit_dir_admin_user.read_link() {
+                Ok(resolved_path) => resolved_path,
+                Err(err) => {
+                    if err.kind() != ErrorKind::NotFound {
+                        debug!(
+                            "Error occurred resolving path {:?}: {err}",
+                            &unit_dir_admin_user
+                        );
+                    }
+                    unit_dir_admin_user
+                }
+            }
+        } else {
+            unit_dir_admin_user
+        }
+    }
+
     fn subdirs_for_search_dir(
         &self,
         path: PathBuf,
-        filter_fn: Option<Box<dyn Fn(&UnitSearchDirsBuilder, &walkdir::DirEntry) -> bool>>,
+        filter_fn: Option<&Box<dyn Fn(&walkdir::DirEntry, bool) -> bool>>,
     ) -> Vec<PathBuf> {
         let path = if path.is_symlink() {
             match path.read_link() {
@@ -225,7 +266,7 @@ impl UnitSearchDirsBuilder {
                 Err(e) => debug!("Error occurred walking sub directories {path:?}: {e}"),
                 Ok(entry) => {
                     if let Some(filter_fn) = &filter_fn {
-                        if filter_fn(&self, &entry) {
+                        if filter_fn(&entry, self.rootless) {
                             dirs.push(entry.path().to_owned())
                         }
                     } else {
@@ -239,46 +280,58 @@ impl UnitSearchDirsBuilder {
     }
 }
 
-fn _non_numeric_filter(
-    _unit_search_dirs: &UnitSearchDirsBuilder,
-    entry: &walkdir::DirEntry,
-) -> bool {
-    // when running in rootless, only recrusive walk directories that are non numeric
-    // ignore sub dirs under the user directory that may correspond to a user id
-    if entry.path().starts_with(&*RESOLVED_UNIT_DIR_ADMIN_USER) {
-        if entry.path().components().count() > *SYSTEM_USER_DIR_LEVEL {
-            if !entry
-                .path()
-                .components()
-                .last()
-                .expect("path should have enough components")
-                .as_os_str()
-                .as_bytes()
-                .iter()
-                .all(|b| b.is_ascii_digit())
-            {
-                return true;
+fn get_non_numeric_filter_func<'a>(
+    resolved_unit_dir_admin_user: PathBuf,
+    system_user_dir_level: usize,
+) -> Box<dyn Fn(&walkdir::DirEntry, bool) -> bool + 'a> {
+    return Box::new(move |entry, _rootless| -> bool {
+        // when running in rootless, only recrusive walk directories that are non numeric
+        // ignore sub dirs under the user directory that may correspond to a user id
+        if entry
+            .path()
+            .starts_with(resolved_unit_dir_admin_user.clone())
+        {
+            if entry.path().components().count() > system_user_dir_level {
+                if !entry
+                    .path()
+                    .components()
+                    .last()
+                    .expect("path should have enough components")
+                    .as_os_str()
+                    .as_bytes()
+                    .iter()
+                    .all(|b| b.is_ascii_digit())
+                {
+                    return true;
+                }
             }
-        }
-    } else {
-        return true;
-    }
-
-    false
-}
-
-fn _user_level_filter(unit_search_dirs: &UnitSearchDirsBuilder, entry: &walkdir::DirEntry) -> bool {
-    // if quadlet generator is run rootless, do not recurse other user sub dirs
-    // if quadlet generator is run as root, ignore users sub dirs
-    if entry.path().starts_with(&*RESOLVED_UNIT_DIR_ADMIN_USER) {
-        if unit_search_dirs.rootless {
+        } else {
             return true;
         }
-    } else {
-        return true;
-    }
 
-    false
+        false
+    });
+}
+
+fn get_user_level_filter_func<'a>(
+    resolved_unit_dir_admin_user: PathBuf,
+) -> Box<dyn Fn(&walkdir::DirEntry, bool) -> bool + 'a> {
+    return Box::new(move |entry, rootless| -> bool {
+        // if quadlet generator is run rootless, do not recurse other user sub dirs
+        // if quadlet generator is run as root, ignore users sub dirs
+        if entry
+            .path()
+            .starts_with(resolved_unit_dir_admin_user.clone())
+        {
+            if rootless {
+                return true;
+            }
+        } else {
+            return true;
+        }
+
+        false
+    });
 }
 
 pub(crate) struct UnitSearchDirsIterator<'a> {
@@ -353,8 +406,8 @@ mod tests {
                             .to_str()
                             .expect("config dir is not a valid UTF-8 string")
                     ),
-                    format!("/etc/containers/systemd/users"),
                     format!("/etc/containers/systemd/users/{}", users::get_current_uid()),
+                    format!("/etc/containers/systemd/users"),
                 ]
                 .iter()
                 .map(PathBuf::from)
