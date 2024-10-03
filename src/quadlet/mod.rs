@@ -57,8 +57,6 @@ pub(crate) enum ConversionError {
     InvalidPod(String),
     #[error("invalid port format {0:?}")]
     InvalidPortFormat(String),
-    #[error("invalid published port {0:?}")]
-    InvalidPublishedPort(String),
     #[error("relative path in File key requires SetWorkingDirectory key to be set")]
     InvalidRelativeFile,
     #[error("{0}")]

@@ -602,7 +602,7 @@ pub(crate) fn from_container_unit(
         podman.add(format!("--expose={exposed_port}"))
     }
 
-    handle_publish_ports(container, CONTAINER_SECTION, &mut podman)?;
+    handle_publish_ports(container, CONTAINER_SECTION, &mut podman);
 
     podman.add_env(&podman_env);
 
@@ -973,7 +973,7 @@ pub(crate) fn from_kube_unit(
         );
     }
 
-    handle_publish_ports(kube, KUBE_SECTION, &mut podman_start)?;
+    handle_publish_ports(kube, KUBE_SECTION, &mut podman_start);
 
     handle_podman_args(kube, KUBE_SECTION, &mut podman_start);
 
@@ -1173,12 +1173,10 @@ pub(crate) fn from_pod_unit(
     units_info_map: &mut UnitsInfoMap,
     is_user: bool,
 ) -> Result<SystemdUnitFile, ConversionError> {
-    let unit_info = units_info_map.0.get(pod.file_name()).ok_or_else(|| {
-        ConversionError::InternalQuadletError(
-            "pod".into(),
-            pod.path().into(),
-        )
-    })?;
+    let unit_info = units_info_map
+        .0
+        .get(pod.file_name())
+        .ok_or_else(|| ConversionError::InternalQuadletError("pod".into(), pod.path().into()))?;
 
     let mut service = SystemdUnitFile::new();
     service.merge_from(pod);
@@ -1274,7 +1272,7 @@ pub(crate) fn from_pod_unit(
 
     handle_user_mappings(pod, POD_SECTION, &mut podman_start_pre, is_user, true)?;
 
-    handle_publish_ports(pod, POD_SECTION, &mut podman_start_pre)?;
+    handle_publish_ports(pod, POD_SECTION, &mut podman_start_pre);
 
     handle_networks(
         pod,
@@ -1669,71 +1667,13 @@ fn handle_pod(
     Ok(())
 }
 
-fn handle_publish_ports(
-    unit_file: &SystemdUnit,
-    section: &str,
-    podman: &mut PodmanCommand,
-) -> Result<(), ConversionError> {
-    let publish_ports: Vec<&str> = unit_file.lookup_all(section, "PublishPort");
-    for publish_port in publish_ports {
-        let publish_port = publish_port.trim(); // Allow whitespaces before and after
-
-        //  IP address could have colons in it. For example: "[::]:8080:80/tcp, so use custom splitter
-        let mut parts = split_ports(publish_port);
-
-        // format (from podman run):
-        // ip:hostPort:containerPort | ip::containerPort | hostPort:containerPort | containerPort
-        //
-        // ip could be IPv6 with minimum of these chars "[::]"
-        // containerPort can have a suffix of "/tcp" or "/udp"
-        let container_port;
-        let mut ip = String::new();
-        let mut host_port = String::new();
-        match parts.len() {
-            1 => {
-                container_port = parts.pop().unwrap();
-            }
-            2 => {
-                // NOTE: order is inverted because of pop()
-                container_port = parts.pop().unwrap();
-                host_port = parts.pop().unwrap();
-            }
-            3 => {
-                // NOTE: order is inverted because of pop()
-                container_port = parts.pop().unwrap();
-                host_port = parts.pop().unwrap();
-                ip = parts.pop().unwrap();
-            }
-            _ => {
-                return Err(ConversionError::InvalidPublishedPort(publish_port.into()));
-            }
-        }
-
-        if ip == "0.0.0.0" {
-            ip.clear();
-        }
-
-        if !host_port.is_empty() && !is_port_range(host_port.as_str()) {
-            return Err(ConversionError::InvalidPortFormat(host_port));
-        }
-
-        if !container_port.is_empty() && !is_port_range(container_port.as_str()) {
-            return Err(ConversionError::InvalidPortFormat(container_port));
-        }
-
-        podman.add("--publish");
-        if !ip.is_empty() && !host_port.is_empty() {
-            podman.add(format!("{ip}:{host_port}:{container_port}"));
-        } else if !ip.is_empty() {
-            podman.add(format!("{ip}::{container_port}"));
-        } else if !host_port.is_empty() {
-            podman.add(format!("{host_port}:{container_port}"));
-        } else {
-            podman.add(container_port);
-        }
-    }
-
-    Ok(())
+fn handle_publish_ports(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {
+    podman.extend(
+        unit_file
+            .lookup_all(section, "PublishPort")
+            .iter()
+            .flat_map(|publish_port| ["--publish".to_string(), publish_port.to_string()]),
+    )
 }
 
 fn handle_set_working_directory(
@@ -2299,100 +2239,7 @@ fn resolve_container_mount_params(
     .expect("connot convert Mount params back into CSV"));
 }
 
-/// Parses arguments to podman-run's `--publish` option.
-/// see also the documentation for the `PublishPort` field.
-///
-/// NOTE: the last part will also include the protocol if specified
-fn split_ports(ports: &str) -> Vec<String> {
-    let mut parts: Vec<String> = Vec::new();
-
-    let mut next_part = String::new();
-    let mut chars = ports.chars();
-    while let Some(c) = chars.next() {
-        let c = c;
-        match c {
-            '[' => {
-                // IPv6 contain ':' characters, hence they are enclosed with '[...]'
-                // so we consume all characters until ']' (including ':') for this part
-                next_part.push(c);
-                while let Some(c) = chars.next() {
-                    next_part.push(c);
-                    if c == ']' {
-                        break;
-                    }
-                }
-            }
-            ':' => {
-                // assume all ':' characters are boundaries that start a new part
-                parts.push(next_part);
-                next_part = String::new();
-                continue;
-            }
-            _ => {
-                next_part.push(c);
-            }
-        }
-    }
-    // don't forget the last part
-    parts.push(next_part);
-
-    parts
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    mod split_ports {
-        use super::*;
-
-        #[test]
-        fn with_empty() {
-            let input = "";
-
-            assert_eq!(split_ports(input), vec![""],);
-        }
-
-        #[test]
-        fn with_only_port() {
-            let input = "123";
-
-            assert_eq!(split_ports(input), vec!["123"],);
-        }
-
-        #[test]
-        fn with_ipv4_and_port() {
-            let input = "1.2.3.4:567";
-
-            assert_eq!(split_ports(input), vec!["1.2.3.4", "567"],);
-        }
-
-        #[test]
-        fn with_ipv6_and_port() {
-            let input = "[::]:567";
-
-            assert_eq!(split_ports(input), vec!["[::]", "567"],);
-        }
-
-        #[test]
-        fn with_host_and_container_ports() {
-            let input = "123:567";
-
-            assert_eq!(split_ports(input), vec!["123", "567"],);
-        }
-
-        #[test]
-        fn with_ipv4_host_and_container_ports() {
-            let input = "0.0.0.0:123:567";
-
-            assert_eq!(split_ports(input), vec!["0.0.0.0", "123", "567"],);
-        }
-
-        #[test]
-        fn with_ipv6_empty_host_container_port_and_protocol() {
-            let input = "[1:2:3:4::]::567/tcp";
-
-            assert_eq!(split_ports(input), vec!["[1:2:3:4::]", "", "567/tcp"],);
-        }
-    }
 }
