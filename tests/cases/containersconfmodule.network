@@ -1,5 +1,5 @@
-## assert-podman-global-args "network" "--module=/etc/container/1.conf"
-## assert-podman-global-args "network" "--module=/etc/container/2.conf"
+## assert-podman-global-args "network" "--module" "/etc/container/1.conf"
+## assert-podman-global-args "network" "--module" "/etc/container/2.conf"
 
 [Network]
 ContainersConfModule=/etc/container/1.conf

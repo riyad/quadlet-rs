@@ -67,8 +67,6 @@ pub(crate) enum ConversionError {
     InvalidSetWorkingDirectory(String, String),
     #[error("{0}")]
     InvalidSubnet(String),
-    #[error("invalid tmpfs format {0:?}")]
-    InvalidTmpfs(String),
     #[error("{0}")]
     Io(#[from] io::Error),
     #[error("no ImageTag key specified")]

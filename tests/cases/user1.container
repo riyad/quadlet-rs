@@ -1,5 +1,5 @@
 ## assert-podman-final-args localhost/imagename
-## assert-podman-args "--user=%U:%G"
+## assert-podman-args "--user" "%U:%G"
 
 [Container]
 Image=localhost/imagename

@@ -11,11 +11,7 @@ use super::*;
 fn get_base_podman_command(unit: &SystemdUnitFile, section: &str) -> PodmanCommand {
     let mut podman = PodmanCommand::new();
 
-    podman.extend(
-        unit.lookup_all(section, "ContainersConfModule")
-            .iter()
-            .map(|s| format!("--module={s}")),
-    );
+    lookup_and_add_all_strings(unit, section, &[("ContainersConfModule", "--module")], &mut podman);
 
     podman.extend(unit.lookup_all_args(section, "GlobalArgs"));
 
@@ -75,63 +71,31 @@ pub(crate) fn from_build_unit(
         ("Target", "--target"),
         ("Variant", "--variant"),
     ];
+    lookup_and_add_string(build, BUILD_SECTION, &string_keys, &mut podman);
 
-    let bool_keys = [("TLSVerify", "--tls-verify"), ("ForceRM", "--force-rm")];
+    let bool_keys = [
+        ("TLSVerify", "--tls-verify"),
+        ("ForceRM", "--force-rm"),
+    ];
+    lookup_and_add_bool(build, BUILD_SECTION, &bool_keys, &mut podman);
 
-    for (key, flag) in string_keys {
-        lookup_and_add_string(build, BUILD_SECTION, key, flag, &mut podman)
-    }
-
-    for (key, flag) in bool_keys {
-        lookup_and_add_bool(build, BUILD_SECTION, key, flag, &mut podman)
-    }
+    let all_string_keys = [
+        ("DNS", "--dns"),
+        ("DNSOption", "--dns-option"),
+        ("DNSSearch", "--dns-search"),
+        ("GroupAdd", "--group-add"),
+        ("ImageTag", "--tag"),
+    ];
+    lookup_and_add_all_strings(build, BUILD_SECTION, &all_string_keys, &mut podman);
 
     let annotations = build.lookup_all_key_val(BUILD_SECTION, "Annotation");
     podman.add_annotations(&annotations);
 
-    podman.extend(
-        build
-            .lookup_all(BUILD_SECTION, "DNS")
-            .iter()
-            .map(|ip_addr| format!("--dns={ip_addr}")),
-    );
-
-    podman.extend(
-        build
-            .lookup_all(BUILD_SECTION, "DNSOption")
-            .iter()
-            .map(|dns_option| format!("--dns-option={dns_option}")),
-    );
-
-    podman.extend(
-        build
-            .lookup_all(BUILD_SECTION, "DNSSearch")
-            .iter()
-            .map(|dns_search| format!("--dns-search={dns_search}")),
-    );
-
     let podman_env = build.lookup_all_key_val(BUILD_SECTION, "Environment");
     podman.add_env(&podman_env);
 
-    podman.extend(
-        build
-            .lookup_all(BUILD_SECTION, "GroupAdd")
-            .iter()
-            .filter_map(|group_add| {
-                if group_add.is_empty() {
-                    None
-                } else {
-                    Some(format!("--group-add={group_add}"))
-                }
-            }),
-    );
-
     let labels = build.lookup_all_key_val(BUILD_SECTION, "Label");
     podman.add_labels(&labels);
-
-    for image_tag in build.lookup_all(BUILD_SECTION, "ImageTag") {
-        podman.add(format!("--tag={}", image_tag));
-    }
 
     handle_networks(
         build,
@@ -180,7 +144,8 @@ pub(crate) fn from_build_unit(
     };
 
     if !file_path.is_empty() {
-        podman.add(format!("--file={file_path}"))
+        podman.add("--file");
+        podman.add(file_path);
     }
 
     handle_podman_args(build, BUILD_SECTION, &mut podman);
@@ -330,7 +295,8 @@ pub(crate) fn from_container_unit(
 
     podman.add("run");
 
-    podman.add(format!("--name={podman_container_name}"));
+    podman.add("--name");
+    podman.add(podman_container_name);
 
     // We store the container id so we can clean it up in case of failure
     podman.add("--cidfile=%t/%N.cid");
@@ -357,13 +323,42 @@ pub(crate) fn from_container_unit(
 
                 cgroups_mode
             });
-    podman.add(format!("--cgroups={}", cgroups_mode));
+    podman.add("--cgroups");
+    podman.add(cgroups_mode);
 
-    if let Some(timezone) = container.lookup_last(CONTAINER_SECTION, "Timezone") {
-        if !timezone.is_empty() {
-            podman.add(format!("--tz={}", timezone));
-        }
-    }
+    let string_keys = [
+        ("Timezone", "--tz"),
+        ("PidsLimit", "--pids-limit"),
+        ("ShmSize", "--shm-size"),
+        ("Entrypoint", "--entrypoint"),
+        ("WorkingDir", "--workdir"),
+        ("IP", "--ip"),
+        ("IP6", "--ip6"),
+        ("HostName", "--hostname"),
+        ("StopSignal", "--stop-signal"),
+        ("StopTimeout", "--stop-timeout"),
+        ("Pull", "--pull"),
+    ];
+    lookup_and_add_string(container, CONTAINER_SECTION, &string_keys, &mut podman);
+
+    let all_string_keys = [
+        ("NetworkAlias", "--network-alias"),
+        ("Ulimit", "--ulimit"),
+        ("DNS", "--dns"),
+        ("DNSOption", "--dns-option"),
+        ("DNSSearch", "--dns-search"),
+        ("GroupAdd", "--group-add"),
+        ("AddHost", "--add-host"),
+        ("Tmpfs", "--tmpfs"),
+    ];
+    lookup_and_add_all_strings(container, CONTAINER_SECTION, &all_string_keys, &mut podman);
+
+    let bool_keys = [
+        ("RunInit", "--init"),
+        ("EnvironmentHost", "--env-host"),
+        ("ReadOnlyTmpfs", "--read-only-tmpfs"),
+    ];
+    lookup_and_add_bool(container, CONTAINER_SECTION, &bool_keys, &mut podman);
 
     handle_networks(
         container,
@@ -372,19 +367,6 @@ pub(crate) fn from_container_unit(
         units_info_map,
         &mut podman,
     )?;
-
-    podman.extend(
-        container
-            .lookup_all(CONTAINER_SECTION, "NetworkAlias")
-            .iter()
-            .flat_map(|network_alias| ["--network-alias", network_alias])
-            .map(str::to_string),
-    );
-
-    // Run with a pid1 init to reap zombies by default (as most apps don't do that)
-    if let Some(run_init) = container.lookup_bool(CONTAINER_SECTION, "RunInit") {
-        podman.add_bool("--init", run_init);
-    }
 
     let service_type = container.lookup_last(SERVICE_SECTION, "Type");
     match service_type {
@@ -447,13 +429,6 @@ pub(crate) fn from_container_unit(
         podman.add_slice(&["--security-opt", "label=nested"]);
     }
 
-    if let Some(pids_limit) = container.lookup(CONTAINER_SECTION, "PidsLimit") {
-        if !pids_limit.is_empty() {
-            podman.add("--pids-limit");
-            podman.add(pids_limit);
-        }
-    }
-
     let security_label_type = container
         .lookup(CONTAINER_SECTION, "SecurityLabelType")
         .unwrap_or_default();
@@ -478,13 +453,6 @@ pub(crate) fn from_container_unit(
         podman.add(format!("label=level:{security_label_level}"));
     }
 
-    for ulimit in container.lookup_all(CONTAINER_SECTION, "Ulimit") {
-        if !ulimit.is_empty() {
-            podman.add("--ulimit");
-            podman.add(ulimit);
-        }
-    }
-
     for mut device in container.lookup_all_strv(CONTAINER_SECTION, "AddDevice") {
         if device.starts_with('-') {
             // ignore device if it doesn't exist
@@ -497,7 +465,8 @@ pub(crate) fn from_container_unit(
                 continue;
             }
         }
-        podman.add(format!("--device={device}"))
+        podman.add("--device");
+        podman.add(device);
     }
 
     // Default to no higher level privileges or caps
@@ -505,37 +474,20 @@ pub(crate) fn from_container_unit(
         podman.add_slice(&["--security-opt", &format!("seccomp={seccomp_profile}")])
     }
 
-    for ip_addr in container.lookup_all(CONTAINER_SECTION, "DNS") {
-        podman.add(format!("--dns={ip_addr}"))
-    }
-
-    for dns_option in container.lookup_all(CONTAINER_SECTION, "DNSOption") {
-        podman.add(format!("--dns-option={dns_option}"))
-    }
-
-    for dns_search in container.lookup_all(CONTAINER_SECTION, "DNSSearch") {
-        podman.add(format!("--dns-search={dns_search}"))
-    }
-
     for caps in container.lookup_all_strv(CONTAINER_SECTION, "DropCapability") {
-        podman.add(format!("--cap-drop={}", caps.to_ascii_lowercase()))
+        podman.add("--cap-drop");
+        podman.add(caps.to_ascii_lowercase());
     }
 
     // But allow overrides with AddCapability
     for caps in container.lookup_all_strv(CONTAINER_SECTION, "AddCapability") {
-        podman.add(format!("--cap-add={}", caps.to_ascii_lowercase()))
-    }
-
-    if let Some(shm_size) = container.lookup(CONTAINER_SECTION, "ShmSize") {
-        podman.add(format!("--shm-size={shm_size}"))
-    }
-
-    if let Some(entrypoint) = container.lookup(CONTAINER_SECTION, "Entrypoint") {
-        podman.add(format!("--entrypoint={entrypoint}"))
+        podman.add("--cap-add");
+        podman.add(caps.to_ascii_lowercase());
     }
 
     for sysctl in container.lookup_all_strv(CONTAINER_SECTION, "Sysctl") {
-        podman.add(format!("--sysctl={sysctl}"))
+        podman.add("--sysctl");
+        podman.add(sysctl);
     }
 
     let read_only = container.lookup_bool(CONTAINER_SECTION, "ReadOnly");
@@ -543,10 +495,6 @@ pub(crate) fn from_container_unit(
         podman.add_bool("--read-only", read_only);
     }
     let read_only = read_only.unwrap_or(false); // key not found: use default
-
-    if let Some(read_only_tmpfs) = container.lookup_bool(CONTAINER_SECTION, "ReadOnlyTmpfs") {
-        podman.add_bool("--read-only-tmpfs", read_only_tmpfs)
-    }
 
     let volatile_tmp = container
         .lookup_bool(CONTAINER_SECTION, "VolatileTmp")
@@ -557,24 +505,7 @@ pub(crate) fn from_container_unit(
 
     handle_user(container, CONTAINER_SECTION, &mut podman)?;
 
-    if let Some(workdir) = container.lookup(CONTAINER_SECTION, "WorkingDir") {
-        podman.add(format!("-w={workdir}"));
-    }
-
     handle_user_mappings(container, CONTAINER_SECTION, &mut podman, is_user, true)?;
-
-    for group_add in container.lookup_all(CONTAINER_SECTION, "GroupAdd") {
-        podman.add(format!("--group-add={group_add}"));
-    }
-
-    for tmpfs in container.lookup_all(CONTAINER_SECTION, "Tmpfs") {
-        if tmpfs.chars().filter(|c| *c == ':').count() > 1 {
-            return Err(ConversionError::InvalidTmpfs(tmpfs.into()));
-        }
-
-        podman.add("--tmpfs");
-        podman.add(tmpfs);
-    }
 
     handle_volumes(
         &container,
@@ -599,30 +530,13 @@ pub(crate) fn from_container_unit(
             return Err(ConversionError::InvalidPortFormat(exposed_port.into()));
         }
 
-        podman.add(format!("--expose={exposed_port}"))
+        podman.add("--expose");
+        podman.add(exposed_port);
     }
 
     handle_publish_ports(container, CONTAINER_SECTION, &mut podman);
 
     podman.add_env(&podman_env);
-
-    if let Some(ip) = container.lookup(CONTAINER_SECTION, "IP") {
-        if !ip.is_empty() {
-            podman.add("--ip");
-            podman.add(ip);
-        }
-    }
-
-    if let Some(ip6) = container.lookup(CONTAINER_SECTION, "IP6") {
-        if !ip6.is_empty() {
-            podman.add("--ip6");
-            podman.add(ip6);
-        }
-    }
-
-    for add_host in container.lookup_all(CONTAINER_SECTION, "AddHost") {
-        podman.add(format!("--add-host={add_host}"));
-    }
 
     let labels = container.lookup_all_key_val(CONTAINER_SECTION, "Label");
     podman.add_labels(&labels);
@@ -654,10 +568,6 @@ pub(crate) fn from_container_unit(
         );
     }
 
-    if let Some(env_host) = container.lookup_bool(CONTAINER_SECTION, "EnvironmentHost") {
-        podman.add_bool("--env-host", env_host);
-    }
-
     podman.extend(
         container
             .lookup_all_args(CONTAINER_SECTION, "Secret")
@@ -675,18 +585,6 @@ pub(crate) fn from_container_unit(
 
     handle_health(container, CONTAINER_SECTION, &mut podman);
 
-    if let Some(hostname) = container.lookup(CONTAINER_SECTION, "HostName") {
-        podman.add("--hostname");
-        podman.add(hostname);
-    }
-
-    if let Some(pull) = container.lookup(CONTAINER_SECTION, "Pull") {
-        if !pull.is_empty() {
-            podman.add("--pull");
-            podman.add(pull);
-        }
-    }
-
     handle_pod(
         container,
         &mut service,
@@ -694,20 +592,6 @@ pub(crate) fn from_container_unit(
         units_info_map,
         &mut podman,
     )?;
-
-    if let Some(stop_signal) = container.lookup(CONTAINER_SECTION, "StopSignal") {
-        if !stop_signal.is_empty() {
-            podman.add("--stop-signal");
-            podman.add(stop_signal);
-        }
-    }
-
-    if let Some(stop_timeout) = container.lookup(CONTAINER_SECTION, "StopTimeout") {
-        if !stop_timeout.is_empty() {
-            podman.add("--stop-timeout");
-            podman.add(stop_timeout);
-        }
-    }
 
     handle_podman_args(container, CONTAINER_SECTION, &mut podman);
 
@@ -793,16 +677,13 @@ pub(crate) fn from_image_unit(
         ("OS", "--os"),
         ("Variant", "--variant"),
     ];
+    lookup_and_add_string(image, IMAGE_SECTION, &string_keys, &mut podman);
 
-    let bool_keys = [("AllTags", "--all-tags"), ("TLSVerify", "--tls-verify")];
-
-    for (key, flag) in string_keys {
-        lookup_and_add_string(image, IMAGE_SECTION, key, flag, &mut podman)
-    }
-
-    for (key, flag) in bool_keys {
-        lookup_and_add_bool(image, IMAGE_SECTION, key, flag, &mut podman)
-    }
+    let bool_keys = [
+        ("AllTags", "--all-tags"),
+        ("TLSVerify", "--tls-verify"),
+    ];
+    lookup_and_add_bool(image, IMAGE_SECTION, &bool_keys, &mut podman);
 
     handle_podman_args(image, IMAGE_SECTION, &mut podman);
 
@@ -1074,23 +955,21 @@ pub(crate) fn from_network_unit(
     podman.add("create");
     podman.add("--ignore");
 
-    let disable_dns = network
-        .lookup_bool(NETWORK_SECTION, "DisableDNS")
-        .unwrap_or(false);
-    if disable_dns {
-        podman.add("--disable-dns")
-    }
+    let bool_keys = [
+        ("DisableDNS", "--disable-dns"),
+        ("Internal", "--internal"),
+        ("IPv6", "--ipv6"),
+    ];
+    lookup_and_add_bool(network, NETWORK_SECTION, &bool_keys, &mut podman);
 
-    for ip_addr in network.lookup_all(NETWORK_SECTION, "DNS") {
-        podman.add(format!("--dns={ip_addr}"))
-    }
+    let string_keys = [
+        ("Driver", "--driver"),
+        ("IPAMDriver", "--ipam-driver"),
+    ];
+    lookup_and_add_string(network, NETWORK_SECTION, &string_keys, &mut podman);
 
-    let driver = network.lookup_last(NETWORK_SECTION, "Driver");
-    if let Some(driver) = driver {
-        if !driver.is_empty() {
-            podman.add(format!("--driver={driver}"));
-        }
-    }
+
+    lookup_and_add_all_strings(network, NETWORK_SECTION, &[("DNS", "--dns")], &mut podman);
 
     let subnets: Vec<&str> = network.lookup_all(NETWORK_SECTION, "Subnet");
     let gateways: Vec<&str> = network.lookup_all(NETWORK_SECTION, "Gateway");
@@ -1107,36 +986,21 @@ pub(crate) fn from_network_unit(
             ));
         }
         for (i, subnet) in subnets.iter().enumerate() {
-            podman.add(format!("--subnet={subnet}"));
+            podman.add("--subnet");
+            podman.add(*subnet);
             if i < gateways.len() {
-                podman.add(format!("--gateway={}", gateways[i]));
+                podman.add("--gateway");
+                podman.add(gateways[i]);
             }
             if i < ip_ranges.len() {
-                podman.add(format!("--ip-range={}", ip_ranges[i]));
+                podman.add("--ip-range");
+                podman.add(ip_ranges[i]);
             }
         }
     } else if !gateways.is_empty() || !ip_ranges.is_empty() {
         return Err(ConversionError::InvalidSubnet(
             "cannot set Gateway or IPRange without Subnet".into(),
         ));
-    }
-
-    let internal = network
-        .lookup_bool(NETWORK_SECTION, "Internal")
-        .unwrap_or(false);
-    if internal {
-        podman.add("--internal")
-    }
-
-    if let Some(ipam_driver) = network.lookup_last(NETWORK_SECTION, "IPAMDriver") {
-        podman.add(format!("--ipam-driver={ipam_driver}"));
-    }
-
-    let ipv6 = network
-        .lookup_bool(NETWORK_SECTION, "IPv6")
-        .unwrap_or(false);
-    if ipv6 {
-        podman.add("--ipv6")
     }
 
     let network_options = network.lookup_all_key_val(NETWORK_SECTION, "Options");
@@ -1282,11 +1146,31 @@ pub(crate) fn from_pod_unit(
         &mut podman_start_pre,
     )?;
 
-    podman_start_pre.extend(
-        pod.lookup_all(POD_SECTION, "NetworkAlias")
-            .iter()
-            .flat_map(|network_alias| ["--network-alias", network_alias])
-            .map(str::to_string),
+
+    let string_keys = [
+        ("IP", "--ip"),
+        ("IP6", "--ip6"),
+    ];
+    // NOTE: Go Quadlet uses `lookup_and_add_all_strings()` here
+    lookup_and_add_string(
+        &pod,
+        POD_SECTION,
+        &string_keys,
+        &mut podman_start_pre,
+    );
+
+    let all_string_keys = [
+        ("NetworkAlias", "--network-alias"),
+        ("DNS", "--dns"),
+        ("DNSOption", "--dns-option"),
+        ("DNSSearch", "--dns-search"),
+        ("AddHost", "--add-host")
+    ];
+    lookup_and_add_all_strings(
+        &pod,
+        POD_SECTION,
+        &all_string_keys,
+        &mut podman_start_pre,
     );
 
     handle_volumes(
@@ -1297,36 +1181,10 @@ pub(crate) fn from_pod_unit(
         &mut podman_start_pre,
     )?;
 
-    podman_start_pre.add(format!("--infra-name={podman_pod_name}-infra"));
-    podman_start_pre.add(format!("--name={podman_pod_name}"));
-
-    for ip_addr in pod.lookup_all(POD_SECTION, "DNS") {
-        podman_start_pre.add(format!("--dns={ip_addr}"))
-    }
-
-    for dns_option in pod.lookup_all(POD_SECTION, "DNSOption") {
-        podman_start_pre.add(format!("--dns-option={dns_option}"))
-    }
-
-    for dns_search in pod.lookup_all(POD_SECTION, "DNSSearch") {
-        podman_start_pre.add(format!("--dns-search={dns_search}"))
-    }
-
-    if let Some(ip) = pod.lookup(POD_SECTION, "IP") {
-        if !ip.is_empty() {
-            podman_start_pre.add(format!("--ip={ip}"));
-        }
-    }
-
-    if let Some(ip6) = pod.lookup(POD_SECTION, "IP6") {
-        if !ip6.is_empty() {
-            podman_start_pre.add(format!("--ip6={ip6}"));
-        }
-    }
-
-    for add_host in pod.lookup_all(POD_SECTION, "AddHost") {
-        podman_start_pre.add(format!("--add-host={add_host}"));
-    }
+    podman_start_pre.add("--infra-name");
+    podman_start_pre.add(format!("{podman_pod_name}-infra"));
+    podman_start_pre.add("--name");
+    podman_start_pre.add(podman_pod_name);
 
     handle_podman_args(pod, POD_SECTION, &mut podman_start_pre);
     service.append_entry_value(
@@ -1409,7 +1267,8 @@ pub(crate) fn from_volume_unit(
 
     let driver = volume.lookup(VOLUME_SECTION, "Driver");
     if let Some(driver) = driver {
-        podman.add(format!("--driver={driver}"))
+        podman.add("--driver");
+        podman.add(driver);
     }
 
     if driver.unwrap_or_default() == "image" {
@@ -1619,9 +1478,11 @@ fn handle_networks(
             }
 
             if options.is_some() {
-                podman.add(format!("--network={network_name}:{}", options.unwrap()));
+                podman.add("--network");
+                podman.add(format!("{network_name}:{}", options.unwrap()));
             } else {
-                podman.add(format!("--network={network_name}"));
+                podman.add("--network");
+                podman.add(network_name);
             }
         }
     }
@@ -1668,12 +1529,7 @@ fn handle_pod(
 }
 
 fn handle_publish_ports(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {
-    podman.extend(
-        unit_file
-            .lookup_all(section, "PublishPort")
-            .iter()
-            .flat_map(|publish_port| ["--publish".to_string(), publish_port.to_string()]),
-    )
+    lookup_and_add_all_strings(unit_file, section, &[("PublishPort", "--publish")], podman);
 }
 
 fn handle_set_working_directory(
@@ -1828,12 +1684,14 @@ fn handle_user(
         (None, Some(group)) if !group.is_empty() => Err(ConversionError::InvalidGroup),
         (None, Some(_empty)) => Ok(()),
         (Some(user), None) if !user.is_empty() => {
-            podman.add(format!("--user={user}"));
+            podman.add("--user");
+            podman.add(user);
             Ok(())
         }
         (Some(_empty), None) => Ok(()),
         (Some(user), Some(group)) if !user.is_empty() && !group.is_empty() => {
-            podman.add(format!("--user={user}:{group}"));
+            podman.add("--user");
+            podman.add(format!("{user}:{group}"));
             Ok(())
         }
         (Some(_), Some(_)) => Ok(()),
@@ -1858,12 +1716,14 @@ fn handle_user_mappings(
     }
 
     for uid_map in unit_file.lookup_all_strv(section, "UIDMap") {
-        podman.add(format!("--uidmap={uid_map}"));
+        podman.add("--uidmap");
+        podman.add(uid_map);
         mappings_defined = true;
     }
 
     for gid_map in unit_file.lookup_all_strv(section, "GIDMap") {
-        podman.add(format!("--gidmap={gid_map}"));
+        podman.add("--gidmap");
+        podman.add(gid_map);
         mappings_defined = true;
     }
 
@@ -1929,10 +1789,12 @@ fn handle_user_remap(
         Some("manual") => {
             if support_manual {
                 for uid_map in uid_maps {
-                    podman.add(format!("--uidmap={uid_map}"));
+                    podman.add("--uidmap");
+                    podman.add(uid_map);
                 }
                 for gid_map in gid_maps {
-                    podman.add(format!("--gidmap={gid_map}"));
+                    podman.add("--gidmap");
+                    podman.add(gid_map);
                 }
             } else {
                 return Err(ConversionError::InvalidRemapUsers(
@@ -1958,9 +1820,10 @@ fn handle_user_remap(
             }
 
             if auto_opts.is_empty() {
-                podman.add("--userns=auto");
+                podman.add_slice(&["--userns", "auto"]);
             } else {
-                podman.add(format!("--userns=auto:{}", auto_opts.join(",")))
+                podman.add("--userns");
+                podman.add(format!("auto:{}", auto_opts.join(",")));
             }
         }
         Some("keep-id") => {
@@ -1989,9 +1852,10 @@ fn handle_user_remap(
             }
 
             if keepid_opts.is_empty() {
-                podman.add("--userns=keep-id");
+                podman.add_slice(&["--userns", "keep-id"]);
             } else {
-                podman.add(format!("--userns=keep-id:{}", keepid_opts.join(",")));
+                podman.add("--userns");
+                podman.add(format!("keep-id:{}", keepid_opts.join(",")));
             }
         }
         Some(remap_users) => {
@@ -2159,27 +2023,51 @@ fn is_port_range(port: &str) -> bool {
 }
 
 fn lookup_and_add_bool(
-    unit_file: &SystemdUnitFile,
+    unit: &SystemdUnit,
     section: &str,
-    key: &str,
-    flag: &str,
+    keys: &[(&str, &str)],
     podman: &mut PodmanCommand,
 ) {
-    if let Some(val) = unit_file.lookup_bool(section, key) {
-        podman.add_bool(flag, val);
+    for (key, flag) in keys {
+        if let Some(val) = unit.lookup_bool(section, *key) {
+            podman.add_bool(*flag, val);
+        }
+    }
+}
+
+fn lookup_and_add_all_strings(
+    unit: &SystemdUnit,
+    section: &str,
+    keys: &[(&str, &str)],
+    podman: &mut PodmanCommand,
+) {
+    // NOTE: Rust doesn't seem to like the doubly nested `flat_map()` variant I tried.
+    // e.g. `keys.iter().flat_map(<for loop part>)`
+    // it clmplains that:
+    // > returns a value referencing data owned by the current function
+    // but all the `&str`s should get "owned" in the end by `to_string()` and passed on to `podman`
+    for (key, flag) in keys {
+        podman.extend(
+            unit.lookup_all(section, *key)
+                .iter()
+                .flat_map(|val| [*flag, val])
+                .map(str::to_string),
+        );
     }
 }
 
 fn lookup_and_add_string(
-    unit_file: &SystemdUnitFile,
+    unit: &SystemdUnit,
     section: &str,
-    key: &str,
-    flag: &str,
+    keys: &[(&str, &str)],
     podman: &mut PodmanCommand,
 ) {
-    if let Some(val) = unit_file.lookup(section, key) {
-        if !val.is_empty() {
-            podman.add(format!("{flag}={val}"));
+    for (key, flag) in keys {
+        if let Some(val) = unit.lookup(section, *key) {
+            if !val.is_empty() {
+                podman.add(*flag);
+                podman.add(val);
+            }
         }
     }
 }

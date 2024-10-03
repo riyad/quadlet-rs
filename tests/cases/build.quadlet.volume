@@ -1,5 +1,5 @@
 ## depends-on basic.build
-## assert-podman-args --driver=image
+## assert-podman-args --driver image
 ## assert-podman-args --opt image=localhost/imagename
 ## assert-key-is "Unit" "Requires" "basic-build.service"
 ## assert-key-is "Unit" "After" "basic-build.service"

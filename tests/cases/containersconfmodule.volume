@@ -1,5 +1,5 @@
-## assert-podman-global-args "volume" "--module=/etc/container/1.conf"
-## assert-podman-global-args "volume" "--module=/etc/container/2.conf"
+## assert-podman-global-args "volume" "--module" "/etc/container/1.conf"
+## assert-podman-global-args "volume" "--module" "/etc/container/2.conf"
 
 [Volume]
 ContainersConfModule=/etc/container/1.conf
