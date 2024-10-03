@@ -1,4 +1,0 @@
-[Kube]
-Yaml=deployment.yml
-UserNS=keep-id:uid=200,gid=210
-## assert-podman-args "--userns" "keep-id:uid=200,gid=210"

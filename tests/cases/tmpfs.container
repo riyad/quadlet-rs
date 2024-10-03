@@ -1,7 +1,0 @@
-[Container]
-Image=localhost/imagename
-Exec=top
-Tmpfs=/tmpfs1
-## assert-podman-args "--tmpfs" "/tmpfs1"
-Tmpfs=/tmpfs2:ro
-## assert-podman-args "--tmpfs" "/tmpfs2:ro"
