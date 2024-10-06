@@ -47,6 +47,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    #[cold]
     fn error(&self, msg: String) -> ParseError {
         ParseError {
             line: self.line,
