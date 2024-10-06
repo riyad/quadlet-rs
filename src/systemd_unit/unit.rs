@@ -258,7 +258,8 @@ impl SystemdUnit {
         self.set_entry_value(section.into(), key.into(), EntryValue::new(value));
     }
 
-    pub(crate) fn set_entry_raw<S, K>(
+    /// Updates the last ocurrence of key to value
+    pub(crate) fn set_raw<S, K>(
         &mut self,
         section: S,
         key: K,
@@ -1486,7 +1487,7 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
                     "/usr/bin/podman test /some/path \"an arg\" \"a;b\\nc\\td\'e\" \"a;b\\nc\\td\" \"a\\\"b\""
                 );
 
-                let _ = unit.set_entry_raw(
+                let _ = unit.set_raw(
                     crate::systemd_unit::SERVICE_SECTION,
                     "ExecStart",
                     new_exec_start.as_str(),
@@ -1540,7 +1541,7 @@ KeyThree=value\\n3
 
                 unit.set("Section A", "KeyOne", "value 1");
                 unit.set("Section B", "KeyTwo", "\"value 2\"");
-                let _ = unit.set_entry_raw("Section B", "KeyThree", "\"value 3\"");
+                let _ = unit.set_raw("Section B", "KeyThree", "\"value 3\"");
 
                 assert_eq!(
                     unit.to_string(),
