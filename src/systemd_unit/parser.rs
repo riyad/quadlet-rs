@@ -625,8 +625,8 @@ mod tests {
             assert_eq!(unit.len(), 1);
 
             let mut iter = unit.section_entries("Section A");
-            assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
-            assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+            assert_eq!(iter.next(), Some(("KeyOne", "value 1".into())));
+            assert_eq!(iter.next(), Some(("KeyTwo", "value 2".into())));
             assert_eq!(iter.next(), None);
         }
 
@@ -639,11 +639,11 @@ mod tests {
             assert_eq!(unit.len(), 2);
 
             let mut iter = unit.section_entries("Section A");
-            assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
+            assert_eq!(iter.next(), Some(("KeyOne", "value 1".into())));
             assert_eq!(iter.next(), None);
 
             let mut iter = unit.section_entries("Section B");
-            assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+            assert_eq!(iter.next(), Some(("KeyTwo", "value 2".into())));
             assert_eq!(iter.next(), None);
         }
 
@@ -656,8 +656,8 @@ mod tests {
             assert_eq!(unit.len(), 1);
 
             let mut iter = unit.section_entries("Section A");
-            assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
-            assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+            assert_eq!(iter.next(), Some(("KeyOne", "value 1".into())));
+            assert_eq!(iter.next(), Some(("KeyTwo", "value 2".into())));
             assert_eq!(iter.next(), None);
         }
     }

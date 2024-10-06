@@ -129,7 +129,7 @@ pub(crate) fn from_build_unit(
 
     let working_directory = service.lookup(SERVICE_SECTION, "WorkingDirectory");
     let file_path = build.lookup(BUILD_SECTION, "File");
-    let (working_directory, file_path) = match (working_directory, file_path, context.as_str()) {
+    let (working_directory, file_path) = match (working_directory.as_deref(), file_path.as_deref(), context.as_str()) {
         (None, None, "") => return Err(ConversionError::NoSetWorkingDirectoryNorFileKeySpecified),
         (None, None, _) => ("", ""),
         (Some(""), None, "") => {
@@ -247,7 +247,7 @@ pub(crate) fn from_container_unit(
                 "systemd-%p_%i"
             } else {
                 "systemd-%N"
-            }
+            }.to_string()
         };
 
     // Set PODMAN_SYSTEMD_UNIT so that podman auto-update can restart the service.
@@ -255,7 +255,7 @@ pub(crate) fn from_container_unit(
 
     // Only allow mixed or control-group, as nothing else works well
     let kill_mode = service.lookup_last(SERVICE_SECTION, "KillMode");
-    match kill_mode {
+    match kill_mode.as_deref() {
         None | Some("mixed") | Some("control-group") => {
             // We default to mixed instead of control-group, because it lets conmon do its thing
             service.set_entry(SERVICE_SECTION, "KillMode", "mixed");
@@ -316,9 +316,9 @@ pub(crate) fn from_container_unit(
     let cgroups_mode =
         container
             .lookup(CONTAINER_SECTION, "CgroupsMode")
-            .map_or("split", |cgroups_mode| {
+            .map_or("split".to_string(), |cgroups_mode| {
                 if cgroups_mode.is_empty() {
-                    return "split";
+                    return "split".to_string();
                 }
 
                 cgroups_mode
@@ -369,7 +369,7 @@ pub(crate) fn from_container_unit(
     )?;
 
     let service_type = container.lookup_last(SERVICE_SECTION, "Type");
-    match service_type {
+    match service_type.as_deref() {
         Some("oneshot") => {}
         Some("notify") | None => {
             // If we're not in oneshot mode always use some form of sd-notify, normally via conmon,
@@ -687,7 +687,7 @@ pub(crate) fn from_image_unit(
 
     handle_podman_args(image, IMAGE_SECTION, &mut podman);
 
-    podman.add(image_name);
+    podman.add(image_name.clone());
 
     service.append_entry_value(
         SERVICE_SECTION,
@@ -746,7 +746,7 @@ pub(crate) fn from_kube_unit(
     // Rename old Kube group to x-Kube so that systemd ignores it
     service.rename_section(KUBE_SECTION, X_KUBE_SECTION);
 
-    let yaml_path = kube.lookup_last(KUBE_SECTION, "Yaml").unwrap_or("");
+    let yaml_path = kube.lookup_last(KUBE_SECTION, "Yaml").unwrap_or_default();
     if yaml_path.is_empty() {
         return Err(ConversionError::NoYamlKeySpecified);
     }
@@ -755,7 +755,7 @@ pub(crate) fn from_kube_unit(
 
     // Only allow mixed or control-group, as nothing else works well
     let kill_mode = kube.lookup_last(KUBE_SECTION, "KillMode");
-    match kill_mode {
+    match kill_mode.as_deref() {
         None | Some("mixed") | Some("control-group") => {
             // We default to mixed instead of control-group, because it lets conmon do its thing
             service.set_entry(SERVICE_SECTION, "KillMode", "mixed");
@@ -971,9 +971,9 @@ pub(crate) fn from_network_unit(
 
     lookup_and_add_all_strings(network, NETWORK_SECTION, &[("DNS", "--dns")], &mut podman);
 
-    let subnets: Vec<&str> = network.lookup_all(NETWORK_SECTION, "Subnet");
-    let gateways: Vec<&str> = network.lookup_all(NETWORK_SECTION, "Gateway");
-    let ip_ranges: Vec<&str> = network.lookup_all(NETWORK_SECTION, "IPRange");
+    let subnets = network.lookup_all(NETWORK_SECTION, "Subnet");
+    let gateways = network.lookup_all(NETWORK_SECTION, "Gateway");
+    let ip_ranges = network.lookup_all(NETWORK_SECTION, "IPRange");
     if !subnets.is_empty() {
         if gateways.len() > subnets.len() {
             return Err(ConversionError::InvalidSubnet(
@@ -987,14 +987,14 @@ pub(crate) fn from_network_unit(
         }
         for (i, subnet) in subnets.iter().enumerate() {
             podman.add("--subnet");
-            podman.add(*subnet);
+            podman.add(subnet);
             if i < gateways.len() {
                 podman.add("--gateway");
-                podman.add(gateways[i]);
+                podman.add(gateways[i].as_str());
             }
             if i < ip_ranges.len() {
                 podman.add("--ip-range");
-                podman.add(ip_ranges[i]);
+                podman.add(ip_ranges[i].as_str());
             }
         }
     } else if !gateways.is_empty() || !ip_ranges.is_empty() {
@@ -1266,7 +1266,7 @@ pub(crate) fn from_volume_unit(
     podman.add("--ignore");
 
     let driver = volume.lookup(VOLUME_SECTION, "Driver");
-    if let Some(driver) = driver {
+    if let Some(driver) = driver.as_deref() {
         podman.add("--driver");
         podman.add(driver);
     }
@@ -1278,7 +1278,7 @@ pub(crate) fn from_volume_unit(
             )
         })?;
 
-        let image_name = handle_image_source(image_name, &mut service, &units_info_map)?;
+        let image_name = handle_image_source(image_name.as_str(), &mut service, &units_info_map)?;
 
         podman.add("--opt");
         podman.add(format!("image={image_name}"));
@@ -1422,7 +1422,8 @@ fn handle_image_source<'a>(
 
 fn handle_log_driver(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {
     if let Some(log_driver) = unit_file.lookup_last(section, "LogDriver") {
-        podman.add_slice(&["--log-driver", log_driver]);
+        podman.add("--log-driver");
+        podman.add(log_driver);
     }
 }
 
@@ -1504,13 +1505,13 @@ fn handle_pod(
     if let Some(pod) = quadlet_unit.lookup(section, "Pod") {
         if !pod.is_empty() {
             if !pod.ends_with(".pod") {
-                return Err(ConversionError::InvalidPod(pod.into()));
+                return Err(ConversionError::InvalidPod(pod));
             }
 
             let pod_info = units_info_map
                 .0
-                .get_mut(&OsString::from(pod))
-                .ok_or_else(|| ConversionError::PodNotFound(pod.into()))?;
+                .get_mut(&OsString::from(&pod))
+                .ok_or_else(|| ConversionError::PodNotFound(pod))?;
             podman.add("--pod-id-file");
             podman.add(format!("%t/{}.pod-id", pod_info.service_name));
 
@@ -1590,7 +1591,7 @@ fn handle_set_working_directory(
             }
 
             // Any value other than the above cases will be returned as context
-            context = set_working_directory;
+            context = &set_working_directory;
 
             // If we have a relative path, set the WorkingDirectory to that of the quadlet_unit_file
             if !PathBuf::from(context).is_absolute() {
@@ -1773,7 +1774,7 @@ fn handle_user_remap(
     let uid_maps: Vec<String> = unit_file.lookup_all_strv(section, "RemapUid");
     let gid_maps: Vec<String> = unit_file.lookup_all_strv(section, "RemapGid");
     let remap_users = unit_file.lookup_last(section, "RemapUsers");
-    match remap_users {
+    match remap_users.as_deref() {
         None => {
             if !uid_maps.is_empty() {
                 return Err(ConversionError::InvalidRemapUsers(

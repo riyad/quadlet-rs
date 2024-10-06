@@ -20,35 +20,23 @@ pub(crate) type EntryKey = String;
 pub(crate) type EntryRawValue = String;
 
 #[derive(Clone, Default, Debug, PartialEq)]
-pub struct EntryValue {
-    raw: EntryRawValue,
-    unquoted: String,
-}
+pub struct EntryValue(EntryRawValue);
 
 impl EntryValue {
-    pub fn from_unquoted<S: Into<String>>(unquoted: S) -> Self {
-        let unquoted = unquoted.into();
-        Self {
-            raw: quote_value(unquoted.as_str()),
-            unquoted,
-        }
+    pub fn from_raw<S: Into<String>>(raw: S) -> Self {
+        Self::try_from_raw(raw).expect("value not correctly quoted")
     }
 
-    pub fn raw(&self) -> &String {
-        &self.raw
+    pub fn new(unquoted: &str) -> Self {
+        Self(quote_value(unquoted))
     }
 
-    pub fn unquote(&self) -> String {
-        self.try_unquote().expect("parsing error")
-    }
-
-    #[deprecated = "use unquote() or try_unquote()"]
-    pub fn unquoted(&self) -> &String {
-        &self.unquoted
+    pub(crate) fn raw(&self) -> &String {
+        &self.0
     }
 
     pub fn to_bool(&self) -> Result<bool, Error> {
-        let trimmed = self.raw.trim();
+        let trimmed = self.0.trim();
         if trimmed.is_empty() {
             return Ok(false);
         }
@@ -58,28 +46,34 @@ impl EntryValue {
 
     pub fn try_from_raw<S: Into<String>>(raw: S) -> Result<Self, Error> {
         let raw = raw.into();
-        Ok(Self {
-            unquoted: unquote_value(raw.as_str())?,
-            raw,
-        })
+        let _ = unquote_value(raw.as_str())?;
+        Ok(Self(raw))
     }
 
     pub fn try_unquote(&self) -> Result<String, Error> {
-        unquote_value(self.raw.as_str())
+        unquote_value(self.0.as_str())
+    }
+
+    // pub fn to_string(&self) -> String {
+    //     self.unquote()
+    // }
+
+    pub fn unquote(&self) -> String {
+        self.try_unquote().expect("parsing error")
     }
 }
 
 /// experimental: not sure if this is the right way
 impl From<&str> for EntryValue {
     fn from(unquoted: &str) -> Self {
-        Self::from_unquoted(unquoted)
+        Self::new(unquoted)
     }
 }
 
 /// experimental: not sure if this is the right way
 impl From<String> for EntryValue {
     fn from(unquoted: String) -> Self {
-        Self::from_unquoted(unquoted)
+        Self::new(unquoted.as_str())
     }
 }
 
@@ -88,7 +82,13 @@ impl FromStr for EntryValue {
     type Err = Error;
 
     fn from_str(raw: &str) -> Result<Self, Self::Err> {
-        Self::try_from_raw(raw)
+        Ok(Self::from_raw(raw))
+    }
+}
+
+impl ToString for EntryValue {
+    fn to_string(&self) -> String {
+        self.unquote()
     }
 }
 
@@ -101,13 +101,13 @@ mod tests {
     mod entry_value {
         use super::*;
 
-        mod from_unquoted {
+        mod new {
             use super::*;
 
             #[test]
             fn value_gets_quoted() {
                 let input = "foo=\"bar\"";
-                let value = EntryValue::from_unquoted(input);
+                let value = EntryValue::new(input);
 
                 assert_eq!(value.unquote(), input);
                 assert_eq!(value.raw(), "foo=\\\"bar\\\"");
@@ -181,20 +181,14 @@ mod tests {
 
             #[test]
             fn unquotes_value() {
-                let value = EntryValue {
-                    raw: "foo \"bar\" foo=\"bar\"".into(),
-                    unquoted: String::new(),
-                };
+                let value = EntryValue::from_raw("foo \"bar\" foo=\"bar\"");
 
                 assert_eq!(value.try_unquote(), Ok("foo bar foo=\"bar\"".into()),);
             }
 
             #[test]
             fn error_for_invalid_value() {
-                let value = EntryValue {
-                    raw: "\\x00".into(),
-                    unquoted: String::new(),
-                };
+                let value = EntryValue("\\x00".into());
 
                 assert_eq!(
                     value.try_unquote(),
@@ -211,10 +205,7 @@ mod tests {
             #[test]
             #[should_panic]
             fn panics_on_parse_error() {
-                let value = EntryValue {
-                    raw: "\\x00".into(),
-                    unquoted: String::new(),
-                };
+                let value = EntryValue::from_raw("\\x00");
 
                 value.unquote();
             }
@@ -240,7 +231,7 @@ mod tests {
         #[test]
         fn value_gets_unquoted() {
             let input = "foo \"bar\"";
-            let value = EntryValue::try_from_raw(input).unwrap();
+            let value = EntryValue::from_raw(input);
 
             assert_eq!(value.raw(), input);
             assert_eq!(value.unquote(), "foo bar");

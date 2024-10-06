@@ -17,7 +17,7 @@ impl SystemdUnit {
         K: Into<String>,
         V: Into<String>,
     {
-        self.append_entry_value(section, key, EntryValue::from_unquoted(value));
+        self.append_entry_value(section, key, EntryValue::new(value.into().as_str()));
     }
 
     /// Appends `key=value` to last instance of `section`
@@ -63,14 +63,14 @@ impl SystemdUnit {
     }
 
     /// Get an interator of values for all `key`s in all instances of `section`
-    pub(crate) fn lookup_all<S, K>(&self, section: S, key: K) -> Vec<&str>
+    pub(crate) fn lookup_all<S, K>(&self, section: S, key: K) -> Vec<String>
     where
         S: Into<String>,
         K: Into<String>,
     {
         self.lookup_all_values(section, key)
             .iter()
-            .map(|v| v.unquoted().as_str())
+            .map(|v| v.unquote())
             .collect()
     }
 
@@ -155,7 +155,7 @@ impl SystemdUnit {
             .get_all(&key.into())
     }
 
-    pub(crate) fn lookup<S, K>(&self, section: S, key: K) -> Option<&str>
+    pub(crate) fn lookup<S, K>(&self, section: S, key: K) -> Option<String>
     where
         S: Into<String>,
         K: Into<String>,
@@ -178,13 +178,12 @@ impl SystemdUnit {
     //TODO: lookup_gid()
 
     // Get the last value for `key` in all instances of `section`
-    pub(crate) fn lookup_last<S, K>(&self, section: S, key: K) -> Option<&str>
+    pub(crate) fn lookup_last<S, K>(&self, section: S, key: K) -> Option<String>
     where
         S: Into<String>,
         K: Into<String>,
     {
-        self.lookup_last_value(section, key)
-            .map(|v| v.unquoted().as_str())
+        self.lookup_last_value(section, key).map(|v| v.unquote())
     }
 
     // TODO: lookup_last_args()
@@ -224,7 +223,7 @@ impl SystemdUnit {
         K: Into<String>,
         V: Into<String>,
     {
-        self.prepend_entry_value(section, key, EntryValue::from_unquoted(value));
+        self.prepend_entry_value(section, key, EntryValue::new(value.into().as_str()));
     }
 
     /// Prepends `key=value` to last instance of `section`
@@ -270,9 +269,9 @@ impl SystemdUnit {
     pub(crate) fn section_entries<S: Into<String>>(
         &self,
         name: S,
-    ) -> impl DoubleEndedIterator<Item = (&str, &str)> {
+    ) -> impl DoubleEndedIterator<Item = (&str, String)> {
         self.section_entry_values(name)
-            .map(|(k, v)| (k, v.unquoted().as_str()))
+            .map(|(k, v)| (k, v.unquote()))
     }
 
     pub(crate) fn section_entry_values<S: Into<String>>(
@@ -295,7 +294,7 @@ impl SystemdUnit {
     {
         let value = value.into();
 
-        self.set_entry_value(section, key, EntryValue::from_unquoted(value));
+        self.set_entry_value(section, key, EntryValue::new(value.as_str()));
     }
 
     pub(crate) fn set_entry_raw<S, K, V>(&mut self, section: S, key: K, value: V)
@@ -414,8 +413,8 @@ KeyOne=value 1";
                 assert_eq!(unit.len(), 1); // shouldn't change the number of sections
 
                 let mut iter = unit.section_entries("Section A");
-                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
-                assert_eq!(iter.next(), Some(("NewKey", "new value")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1".into())));
+                assert_eq!(iter.next(), Some(("NewKey", "new value".into())));
                 assert_eq!(iter.next(), None);
             }
 
@@ -431,11 +430,11 @@ KeyOne=value 1";
                 assert_eq!(unit.len(), 2);
 
                 let mut iter = unit.section_entries("Section A");
-                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1".into())));
                 assert_eq!(iter.next(), None);
 
                 let mut iter = unit.section_entries("New Section");
-                assert_eq!(iter.next(), Some(("NewKey", "new value")));
+                assert_eq!(iter.next(), Some(("NewKey", "new value".into())));
                 assert_eq!(iter.next(), None);
             }
 
@@ -459,11 +458,11 @@ KeyOne=value 2.1";
                 assert_eq!(unit.len(), 2);
 
                 let mut iter = unit.section_entries("Section A");
-                assert_eq!(iter.next(), Some(("KeyOne", "value 1.1")));
-                assert_eq!(iter.next(), Some(("KeyOne", "value 1.2")));
-                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
-                assert_eq!(iter.next(), Some(("KeyOne", "value 2.1")));
-                assert_eq!(iter.next(), Some(("KeyOne", "new value")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1.1".into())));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1.2".into())));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2".into())));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 2.1".into())));
+                assert_eq!(iter.next(), Some(("KeyOne", "new value".into())));
                 assert_eq!(iter.next(), None);
             }
         }
@@ -677,7 +676,7 @@ KeyOne  =value 1";
                 assert_eq!(unit.len(), 1);
 
                 let mut iter = unit.section_entries("Section A");
-                assert_eq!(iter.next().unwrap(), ("KeyOne", "value 1"));
+                assert_eq!(iter.next().unwrap(), ("KeyOne", "value 1".into()));
                 assert_eq!(iter.next(), None);
             }
 
@@ -691,7 +690,7 @@ KeyOne  =value 1";
                 assert_eq!(unit.len(), 1);
 
                 let mut iter = unit.section_entries("Section A");
-                assert_eq!(iter.next().unwrap(), ("KeyOne", "value 1"));
+                assert_eq!(iter.next().unwrap(), ("KeyOne", "value 1".into()));
                 assert_eq!(iter.next(), None);
             }
 
@@ -706,8 +705,8 @@ KeyTwo\t=\tvalue 2\t";
                 assert_eq!(unit.len(), 1);
 
                 let mut iter = unit.section_entries("Section A");
-                assert_eq!(iter.next().unwrap(), ("KeyOne", "value 1"));
-                assert_eq!(iter.next().unwrap(), ("KeyTwo", "value 2"));
+                assert_eq!(iter.next().unwrap(), ("KeyOne", "value 1".into()));
+                assert_eq!(iter.next().unwrap(), ("KeyTwo", "value 2".into()));
                 assert_eq!(iter.next(), None);
             }
 
@@ -720,7 +719,7 @@ KeyThree  =  \"  value 3\t\"";
                 assert_eq!(unit.len(), 1);
 
                 let mut iter = unit.section_entries("Section A");
-                assert_eq!(iter.next().unwrap(), ("KeyThree", "  value 3\t"));
+                assert_eq!(iter.next().unwrap(), ("KeyThree", "  value 3\t".into()));
                 assert_eq!(iter.next(), None);
             }
 
@@ -734,7 +733,10 @@ Setting=\"something\" \"some thing\" \'…\'";
                 assert_eq!(unit.len(), 1);
 
                 let mut iter = unit.section_entries("Section A");
-                assert_eq!(iter.next().unwrap(), ("Setting", "something some thing …"));
+                assert_eq!(
+                    iter.next().unwrap(),
+                    ("Setting", "something some thing …".into())
+                );
                 assert_eq!(iter.next(), None);
             }
 
@@ -747,7 +749,7 @@ Setting=foo=\"bar baz\"";
                 assert_eq!(unit.len(), 1);
 
                 let mut iter = unit.section_entries("Section A");
-                assert_eq!(iter.next().unwrap(), ("Setting", "foo=\"bar baz\""));
+                assert_eq!(iter.next().unwrap(), ("Setting", "foo=\"bar baz\"".into()));
                 assert_eq!(iter.next(), None);
             }
 
@@ -784,7 +786,7 @@ unescape=\\a\\b\\f\\n\\r\\t\\v\\\\\\\"\\\'\\s";
                     let mut iter = unit.section_entries("Section A");
                     assert_eq!(
                         iter.next().unwrap(),
-                        ("unescape", "\u{7}\u{8}\u{c}\n\r\t\u{b}\\\"\' ")
+                        ("unescape", "\u{7}\u{8}\u{c}\n\r\t\u{b}\\\"\' ".into())
                     );
                     assert_eq!(iter.next(), None);
                 }
@@ -800,7 +802,7 @@ unescape=\\xaa \\u1234 \\U0010cdef \\123";
                     let mut iter = unit.section_entries("Section A");
                     assert_eq!(
                         iter.next().unwrap(),
-                        ("unescape", "\u{aa} \u{1234} \u{10cdef} \u{53}")
+                        ("unescape", "\u{aa} \u{1234} \u{10cdef} \u{53}".into())
                     );
                     assert_eq!(iter.next(), None);
                 }
@@ -890,22 +892,25 @@ KeyThree=value 3\\
                 assert_eq!(unit.len(), 3);
 
                 let mut iter = unit.section_entries("Section A");
-                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
-                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1".into())));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2".into())));
                 assert_eq!(iter.next(), None);
 
                 let mut iter = unit.section_entries("Section B");
-                assert_eq!(iter.next(), Some(("Setting", "something some thing …")));
                 assert_eq!(
                     iter.next(),
-                    Some(("KeyTwo", "value 2        value 2 continued"))
+                    Some(("Setting", "something some thing …".into()))
+                );
+                assert_eq!(
+                    iter.next(),
+                    Some(("KeyTwo", "value 2        value 2 continued".into()))
                 );
                 assert_eq!(iter.next(), None);
 
                 let mut iter = unit.section_entries("Section C");
                 assert_eq!(
                     iter.next(),
-                    Some(("KeyThree", "value 3       value 3 continued"))
+                    Some(("KeyThree", "value 3       value 3 continued".into()))
                 );
                 assert_eq!(iter.next(), None);
             }
@@ -923,12 +928,15 @@ Exec=/some/path \"an arg\" \"a;b\\nc\\td'e\" a;b\\nc\\td 'a\"b'";
                 assert_eq!(unit.len(), 1);
 
                 let mut iter = unit.section_entries("Container");
-                assert_eq!(iter.next(), Some(("Image", "imagename")));
-                assert_eq!(iter.next(), Some(("PodmanArgs", "--foo    --bar")));
-                assert_eq!(iter.next(), Some(("PodmanArgs", "--also")));
+                assert_eq!(iter.next(), Some(("Image", "imagename".into())));
+                assert_eq!(iter.next(), Some(("PodmanArgs", "--foo    --bar".into())));
+                assert_eq!(iter.next(), Some(("PodmanArgs", "--also".into())));
                 assert_eq!(
                     iter.next(),
-                    Some(("Exec", "/some/path an arg a;b\nc\td'e a;b\nc\td a\"b"))
+                    Some((
+                        "Exec",
+                        "/some/path an arg a;b\nc\td'e a;b\nc\td a\"b".into()
+                    ))
                 );
                 assert_eq!(iter.next(), None);
             }
@@ -1027,7 +1035,7 @@ Key1=val1.2";
 
                 let unit = SystemdUnit::load_from_str(input).unwrap();
 
-                assert_eq!(unit.lookup_last("secA", "Key1"), Some("val1.2"),);
+                assert_eq!(unit.lookup_last("secA", "Key1"), Some("val1.2".into()),);
             }
 
             #[test]
@@ -1042,7 +1050,7 @@ Key2=valA2";
 
                 let unit = SystemdUnit::load_from_str(input).unwrap();
 
-                assert_eq!(unit.lookup_last("secA", "Key1"), Some("valA1.2"),);
+                assert_eq!(unit.lookup_last("secA", "Key1"), Some("valA1.2".into()),);
             }
         }
 
@@ -1069,15 +1077,15 @@ KeyTwo=value 2";
                 // newly added
                 assert!(unit_to.has_section(added_section));
                 let mut iter = unit_to.section_entries(added_section);
-                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
-                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1".into())));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2".into())));
                 assert_eq!(iter.next(), None);
 
                 // should not have changed
                 assert!(unit_to.has_section(unchanged_section));
                 let mut iter = unit_to.section_entries(unchanged_section);
-                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
-                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1".into())));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2".into())));
                 assert_eq!(iter.next(), None);
             }
 
@@ -1110,24 +1118,24 @@ KeyThree=value a3.from";
                 // newly added
                 assert!(unit_to.has_section(added_section));
                 let mut iter = unit_to.section_entries(added_section);
-                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
-                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1".into())));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2".into())));
                 assert_eq!(iter.next(), None);
 
                 // extended with new entries
                 assert!(unit_to.has_section(extended_section));
                 let mut iter = unit_to.section_entries(extended_section);
-                assert_eq!(iter.next(), Some(("KeyOne", "value a1")));
-                assert_eq!(iter.next(), Some(("KeyTwo", "value a2")));
-                assert_eq!(iter.next(), Some(("KeyOne", "value a1.from")));
-                assert_eq!(iter.next(), Some(("KeyThree", "value a3.from")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value a1".into())));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value a2".into())));
+                assert_eq!(iter.next(), Some(("KeyOne", "value a1.from".into())));
+                assert_eq!(iter.next(), Some(("KeyThree", "value a3.from".into())));
                 assert_eq!(iter.next(), None);
 
                 // should not have changed
                 assert!(unit_to.has_section(unchanged_section));
                 let mut iter = unit_to.section_entries(unchanged_section);
-                assert_eq!(iter.next(), Some(("KeyOne", "value b1")));
-                assert_eq!(iter.next(), Some(("KeyTwo", "value b2")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value b1".into())));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value b2".into())));
                 assert_eq!(iter.next(), None);
             }
         }
@@ -1147,8 +1155,8 @@ KeyOne=value 1";
                 assert_eq!(unit.len(), 1); // shouldn't change the number of sections
 
                 let mut iter = unit.section_entries("Section A");
-                assert_eq!(iter.next(), Some(("NewKey", "new value")));
-                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
+                assert_eq!(iter.next(), Some(("NewKey", "new value".into())));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1".into())));
                 assert_eq!(iter.next(), None);
             }
 
@@ -1164,11 +1172,11 @@ KeyOne=value 1";
                 assert_eq!(unit.len(), 2);
 
                 let mut iter = unit.section_entries("Section A");
-                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1".into())));
                 assert_eq!(iter.next(), None);
 
                 let mut iter = unit.section_entries("New Section");
-                assert_eq!(iter.next(), Some(("NewKey", "new value")));
+                assert_eq!(iter.next(), Some(("NewKey", "new value".into())));
                 assert_eq!(iter.next(), None);
             }
 
@@ -1192,11 +1200,11 @@ KeyOne=value 2.1";
                 assert_eq!(unit.len(), 2);
 
                 let mut iter = unit.section_entries("Section A");
-                assert_eq!(iter.next(), Some(("KeyOne", "new value")));
-                assert_eq!(iter.next(), Some(("KeyOne", "value 1.1")));
-                assert_eq!(iter.next(), Some(("KeyOne", "value 1.2")));
-                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
-                assert_eq!(iter.next(), Some(("KeyOne", "value 2.1")));
+                assert_eq!(iter.next(), Some(("KeyOne", "new value".into())));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1.1".into())));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1.2".into())));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2".into())));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 2.1".into())));
                 assert_eq!(iter.next(), None);
             }
         }
@@ -1224,8 +1232,8 @@ KeyTwo=value 2";
 
                 assert!(unit.has_section(to_section));
                 let mut iter = unit.section_entries(to_section);
-                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
-                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1".into())));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2".into())));
                 assert_eq!(iter.next(), None);
             }
 
@@ -1251,8 +1259,8 @@ KeyTwo=value 2";
 
                 assert!(unit.has_section(to_section));
                 let mut iter = unit.section_entries(to_section);
-                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
-                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1".into())));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2".into())));
                 assert_eq!(iter.next(), None);
             }
 
@@ -1275,8 +1283,8 @@ KeyTwo=value 2";
 
                 assert!(unit.has_section(other_section));
                 let mut iter = unit.section_entries(other_section);
-                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
-                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1".into())));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2".into())));
                 assert_eq!(iter.next(), None);
 
                 assert!(!unit.has_section(to_section));
@@ -1307,9 +1315,9 @@ KeyThree=value 3";
 
                 assert!(unit.has_section(to_section));
                 let mut iter = unit.section_entries(to_section);
-                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
-                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
-                assert_eq!(iter.next(), Some(("KeyThree", "value 3")));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2".into())));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1".into())));
+                assert_eq!(iter.next(), Some(("KeyThree", "value 3".into())));
                 assert_eq!(iter.next(), None);
             }
         }
@@ -1327,8 +1335,8 @@ KeyTwo=value 2";
                 assert_eq!(unit.len(), 1);
 
                 let mut iter = unit.section_entries("Section A");
-                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
-                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1".into())));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2".into())));
                 assert_eq!(iter.next(), None);
             }
 
@@ -1348,9 +1356,9 @@ KeyOne=value 1.2";
                 assert_eq!(unit.len(), 2);
 
                 let mut iter = unit.section_entries("Section A");
-                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
-                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
-                assert_eq!(iter.next(), Some(("KeyOne", "value 1.2")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1".into())));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2".into())));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1.2".into())));
                 assert_eq!(iter.next(), None);
             }
         }
@@ -1371,12 +1379,12 @@ KeyOne=value 1";
 
                 // unchanged
                 let mut iter = unit.section_entries("Section A");
-                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1".into())));
                 assert_eq!(iter.next(), None);
 
                 // added
                 let mut iter = unit.section_entries("Section B");
-                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2".into())));
                 assert_eq!(iter.next(), None);
             }
 
@@ -1392,8 +1400,8 @@ KeyOne=value 1";
                 assert_eq!(unit.len(), 1); // shouldn't change the number of sections
 
                 let mut iter = unit.section_entries("Section A");
-                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
-                assert_eq!(iter.next(), Some(("KeyTwo", "value 2")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1".into())));
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2".into())));
                 assert_eq!(iter.next(), None);
             }
 
@@ -1409,7 +1417,7 @@ KeyOne=value 1";
                 assert_eq!(unit.len(), 1); // shouldn't change the number of sections
 
                 let mut iter = unit.section_entries("Section A");
-                assert_eq!(iter.next(), Some(("KeyOne", "new value")));
+                assert_eq!(iter.next(), Some(("KeyOne", "new value".into())));
                 assert_eq!(iter.next(), None);
             }
 
@@ -1427,9 +1435,9 @@ KeyOne=value 3";
                 assert_eq!(unit.len(), 1); // shouldn't change the number of sections
 
                 let mut iter = unit.section_entries("Section A");
-                assert_eq!(iter.next(), Some(("KeyOne", "value 1")));
-                assert_eq!(iter.next(), Some(("KeyOne", "value 2")));
-                assert_eq!(iter.next(), Some(("KeyOne", "new value")));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 1".into())));
+                assert_eq!(iter.next(), Some(("KeyOne", "value 2".into())));
+                assert_eq!(iter.next(), Some(("KeyOne", "new value".into())));
                 assert_eq!(iter.next(), None);
             }
         }
@@ -1451,8 +1459,8 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
                     Some("/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'")
                 );
                 assert_eq!(
-                    exec_start.map(|ev| ev.unquoted().as_str()),
-                    Some("/some/path an arg a;b\nc\td\'e a;b\nc\td a\"b")
+                    exec_start.map(|ev| ev.to_string()),
+                    Some("/some/path an arg a;b\nc\td\'e a;b\nc\td a\"b".into())
                 );
 
                 let mut output = Vec::new();
@@ -1482,8 +1490,8 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
                     Some("/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'")
                 );
                 assert_eq!(
-                    exec_start.map(|ev| ev.unquoted().as_str()),
-                    Some("/some/path an arg a;b\nc\td\'e a;b\nc\td a\"b")
+                    exec_start.map(|ev| ev.unquote()),
+                    Some("/some/path an arg a;b\nc\td\'e a;b\nc\td a\"b".into())
                 );
 
                 let split_words: Vec<String> = SplitWord::new(exec_start.unwrap().raw()).collect();

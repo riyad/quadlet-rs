@@ -330,7 +330,7 @@ pub(crate) fn warn_if_ambiguous_image_name(unit: &SystemdUnitFile, section: &str
         if unit_path_extension == "build" || unit_path_extension == "image" {
             return;
         }
-        if !is_unambiguous_name(image_name) {
+        if !is_unambiguous_name(&image_name) {
             let file_name = unit.file_name();
             warn!("{file_name:?} specifies the image {image_name:?} which not a fully qualified image name. This is not ideal for performance and security reasons. See the podman-pull manpage discussion of short-name-aliases.conf for details.");
         }
