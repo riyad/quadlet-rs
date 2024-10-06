@@ -187,7 +187,7 @@ impl<'a> Parser<'a> {
                         .entry(section.clone())
                         .or_insert(Entries::default());
                     for (key, value) in entries {
-                        unit.append_entry_raw(
+                        unit.add_raw(
                             section.as_str(),
                             key,
                             value.as_str()

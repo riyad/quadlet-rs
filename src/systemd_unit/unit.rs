@@ -20,7 +20,7 @@ impl SystemdUnit {
     }
 
     /// Appends `key=value` to last instance of `section`
-    pub(crate) fn append_entry_raw<S, K>(
+    pub(crate) fn add_raw<S, K>(
         &mut self,
         section: S,
         key: K,
@@ -418,6 +418,25 @@ KeyOne=value 2.1";
                 assert_eq!(iter.next(), Some(("KeyOne", "value 2.1".into())));
                 assert_eq!(iter.next(), Some(("KeyOne", "new value".into())));
                 assert_eq!(iter.next(), None);
+            }
+        }
+
+        mod add_raw {
+            use super::*;
+
+            #[test]
+            fn fails_with_unqouted_value() {
+                let mut unit = SystemdUnit::new();
+
+                let result = unit.add_raw("Section A", "KeyOne", "\\x00");
+
+                assert!(result.is_err());
+                assert_eq!(
+                    result,
+                    Err(crate::Error::Unquoting(
+                        "\\0 character not allowed in escape sequence".into()
+                    )),
+                )
             }
         }
 
