@@ -16,7 +16,7 @@ impl SystemdUnit {
         S: Into<String>,
         K: Into<String>,
     {
-        self.append_entry_value(section.into(), key.into(), EntryValue::new(value));
+        self.add_entry_value(section.into(), key.into(), EntryValue::new(value));
     }
 
     /// Appends `key=value` to last instance of `section`
@@ -30,7 +30,7 @@ impl SystemdUnit {
         S: Into<String>,
         K: Into<String>,
     {
-        self.append_entry_value(
+        self.add_entry_value(
             section.into(),
             key.into(),
             EntryValue::try_from_raw(raw_value)?,
@@ -39,7 +39,7 @@ impl SystemdUnit {
         Ok(())
     }
 
-    fn append_entry_value(&mut self, section: String, key: String, value: EntryValue) {
+    fn add_entry_value(&mut self, section: String, key: String, value: EntryValue) {
         self.sections
             .entry(section)
             .or_insert_entry(Entries::default())
@@ -181,7 +181,7 @@ impl SystemdUnit {
     pub(crate) fn merge_from(&mut self, other: &SystemdUnit) {
         for (section, entries) in other.sections.iter() {
             for (key, value) in entries.data.iter() {
-                self.append_entry_value(section.clone(), key.clone(), value.clone());
+                self.add_entry_value(section.clone(), key.clone(), value.clone());
             }
         }
     }
@@ -200,11 +200,11 @@ impl SystemdUnit {
     {
         let old_values: Vec<_> = self.sections.remove_all(&section).collect();
 
-        self.append_entry_value(section.clone(), key.into(), value);
+        self.add_entry_value(section.clone(), key.into(), value);
 
         for entries in old_values {
             for (ek, ev) in entries.data {
-                self.append_entry_value(section.clone(), ek, ev);
+                self.add_entry_value(section.clone(), ek, ev);
             }
         }
     }
@@ -225,7 +225,7 @@ impl SystemdUnit {
         let to_key = to.into();
         for entries in from_values {
             for (ek, ev) in entries.data {
-                self.append_entry_value(to_key.clone(), ek, ev);
+                self.add_entry_value(to_key.clone(), ek, ev);
             }
         }
     }
