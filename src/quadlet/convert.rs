@@ -39,8 +39,8 @@ pub(crate) fn from_build_unit(
     // Add a dependency on network-online.target so the image pull does not happen
     // before network is ready https://github.com/containers/podman/issues/21873
     // Prepend the lines, so the user-provided values override the default ones.
-    service.prepend_entry(UNIT_SECTION, "After", "network-online.target");
-    service.prepend_entry(UNIT_SECTION, "Wants", "network-online.target");
+    service.prepend(UNIT_SECTION, "After", "network-online.target");
+    service.prepend(UNIT_SECTION, "Wants", "network-online.target");
 
     // Need the containers filesystem mounted to start podman
     service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
@@ -196,8 +196,8 @@ pub(crate) fn from_container_unit(
     // Add a dependency on network-online.target so the image pull does not happen
     // before network is ready https://github.com/containers/podman/issues/21873
     // Prepend the lines, so the user-provided values override the default ones.
-    service.prepend_entry(UNIT_SECTION, "After", "network-online.target");
-    service.prepend_entry(UNIT_SECTION, "Wants", "network-online.target");
+    service.prepend(UNIT_SECTION, "After", "network-online.target");
+    service.prepend(UNIT_SECTION, "Wants", "network-online.target");
 
     if !container.path().as_os_str().is_empty() {
         service.add(
@@ -633,8 +633,8 @@ pub(crate) fn from_image_unit(
     // Add a dependency on network-online.target so the image pull does not happen
     // before network is ready https://github.com/containers/podman/issues/21873
     // Prepend the lines, so the user-provided values override the default ones.
-    service.prepend_entry(UNIT_SECTION, "After", "network-online.target");
-    service.prepend_entry(UNIT_SECTION, "Wants", "network-online.target");
+    service.prepend(UNIT_SECTION, "After", "network-online.target");
+    service.prepend(UNIT_SECTION, "Wants", "network-online.target");
 
     if !image.path().as_os_str().is_empty() {
         service.add(
