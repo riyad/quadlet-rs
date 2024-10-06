@@ -43,10 +43,10 @@ pub(crate) fn from_build_unit(
     service.prepend_entry(UNIT_SECTION, "Wants", "network-online.target");
 
     // Need the containers filesystem mounted to start podman
-    service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
+    service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
 
     if !build.path().as_os_str().is_empty() {
-        service.append_entry(
+        service.add(
             UNIT_SECTION,
             "SourcePath",
             build
@@ -167,11 +167,11 @@ pub(crate) fn from_build_unit(
         podman.to_escaped_string().as_str(),
     )?;
 
-    service.append_entry(SERVICE_SECTION, "Type", "oneshot");
-    service.append_entry(SERVICE_SECTION, "RemainAfterExit", "yes");
+    service.add(SERVICE_SECTION, "Type", "oneshot");
+    service.add(SERVICE_SECTION, "RemainAfterExit", "yes");
     // The default syslog identifier is the exec basename (podman)
     // which isn't very useful here
-    service.append_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
+    service.add(SERVICE_SECTION, "SyslogIdentifier", "%N");
 
     return Ok(service);
 }
@@ -200,7 +200,7 @@ pub(crate) fn from_container_unit(
     service.prepend_entry(UNIT_SECTION, "Wants", "network-online.target");
 
     if !container.path().as_os_str().is_empty() {
-        service.append_entry(
+        service.add(
             UNIT_SECTION,
             "SourcePath",
             container
@@ -251,7 +251,7 @@ pub(crate) fn from_container_unit(
         };
 
     // Set PODMAN_SYSTEMD_UNIT so that podman auto-update can restart the service.
-    service.append_entry(SERVICE_SECTION, "Environment", "PODMAN_SYSTEMD_UNIT=%n");
+    service.add(SERVICE_SECTION, "Environment", "PODMAN_SYSTEMD_UNIT=%n");
 
     // Only allow mixed or control-group, as nothing else works well
     let kill_mode = service.lookup_last(SERVICE_SECTION, "KillMode");
@@ -269,7 +269,7 @@ pub(crate) fn from_container_unit(
     let podman_env = container.lookup_all_key_val(CONTAINER_SECTION, "Environment");
 
     // Need the containers filesystem mounted to start podman
-    service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
+    service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
 
     // If conmon exited uncleanly it may not have removed the container, so
     // force it, -i makes it ignore non-existing files.
@@ -311,7 +311,7 @@ pub(crate) fn from_container_unit(
     handle_log_opt(container, CONTAINER_SECTION, &mut podman);
 
     // We delegate groups to the runtime
-    service.append_entry(SERVICE_SECTION, "Delegate", "yes");
+    service.add(SERVICE_SECTION, "Delegate", "yes");
 
     let cgroups_mode =
         container
@@ -637,7 +637,7 @@ pub(crate) fn from_image_unit(
     service.prepend_entry(UNIT_SECTION, "Wants", "network-online.target");
 
     if !image.path().as_os_str().is_empty() {
-        service.append_entry(
+        service.add(
             UNIT_SECTION,
             "SourcePath",
             image
@@ -662,7 +662,7 @@ pub(crate) fn from_image_unit(
     service.rename_section(IMAGE_SECTION, X_IMAGE_SECTION);
 
     // Need the containers filesystem mounted to start podman
-    service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
+    service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
 
     let mut podman = get_base_podman_command(image, IMAGE_SECTION);
     podman.add("image");
@@ -695,11 +695,11 @@ pub(crate) fn from_image_unit(
         podman.to_escaped_string().as_str(),
     )?;
 
-    service.append_entry(SERVICE_SECTION, "Type", "oneshot");
-    service.append_entry(SERVICE_SECTION, "RemainAfterExit", "yes");
+    service.add(SERVICE_SECTION, "Type", "oneshot");
+    service.add(SERVICE_SECTION, "RemainAfterExit", "yes");
 
     // The default syslog identifier is the exec basename (podman) which isn't very useful here
-    service.append_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
+    service.add(SERVICE_SECTION, "SyslogIdentifier", "%N");
 
     let podman_image_name = if let Some(image) = image.lookup(IMAGE_SECTION, "ImageTag") {
         if !image.is_empty() {
@@ -732,7 +732,7 @@ pub(crate) fn from_kube_unit(
     service.path = unit_info.get_service_file_name().into();
 
     if !kube.path().as_os_str().is_empty() {
-        service.append_entry(
+        service.add(
             UNIT_SECTION,
             "SourcePath",
             kube.path()
@@ -766,21 +766,21 @@ pub(crate) fn from_kube_unit(
     }
 
     // Set PODMAN_SYSTEMD_UNIT so that podman auto-update can restart the service.
-    service.append_entry(SERVICE_SECTION, "Environment", "PODMAN_SYSTEMD_UNIT=%n");
+    service.add(SERVICE_SECTION, "Environment", "PODMAN_SYSTEMD_UNIT=%n");
 
     // Need the containers filesystem mounted to start podman
-    service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
+    service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
 
     // Allow users to set the Service Type to oneshot to allow resources only kube yaml
     match service.lookup(SERVICE_SECTION, "Type") {
         None => {
-            service.append_entry(SERVICE_SECTION, "Type", "notify");
-            service.append_entry(SERVICE_SECTION, "NotifyAccess", "all");
+            service.add(SERVICE_SECTION, "Type", "notify");
+            service.add(SERVICE_SECTION, "NotifyAccess", "all");
         }
         // could be combined with the case above
         Some(service_type) if service_type != "oneshot" => {
-            service.append_entry(SERVICE_SECTION, "Type", "notify");
-            service.append_entry(SERVICE_SECTION, "NotifyAccess", "all");
+            service.add(SERVICE_SECTION, "Type", "notify");
+            service.add(SERVICE_SECTION, "NotifyAccess", "all");
         }
         Some(service_type) => {
             if service_type != "notify" && service_type != "oneshot" {
@@ -917,7 +917,7 @@ pub(crate) fn from_network_unit(
     service.path = unit_info.get_service_file_name().into();
 
     if !network.path().as_os_str().is_empty() {
-        service.append_entry(
+        service.add(
             UNIT_SECTION,
             "SourcePath",
             network
@@ -948,7 +948,7 @@ pub(crate) fn from_network_unit(
     };
 
     // Need the containers filesystem mounted to start podman
-    service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
+    service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
 
     let mut podman = get_base_podman_command(network, NETWORK_SECTION);
     podman.add("network");
@@ -1021,10 +1021,10 @@ pub(crate) fn from_network_unit(
         podman.to_escaped_string().as_str(),
     )?;
 
-    service.append_entry(SERVICE_SECTION, "Type", "oneshot");
-    service.append_entry(SERVICE_SECTION, "RemainAfterExit", "yes");
+    service.add(SERVICE_SECTION, "Type", "oneshot");
+    service.add(SERVICE_SECTION, "RemainAfterExit", "yes");
     // The default syslog identifier is the exec basename (podman) which isn't very useful here
-    service.append_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
+    service.add(SERVICE_SECTION, "SyslogIdentifier", "%N");
 
     // Store the name of the created resource
     unit_info.resource_name = podman_network_name;
@@ -1047,7 +1047,7 @@ pub(crate) fn from_pod_unit(
     service.path = unit_info.get_service_file_name().into();
 
     if !pod.path().as_os_str().is_empty() {
-        service.append_entry(
+        service.add(
             UNIT_SECTION,
             "SourcePath",
             pod.path()
@@ -1075,14 +1075,14 @@ pub(crate) fn from_pod_unit(
     service.rename_section(POD_SECTION, X_POD_SECTION);
 
     // Need the containers filesystem mounted to start podman
-    service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
+    service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
 
     for container_service in &unit_info.containers {
         let container_service = container_service
             .to_str()
             .expect("container service path is not a valid UTF-8 string");
-        service.append_entry(UNIT_SECTION, "Wants", container_service);
-        service.append_entry(UNIT_SECTION, "Before", container_service);
+        service.add(UNIT_SECTION, "Wants", container_service);
+        service.add(UNIT_SECTION, "Before", container_service);
     }
 
     if pod
@@ -1193,10 +1193,10 @@ pub(crate) fn from_pod_unit(
         podman_start_pre.to_escaped_string().as_str(),
     )?;
 
-    service.append_entry(SERVICE_SECTION, "Environment", "PODMAN_SYSTEMD_UNIT=%n");
-    service.append_entry(SERVICE_SECTION, "Type", "forking");
-    service.append_entry(SERVICE_SECTION, "Restart", "on-failure");
-    service.append_entry(SERVICE_SECTION, "PIDFile", "%t/%N.pid");
+    service.add(SERVICE_SECTION, "Environment", "PODMAN_SYSTEMD_UNIT=%n");
+    service.add(SERVICE_SECTION, "Type", "forking");
+    service.add(SERVICE_SECTION, "Restart", "on-failure");
+    service.add(SERVICE_SECTION, "PIDFile", "%t/%N.pid");
 
     Ok(service)
 }
@@ -1223,7 +1223,7 @@ pub(crate) fn from_volume_unit(
     service.path = unit_info.get_service_file_name().into();
 
     if !volume.path().as_os_str().is_empty() {
-        service.append_entry(
+        service.add(
             UNIT_SECTION,
             "SourcePath",
             volume
@@ -1256,7 +1256,7 @@ pub(crate) fn from_volume_unit(
     unit_info.resource_name = podman_volume_name.clone();
 
     // Need the containers filesystem mounted to start podman
-    service.append_entry(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
+    service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
 
     let labels = volume.lookup_all_key_val(VOLUME_SECTION, "Label");
 
@@ -1357,10 +1357,10 @@ pub(crate) fn from_volume_unit(
         podman.to_escaped_string().as_str(),
     )?;
 
-    service.append_entry(SERVICE_SECTION, "Type", "oneshot");
-    service.append_entry(SERVICE_SECTION, "RemainAfterExit", "yes");
+    service.add(SERVICE_SECTION, "Type", "oneshot");
+    service.add(SERVICE_SECTION, "RemainAfterExit", "yes");
     // The default syslog identifier is the exec basename (podman) which isn't very useful here
-    service.append_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
+    service.add(SERVICE_SECTION, "SyslogIdentifier", "%N");
 
     Ok(service)
 }
@@ -1409,8 +1409,8 @@ fn handle_image_source<'a>(
                 .to_str()
                 .expect("image service name is not a valid UTF-8 string")
                 .to_string();
-            service_unit_file.append_entry(UNIT_SECTION, "Requires", &image_service_name);
-            service_unit_file.append_entry(UNIT_SECTION, "After", &image_service_name);
+            service_unit_file.add(UNIT_SECTION, "Requires", &image_service_name);
+            service_unit_file.add(UNIT_SECTION, "After", &image_service_name);
 
             let image_name = unit_info.resource_name.as_str();
             return Ok(image_name);
@@ -1464,12 +1464,12 @@ fn handle_networks(
 
                 // the systemd unit name is $name-network.service
                 let network_service_name = network_unit_info.get_service_file_name();
-                service_unit_file.append_entry(
+                service_unit_file.add(
                     UNIT_SECTION,
                     "Requires",
                     network_service_name.to_str().unwrap(),
                 );
-                service_unit_file.append_entry(
+                service_unit_file.add(
                     UNIT_SECTION,
                     "After",
                     network_service_name.to_str().unwrap(),
@@ -1520,8 +1520,8 @@ fn handle_pod(
                 .to_str()
                 .expect("pod service name is not a valid UTF-8 string")
                 .to_string();
-            service_unit_file.append_entry(UNIT_SECTION, "BindsTo", &pod_service_name);
-            service_unit_file.append_entry(UNIT_SECTION, "After", &pod_service_name);
+            service_unit_file.add(UNIT_SECTION, "BindsTo", &pod_service_name);
+            service_unit_file.add(UNIT_SECTION, "After", &pod_service_name);
 
             pod_info.containers.push(service_unit_file.path.clone());
         }
@@ -1612,7 +1612,7 @@ fn handle_set_working_directory(
 
         let file_in_workingdir = relative_to_file.absolute_from_unit(quadlet_unit_file);
 
-        service_unit_file.append_entry(
+        service_unit_file.add(
             SERVICE_SECTION,
             "WorkingDirectory",
             file_in_workingdir
@@ -1645,7 +1645,7 @@ fn handle_storage_source(
 
     if source.starts_with('/') {
         // Absolute path
-        service_unit_file.append_entry(UNIT_SECTION, "RequiresMountsFor", &source);
+        service_unit_file.add(UNIT_SECTION, "RequiresMountsFor", &source);
     } else if source.ends_with(".volume") {
         let volume_unit_info = units_info_map
             .0
@@ -1655,12 +1655,12 @@ fn handle_storage_source(
         // the systemd unit name is $name-volume.service
         let volume_service_name = volume_unit_info.get_service_file_name();
 
-        service_unit_file.append_entry(
+        service_unit_file.add(
             UNIT_SECTION,
             "Requires",
             volume_service_name.to_str().unwrap(),
         );
-        service_unit_file.append_entry(
+        service_unit_file.add(
             UNIT_SECTION,
             "After",
             volume_service_name.to_str().unwrap(),

@@ -11,7 +11,7 @@ pub struct SystemdUnit {
 
 impl SystemdUnit {
     /// Appends `key=value` to last instance of `section`
-    pub(crate) fn append_entry<S, K>(&mut self, section: S, key: K, value: &str)
+    pub(crate) fn add<S, K>(&mut self, section: S, key: K, value: &str)
     where
         S: Into<String>,
         K: Into<String>,
@@ -352,7 +352,7 @@ mod tests {
     mod systemd_unit {
         use super::*;
 
-        mod append_entry {
+        mod add {
             use super::*;
 
             #[test]
@@ -363,7 +363,7 @@ KeyOne=value 1";
                 let mut unit = SystemdUnit::load_from_str(input).unwrap();
                 assert_eq!(unit.len(), 1);
 
-                unit.append_entry("Section A", "NewKey", "new value");
+                unit.add("Section A", "NewKey", "new value");
                 assert_eq!(unit.len(), 1); // shouldn't change the number of sections
 
                 let mut iter = unit.section_entries("Section A");
@@ -380,7 +380,7 @@ KeyOne=value 1";
                 let mut unit = SystemdUnit::load_from_str(input).unwrap();
                 assert_eq!(unit.len(), 1);
 
-                unit.append_entry("New Section", "NewKey", "new value");
+                unit.add("New Section", "NewKey", "new value");
                 assert_eq!(unit.len(), 2);
 
                 let mut iter = unit.section_entries("Section A");
@@ -408,7 +408,7 @@ KeyOne=value 2.1";
                 let mut unit = SystemdUnit::load_from_str(input).unwrap();
                 assert_eq!(unit.len(), 2);
 
-                unit.append_entry("Section A", "KeyOne", "new value");
+                unit.add("Section A", "KeyOne", "new value");
                 assert_eq!(unit.len(), 2);
 
                 let mut iter = unit.section_entries("Section A");
