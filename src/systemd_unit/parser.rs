@@ -76,14 +76,14 @@ impl<'a> Parser<'a> {
         let key = self.parse_key()?;
 
         // skip whitespace before '='
-        let _ = self.parse_until_none_of(&[' ', '\t']);
+        self.skip_chars(&[' ', '\t']);
         match self.cur {
             Some('=') => self.bump(),
             Some(c) => return Err(self.error(format!("expected '=' after key, but found {c:?}"))),
             None => return Err(self.error("expected '=' after key, but found EOF".into())),
         }
         // skip whitespace after '='
-        let _ = self.parse_until_none_of(&[' ', '\t']);
+        self.skip_chars(&[' ', '\t']);
 
         let value = self.parse_value()?;
 
@@ -216,18 +216,13 @@ impl<'a> Parser<'a> {
         s
     }
 
-    fn parse_until_none_of(&mut self, end: &[char]) -> String {
-        let mut s = String::new();
-
+    fn skip_chars(&mut self, end: &[char]) {
         while let Some(c) = self.cur {
             if !end.contains(&c) {
                 break;
             }
-            s.push(c);
             self.bump();
         }
-
-        s
     }
 
     // VALUE          = ANY* CONTINUE_NL [COMMENT]* VALUE
