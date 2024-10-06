@@ -11,13 +11,12 @@ pub struct SystemdUnit {
 
 impl SystemdUnit {
     /// Appends `key=value` to last instance of `section`
-    pub(crate) fn append_entry<S, K, V>(&mut self, section: S, key: K, value: V)
+    pub(crate) fn append_entry<S, K>(&mut self, section: S, key: K, value: &str)
     where
         S: Into<String>,
         K: Into<String>,
-        V: Into<String>,
     {
-        self.append_entry_value(section, key, EntryValue::new(value.into().as_str()));
+        self.append_entry_value(section.into(), key.into(), EntryValue::new(value));
     }
 
     /// Appends `key=value` to last instance of `section`
@@ -32,40 +31,32 @@ impl SystemdUnit {
         K: Into<String>,
     {
         self.append_entry_value(
-            section,
-            key,
+            section.into(),
+            key.into(),
             EntryValue::try_from_raw(raw_value)?,
         );
 
         Ok(())
     }
 
-    fn append_entry_value<S, K>(&mut self, section: S, key: K, value: EntryValue)
-    where
-        S: Into<String>,
-        K: Into<String>,
-    {
+    fn append_entry_value(&mut self, section: String, key: String, value: EntryValue) {
         self.sections
-            .entry(section.into())
+            .entry(section)
             .or_insert_entry(Entries::default())
             .into_mut()
             .data
-            .append(key.into(), value);
+            .append(key, value);
     }
 
-    pub(crate) fn has_key<S, K>(&self, section: S, key: K) -> bool
-    where
-        S: Into<String>,
-        K: Into<String>,
-    {
+    pub(crate) fn has_key(&self, section: &str, key: &str) -> bool {
         self.sections
-            .get(&section.into())
-            .map_or(false, |e| e.data.contains_key(&key.into()))
+            .get(section)
+            .map_or(false, |e| e.data.contains_key(key))
     }
 
     /// Retrun `true` if there's an (non-empty) instance of section `name`
-    pub(crate) fn has_section<S: Into<String>>(&self, name: S) -> bool {
-        self.sections.contains_key(&name.into())
+    pub(crate) fn has_section(&self, name: &str) -> bool {
+        self.sections.contains_key(name)
     }
 
     /// Number of unique sections (i.e. with different names)
@@ -82,22 +73,14 @@ impl SystemdUnit {
     }
 
     /// Get an interator of values for all `key`s in all instances of `section`
-    pub(crate) fn lookup_all<S, K>(&self, section: S, key: K) -> Vec<String>
-    where
-        S: Into<String>,
-        K: Into<String>,
-    {
+    pub(crate) fn lookup_all(&self, section: &str, key: &str) -> Vec<String> {
         self.lookup_all_values(section, key)
             .iter()
             .map(|v| v.unquote())
             .collect()
     }
 
-    pub(crate) fn lookup_all_args<S, K>(&self, section: S, key: K) -> Vec<String>
-    where
-        S: Into<String>,
-        K: Into<String>,
-    {
+    pub(crate) fn lookup_all_args(&self, section: &str, key: &str) -> Vec<String> {
         self.lookup_all_values(section, key)
             .iter()
             .flat_map(|v| SplitWord::new(v.raw()))
@@ -105,11 +88,7 @@ impl SystemdUnit {
     }
 
     /// Look up 'Environment' style key-value keys
-    pub(crate) fn lookup_all_key_val<S, K>(&self, section: S, key: K) -> HashMap<String, String>
-    where
-        S: Into<String>,
-        K: Into<String>,
-    {
+    pub(crate) fn lookup_all_key_val(&self, section: &str, key: &str) -> HashMap<String, String> {
         let all_key_vals = self.lookup_all_values(section, key);
 
         let mut res = HashMap::with_capacity(all_key_vals.len());
@@ -125,11 +104,7 @@ impl SystemdUnit {
         res
     }
 
-    pub(crate) fn lookup_all_strv<S, K>(&self, section: S, key: K) -> Vec<String>
-    where
-        S: Into<String>,
-        K: Into<String>,
-    {
+    pub(crate) fn lookup_all_strv(&self, section: &str, key: &str) -> Vec<String> {
         self.lookup_all_values(section, key)
             .iter()
             .flat_map(|v| SplitStrv::new(v.raw()))
@@ -138,11 +113,7 @@ impl SystemdUnit {
 
     /// Get a Vec of values for all `key`s in all instances of `section`
     /// This mimics quadlet's behavior in that empty values reset the list.
-    pub(crate) fn lookup_all_values<S, K>(&self, section: S, key: K) -> Vec<&EntryValue>
-    where
-        S: Into<String>,
-        K: Into<String>,
-    {
+    pub(crate) fn lookup_all_values(&self, section: &str, key: &str) -> Vec<&EntryValue> {
         let values = self.lookup_all_values_raw(section, key);
 
         // size_hint.0 is not optimal, but may prevent forseeable growing
@@ -158,35 +129,23 @@ impl SystemdUnit {
     }
 
     /// Get an interator of values for all `key`s in all instances of `section`
-    pub(crate) fn lookup_all_values_raw<S, K>(
+    pub(crate) fn lookup_all_values_raw(
         &self,
-        section: S,
-        key: K,
-    ) -> impl DoubleEndedIterator<Item = &EntryValue>
-    where
-        S: Into<String>,
-        K: Into<String>,
-    {
+        section: &str,
+        key: &str,
+    ) -> impl DoubleEndedIterator<Item = &EntryValue> {
         self.sections
-            .get(&section.into())
+            .get(section)
             .unwrap_or_default()
             .data
-            .get_all(&key.into())
+            .get_all(key)
     }
 
-    pub(crate) fn lookup<S, K>(&self, section: S, key: K) -> Option<String>
-    where
-        S: Into<String>,
-        K: Into<String>,
-    {
+    pub(crate) fn lookup(&self, section: &str, key: &str) -> Option<String> {
         self.lookup_last(section, key)
     }
 
-    pub(crate) fn lookup_bool<S, K>(&self, section: S, key: K) -> Option<bool>
-    where
-        S: Into<String>,
-        K: Into<String>,
-    {
+    pub(crate) fn lookup_bool(&self, section: &str, key: &str) -> Option<bool> {
         self.lookup_last_value(section, key)
             .map(|v| v.to_bool().unwrap_or(false))
     }
@@ -197,27 +156,19 @@ impl SystemdUnit {
     //TODO: lookup_gid()
 
     // Get the last value for `key` in all instances of `section`
-    pub(crate) fn lookup_last<S, K>(&self, section: S, key: K) -> Option<String>
-    where
-        S: Into<String>,
-        K: Into<String>,
-    {
+    pub(crate) fn lookup_last(&self, section: &str, key: &str) -> Option<String> {
         self.lookup_last_value(section, key).map(|v| v.unquote())
     }
 
     // TODO: lookup_last_args()
 
     // Get the last value for `key` in all instances of `section`
-    pub(crate) fn lookup_last_value<S, K>(&self, section: S, key: K) -> Option<&EntryValue>
-    where
-        S: Into<String>,
-        K: Into<String>,
-    {
+    pub(crate) fn lookup_last_value(&self, section: &str, key: &str) -> Option<&EntryValue> {
         self.sections
-            .get(&section.into())
+            .get(section)
             .unwrap_or_default()
             .data
-            .get_all(&key.into())
+            .get_all(key)
             .last()
     }
 
@@ -230,32 +181,26 @@ impl SystemdUnit {
     pub(crate) fn merge_from(&mut self, other: &SystemdUnit) {
         for (section, entries) in other.sections.iter() {
             for (key, value) in entries.data.iter() {
-                self.append_entry_value(section, key, value.clone());
+                self.append_entry_value(section.clone(), key.clone(), value.clone());
             }
         }
     }
 
     /// Prepends `key=value` to last instance of `section`
-    pub(crate) fn prepend_entry<S, K, V>(&mut self, section: S, key: K, value: V)
+    pub(crate) fn prepend_entry<S, K>(&mut self, section: S, key: K, value: &str)
     where
         S: Into<String>,
         K: Into<String>,
-        V: Into<String>,
     {
-        self.prepend_entry_value(section, key, EntryValue::new(value.into().as_str()));
+        self.prepend_entry_value(section.into(), key.into(), EntryValue::new(value));
     }
 
     /// Prepends `key=value` to last instance of `section`
-    pub(crate) fn prepend_entry_value<S, K>(&mut self, section: S, key: K, value: EntryValue)
-    where
-        S: Into<String>,
-        K: Into<String>,
+    fn prepend_entry_value(&mut self, section: String, key: String, value: EntryValue)
     {
-        let section = section.into();
-
         let old_values: Vec<_> = self.sections.remove_all(&section).collect();
 
-        self.append_entry_value(section.clone(), key, value);
+        self.append_entry_value(section.clone(), key.into(), value);
 
         for entries in old_values {
             for (ek, ev) in entries.data {
@@ -305,41 +250,31 @@ impl SystemdUnit {
             .map(|(k, v)| (k.as_str(), v))
     }
 
-    pub(crate) fn set_entry<S, K, V>(&mut self, section: S, key: K, value: V)
+    pub(crate) fn set_entry<S, K>(&mut self, section: S, key: K, value: &str)
     where
         S: Into<String>,
         K: Into<String>,
-        V: Into<String>,
     {
-        let value = value.into();
-
-        self.set_entry_value(section, key, EntryValue::new(value.as_str()));
+        self.set_entry_value(section.into(), key.into(), EntryValue::new(value));
     }
 
-    pub(crate) fn set_entry_raw<S, K, V>(&mut self, section: S, key: K, value: V)
+    pub(crate) fn set_entry_raw<S, K>(
+        &mut self,
+        section: S,
+        key: K,
+        value: &str,
+    ) -> Result<(), super::Error>
     where
         S: Into<String>,
         K: Into<String>,
-        V: Into<String>,
     {
-        self.set_entry_value(
-            section,
-            key,
-            EntryValue::try_from_raw(value).expect("value should be properly quoted"),
-        );
+        self.set_entry_value(section.into(), key.into(), EntryValue::try_from_raw(value)?);
+
+        Ok(())
     }
 
-    pub(crate) fn set_entry_value<S, K>(&mut self, section: S, key: K, value: EntryValue)
-    where
-        S: Into<String>,
-        K: Into<String>,
-    {
-        let entries = self
-            .sections
-            .entry(section.into())
-            .or_insert(Entries::default());
-
-        let key = key.into();
+    fn set_entry_value(&mut self, section: String, key: String, value: EntryValue) {
+        let entries = self.sections.entry(section).or_insert(Entries::default());
 
         // we can't replace the last value directly, so we have to get "creative" O.o
         // we do a stupid form of read-modify-write called remove-modify-append m(
@@ -1532,7 +1467,7 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
                     "/usr/bin/podman test /some/path \"an arg\" \"a;b\\nc\\td\'e\" \"a;b\\nc\\td\" \"a\\\"b\""
                 );
 
-                unit.set_entry_raw(
+                let _ = unit.set_entry_raw(
                     crate::systemd_unit::SERVICE_SECTION,
                     "ExecStart",
                     new_exec_start.as_str(),
@@ -1586,7 +1521,7 @@ KeyThree=value\\n3
 
                 unit.set_entry("Section A", "KeyOne", "value 1");
                 unit.set_entry("Section B", "KeyTwo", "\"value 2\"");
-                unit.set_entry_raw("Section B", "KeyThree", "\"value 3\"");
+                let _ = unit.set_entry_raw("Section B", "KeyThree", "\"value 3\"");
 
                 assert_eq!(
                     unit.to_string(),

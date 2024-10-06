@@ -1619,7 +1619,8 @@ fn handle_set_working_directory(
                 .parent()
                 .expect("should have a parent directory")
                 .display()
-                .to_string(),
+                .to_string()
+                .as_str(),
         );
     }
 
