@@ -161,11 +161,11 @@ pub(crate) fn from_build_unit(
         podman.add(working_directory);
     }
 
-    service.append_entry_value(
+    service.append_entry_raw(
         SERVICE_SECTION,
         "ExecStart",
-        EntryValue::try_from_raw(podman.to_escaped_string().as_str())?,
-    );
+        podman.to_escaped_string().as_str(),
+    )?;
 
     service.append_entry(SERVICE_SECTION, "Type", "oneshot");
     service.append_entry(SERVICE_SECTION, "RemainAfterExit", "yes");
@@ -275,21 +275,21 @@ pub(crate) fn from_container_unit(
     // force it, -i makes it ignore non-existing files.
     let mut service_stop_cmd = get_base_podman_command(container, CONTAINER_SECTION);
     service_stop_cmd.add_slice(&["rm", "-v", "-f", "-i", "--cidfile=%t/%N.cid"]);
-    service.append_entry_value(
+    service.append_entry_raw(
         SERVICE_SECTION,
         "ExecStop",
-        EntryValue::try_from_raw(service_stop_cmd.to_escaped_string().as_str())?,
-    );
+        service_stop_cmd.to_escaped_string().as_str(),
+    )?;
     // The ExecStopPost is needed when the main PID (i.e., conmon) gets killed.
     // In that case, ExecStop is not executed but *Post only.  If both are
     // fired in sequence, *Post will exit when detecting that the --cidfile
     // has already been removed by the previous `rm`..
     service_stop_cmd.args[0] = format!("-{}", service_stop_cmd.args[0]);
-    service.append_entry_value(
+    service.append_entry_raw(
         SERVICE_SECTION,
         "ExecStopPost",
-        EntryValue::try_from_raw(service_stop_cmd.to_escaped_string().as_str())?,
-    );
+        service_stop_cmd.to_escaped_string().as_str(),
+    )?;
 
     let mut podman = get_base_podman_command(container, CONTAINER_SECTION);
 
@@ -608,11 +608,11 @@ pub(crate) fn from_container_unit(
         .unwrap_or_default();
     podman.extend(exec_args);
 
-    service.append_entry_value(
+    service.append_entry_raw(
         SERVICE_SECTION,
         "ExecStart",
-        EntryValue::try_from_raw(podman.to_escaped_string().as_str())?,
-    );
+        podman.to_escaped_string().as_str(),
+    )?;
 
     Ok(service)
 }
@@ -689,11 +689,11 @@ pub(crate) fn from_image_unit(
 
     podman.add(image_name.clone());
 
-    service.append_entry_value(
+    service.append_entry_raw(
         SERVICE_SECTION,
         "ExecStart",
-        EntryValue::try_from_raw(podman.to_escaped_string().as_str())?,
-    );
+        podman.to_escaped_string().as_str(),
+    )?;
 
     service.append_entry(SERVICE_SECTION, "Type", "oneshot");
     service.append_entry(SERVICE_SECTION, "RemainAfterExit", "yes");
@@ -864,11 +864,11 @@ pub(crate) fn from_kube_unit(
             .expect("Yaml path is not valid UTF-8 string"),
     );
 
-    service.append_entry_value(
+    service.append_entry_raw(
         SERVICE_SECTION,
         "ExecStart",
-        EntryValue::try_from_raw(podman_start.to_escaped_string().as_str())?,
-    );
+        podman_start.to_escaped_string().as_str(),
+    )?;
 
     // Use `ExecStopPost` to make sure cleanup happens even in case of
     // errors; otherwise containers, pods, etc. would be left behind.
@@ -885,11 +885,11 @@ pub(crate) fn from_kube_unit(
             .to_str()
             .expect("Yaml path is not valid UTF-8 string"),
     );
-    service.append_entry_value(
+    service.append_entry_raw(
         SERVICE_SECTION,
         "ExecStopPost",
-        EntryValue::try_from_raw(podman_stop.to_escaped_string().as_str())?,
-    );
+        podman_stop.to_escaped_string().as_str(),
+    )?;
 
     handle_set_working_directory(kube, &mut service, KUBE_SECTION)?;
 
@@ -1015,11 +1015,11 @@ pub(crate) fn from_network_unit(
 
     podman.add(&podman_network_name);
 
-    service.append_entry_value(
+    service.append_entry_raw(
         SERVICE_SECTION,
         "ExecStart",
-        EntryValue::try_from_raw(podman.to_escaped_string().as_str())?,
-    );
+        podman.to_escaped_string().as_str(),
+    )?;
 
     service.append_entry(SERVICE_SECTION, "Type", "oneshot");
     service.append_entry(SERVICE_SECTION, "RemainAfterExit", "yes");
@@ -1096,11 +1096,11 @@ pub(crate) fn from_pod_unit(
     podman_start.add("pod");
     podman_start.add("start");
     podman_start.add("--pod-id-file=%t/%N.pod-id");
-    service.append_entry_value(
+    service.append_entry_raw(
         SERVICE_SECTION,
         "ExecStart",
-        EntryValue::try_from_raw(podman_start.to_escaped_string().as_str())?,
-    );
+        podman_start.to_escaped_string().as_str(),
+    )?;
 
     let mut podman_stop = get_base_podman_command(pod, POD_SECTION);
     podman_stop.add("pod");
@@ -1108,11 +1108,11 @@ pub(crate) fn from_pod_unit(
     podman_stop.add("--pod-id-file=%t/%N.pod-id");
     podman_stop.add("--ignore");
     podman_stop.add("--time=10");
-    service.append_entry_value(
+    service.append_entry_raw(
         SERVICE_SECTION,
         "ExecStop",
-        EntryValue::try_from_raw(podman_stop.to_escaped_string().as_str())?,
-    );
+        podman_stop.to_escaped_string().as_str(),
+    )?;
 
     let mut podman_stop_post = get_base_podman_command(pod, POD_SECTION);
     podman_stop_post.add("pod");
@@ -1120,11 +1120,11 @@ pub(crate) fn from_pod_unit(
     podman_stop_post.add("--pod-id-file=%t/%N.pod-id");
     podman_stop_post.add("--ignore");
     podman_stop_post.add("--force");
-    service.append_entry_value(
+    service.append_entry_raw(
         SERVICE_SECTION,
         "ExecStopPost",
-        EntryValue::try_from_raw(podman_stop_post.to_escaped_string().as_str())?,
-    );
+        podman_stop_post.to_escaped_string().as_str(),
+    )?;
 
     let mut podman_start_pre = get_base_podman_command(pod, POD_SECTION);
     podman_start_pre.add("pod");
@@ -1187,11 +1187,11 @@ pub(crate) fn from_pod_unit(
     podman_start_pre.add(podman_pod_name);
 
     handle_podman_args(pod, POD_SECTION, &mut podman_start_pre);
-    service.append_entry_value(
+    service.append_entry_raw(
         SERVICE_SECTION,
         "ExecStartPre",
-        EntryValue::try_from_raw(podman_start_pre.to_escaped_string().as_str())?,
-    );
+        podman_start_pre.to_escaped_string().as_str(),
+    )?;
 
     service.append_entry(SERVICE_SECTION, "Environment", "PODMAN_SYSTEMD_UNIT=%n");
     service.append_entry(SERVICE_SECTION, "Type", "forking");
@@ -1351,11 +1351,11 @@ pub(crate) fn from_volume_unit(
 
     podman.add(&podman_volume_name);
 
-    service.append_entry_value(
+    service.append_entry_raw(
         SERVICE_SECTION,
         "ExecStart",
-        EntryValue::try_from_raw(podman.to_escaped_string().as_str())?,
-    );
+        podman.to_escaped_string().as_str(),
+    )?;
 
     service.append_entry(SERVICE_SECTION, "Type", "oneshot");
     service.append_entry(SERVICE_SECTION, "RemainAfterExit", "yes");

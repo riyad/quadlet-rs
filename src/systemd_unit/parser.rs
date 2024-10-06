@@ -187,14 +187,11 @@ impl<'a> Parser<'a> {
                         .entry(section.clone())
                         .or_insert(Entries::default());
                     for (key, value) in entries {
-                        unit.append_entry_value(
+                        unit.append_entry_raw(
                             section.as_str(),
                             key,
-                            match EntryValue::try_from_raw(value) {
-                                Ok(v) => v,
-                                Err(e) => return Err(self.error(e.to_string())),
-                            },
-                        );
+                            value.as_str()
+                        ).map_err(|e| self.error(e.to_string()))?;
                     }
                 }
                 _ if c.is_ascii_whitespace() => self.bump(),

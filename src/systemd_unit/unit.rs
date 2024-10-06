@@ -21,7 +21,26 @@ impl SystemdUnit {
     }
 
     /// Appends `key=value` to last instance of `section`
-    pub(crate) fn append_entry_value<S, K>(&mut self, section: S, key: K, value: EntryValue)
+    pub(crate) fn append_entry_raw<S, K>(
+        &mut self,
+        section: S,
+        key: K,
+        raw_value: &str,
+    ) -> Result<(), super::Error>
+    where
+        S: Into<String>,
+        K: Into<String>,
+    {
+        self.append_entry_value(
+            section,
+            key,
+            EntryValue::try_from_raw(raw_value)?,
+        );
+
+        Ok(())
+    }
+
+    fn append_entry_value<S, K>(&mut self, section: S, key: K, value: EntryValue)
     where
         S: Into<String>,
         K: Into<String>,
