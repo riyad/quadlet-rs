@@ -249,7 +249,8 @@ impl SystemdUnit {
             .map(|(k, v)| (k.as_str(), v))
     }
 
-    pub(crate) fn set_entry<S, K>(&mut self, section: S, key: K, value: &str)
+    /// Updates the last ocurrence of key to value
+    pub(crate) fn set<S, K>(&mut self, section: S, key: K, value: &str)
     where
         S: Into<String>,
         K: Into<String>,
@@ -1335,7 +1336,7 @@ KeyOne=value 1.2";
             }
         }
 
-        mod set_entry {
+        mod set {
             use super::*;
 
             #[test]
@@ -1346,7 +1347,7 @@ KeyOne=value 1";
                 let mut unit = SystemdUnit::load_from_str(input).unwrap();
                 assert_eq!(unit.len(), 1);
 
-                unit.set_entry("Section B", "KeyTwo", "value 2");
+                unit.set("Section B", "KeyTwo", "value 2");
                 assert_eq!(unit.len(), 2); // should have added new section
 
                 // unchanged
@@ -1368,7 +1369,7 @@ KeyOne=value 1";
                 let mut unit = SystemdUnit::load_from_str(input).unwrap();
                 assert_eq!(unit.len(), 1);
 
-                unit.set_entry("Section A", "KeyTwo", "value 2");
+                unit.set("Section A", "KeyTwo", "value 2");
                 assert_eq!(unit.len(), 1); // shouldn't change the number of sections
 
                 let mut iter = unit.section_entries("Section A");
@@ -1385,7 +1386,7 @@ KeyOne=value 1";
                 let mut unit = SystemdUnit::load_from_str(input).unwrap();
                 assert_eq!(unit.len(), 1);
 
-                unit.set_entry("Section A", "KeyOne", "new value");
+                unit.set("Section A", "KeyOne", "new value");
                 assert_eq!(unit.len(), 1); // shouldn't change the number of sections
 
                 let mut iter = unit.section_entries("Section A");
@@ -1403,7 +1404,7 @@ KeyOne=value 3";
                 let mut unit = SystemdUnit::load_from_str(input).unwrap();
                 assert_eq!(unit.len(), 1);
 
-                unit.set_entry("Section A", "KeyOne", "new value");
+                unit.set("Section A", "KeyOne", "new value");
                 assert_eq!(unit.len(), 1); // shouldn't change the number of sections
 
                 let mut iter = unit.section_entries("Section A");
@@ -1516,9 +1517,9 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
             fn with_basic_entries() {
                 let mut unit = SystemdUnit::new();
 
-                unit.set_entry("Section A", "KeyOne", "value 1");
-                unit.set_entry("Section B", "KeyTwo", "value 2");
-                unit.set_entry("Section B", "KeyThree", "value\n3");
+                unit.set("Section A", "KeyOne", "value 1");
+                unit.set("Section B", "KeyTwo", "value 2");
+                unit.set("Section B", "KeyThree", "value\n3");
 
                 assert_eq!(
                     unit.to_string(),
@@ -1537,8 +1538,8 @@ KeyThree=value\\n3
             fn with_raw_entries() {
                 let mut unit = SystemdUnit::new();
 
-                unit.set_entry("Section A", "KeyOne", "value 1");
-                unit.set_entry("Section B", "KeyTwo", "\"value 2\"");
+                unit.set("Section A", "KeyOne", "value 1");
+                unit.set("Section B", "KeyTwo", "\"value 2\"");
                 let _ = unit.set_entry_raw("Section B", "KeyThree", "\"value 3\"");
 
                 assert_eq!(

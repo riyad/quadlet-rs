@@ -258,7 +258,7 @@ pub(crate) fn from_container_unit(
     match kill_mode.as_deref() {
         None | Some("mixed") | Some("control-group") => {
             // We default to mixed instead of control-group, because it lets conmon do its thing
-            service.set_entry(SERVICE_SECTION, "KillMode", "mixed");
+            service.set(SERVICE_SECTION, "KillMode", "mixed");
         }
         Some(kill_mode) => {
             return Err(ConversionError::InvalidKillMode(kill_mode.into()));
@@ -389,8 +389,8 @@ pub(crate) fn from_container_unit(
                     }
                 }
             }
-            service.set_entry(SERVICE_SECTION, "Type", "notify");
-            service.set_entry(SERVICE_SECTION, "NotifyAccess", "all");
+            service.set(SERVICE_SECTION, "Type", "notify");
+            service.set(SERVICE_SECTION, "NotifyAccess", "all");
 
             // Detach from container, we don't need the podman process to hang around
             podman.add("-d");
@@ -404,7 +404,7 @@ pub(crate) fn from_container_unit(
         .lookup_last(SERVICE_SECTION, "SyslogIdentifier")
         .is_none()
     {
-        service.set_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
+        service.set(SERVICE_SECTION, "SyslogIdentifier", "%N");
     }
 
     // Default to no higher level privileges or caps
@@ -758,7 +758,7 @@ pub(crate) fn from_kube_unit(
     match kill_mode.as_deref() {
         None | Some("mixed") | Some("control-group") => {
             // We default to mixed instead of control-group, because it lets conmon do its thing
-            service.set_entry(SERVICE_SECTION, "KillMode", "mixed");
+            service.set(SERVICE_SECTION, "KillMode", "mixed");
         }
         Some(kill_mode) => {
             return Err(ConversionError::InvalidKillMode(kill_mode.into()));
@@ -790,7 +790,7 @@ pub(crate) fn from_kube_unit(
     }
 
     if !kube.has_key(SERVICE_SECTION, "SyslogIdentifier") {
-        service.set_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
+        service.set(SERVICE_SECTION, "SyslogIdentifier", "%N");
     }
 
     let mut podman_start = get_base_podman_command(kube, KUBE_SECTION);
@@ -1089,7 +1089,7 @@ pub(crate) fn from_pod_unit(
         .lookup_last(SERVICE_SECTION, "SyslogIdentifier")
         .is_none()
     {
-        service.set_entry(SERVICE_SECTION, "SyslogIdentifier", "%N");
+        service.set(SERVICE_SECTION, "SyslogIdentifier", "%N");
     }
 
     let mut podman_start = get_base_podman_command(pod, POD_SECTION);
