@@ -197,23 +197,6 @@ impl UnitsInfoMap {
     }
 }
 
-pub(crate) fn check_for_unknown_keys(
-    unit: &SystemdUnitFile,
-    group_name: &str,
-    supported_keys: &[&str],
-) -> Result<(), ConversionError> {
-    for (key, _) in unit.section_entries(group_name) {
-        if !supported_keys.contains(&key) {
-            return Err(ConversionError::UnknownKey(format!(
-                "unsupported key '{key}' in group '{group_name}' in {:?}",
-                unit.path()
-            )));
-        }
-    }
-
-    Ok(())
-}
-
 fn get_build_service_name(build: &SystemdUnitFile) -> PathBuf {
     get_quadlet_service_name(build, BUILD_SECTION, "-build")
 }

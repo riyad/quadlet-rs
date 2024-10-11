@@ -13,6 +13,7 @@ pub const IMAGE_SECTION: &str       = "Image";
 pub const KUBE_SECTION: &str        = "Kube";
 pub const NETWORK_SECTION: &str     = "Network";
 pub const POD_SECTION: &str         = "Pod";
+pub const QUADLET_SECTION: &str     = "Quadlet";
 pub const VOLUME_SECTION: &str      = "Volume";
 pub const X_BUILD_SECTION: &str     = "X-Build";
 pub const X_CONTAINER_SECTION: &str = "X-Container";
@@ -20,6 +21,7 @@ pub const X_IMAGE_SECTION: &str     = "X-Image";
 pub const X_KUBE_SECTION: &str      = "X-Kube";
 pub const X_NETWORK_SECTION: &str   = "X-Network";
 pub const X_POD_SECTION: &str       = "X-Pod";
+pub const X_QUADLET_SECTION: &str   = "X-Quadlet";
 pub const X_VOLUME_SECTION: &str    = "X-Volume";
 
 pub const AUTO_UPDATE_LABEL: &str = "io.containers.autoupdate";
@@ -224,6 +226,8 @@ pub static SUPPORTED_POD_KEYS: [&str; 24] = [
     "UserNS",
     "Volume",
 ];
+
+pub static SUPPORTED_QUADLET_KEYS: [&str; 1] = ["DefaultDependencies"];
 
 pub static SUPPORTED_SERVICE_KEYS: [&str; 1] = ["WorkingDirectory"];
 

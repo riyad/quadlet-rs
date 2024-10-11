@@ -8,6 +8,23 @@ use super::constants::*;
 use super::podman_command::PodmanCommand;
 use super::*;
 
+fn check_for_unknown_keys(
+    unit: &SystemdUnitFile,
+    group_name: &str,
+    supported_keys: &[&str],
+) -> Result<(), ConversionError> {
+    for (key, _) in unit.section_entries(group_name) {
+        if !supported_keys.contains(&key) {
+            return Err(ConversionError::UnknownKey(format!(
+                "unsupported key '{key}' in group '{group_name}' in {:?}",
+                unit.path()
+            )));
+        }
+    }
+
+    Ok(())
+}
+
 fn get_base_podman_command(unit: &SystemdUnitFile, section: &str) -> PodmanCommand {
     let mut podman = PodmanCommand::new();
 
@@ -38,9 +55,10 @@ pub(crate) fn from_build_unit(
 
     // Add a dependency on network-online.target so the image pull does not happen
     // before network is ready https://github.com/containers/podman/issues/21873
-    // Prepend the lines, so the user-provided values override the default ones.
-    service.prepend(UNIT_SECTION, "After", "network-online.target");
-    service.prepend(UNIT_SECTION, "Wants", "network-online.target");
+    if build.lookup_bool(QUADLET_SECTION, "DefaultDependencies").unwrap_or(true) {
+        service.prepend(UNIT_SECTION, "After", "network-online.target");
+        service.prepend(UNIT_SECTION, "Wants", "network-online.target");
+    }
 
     // Need the containers filesystem mounted to start podman
     service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
@@ -57,9 +75,13 @@ pub(crate) fn from_build_unit(
     }
 
     check_for_unknown_keys(build, BUILD_SECTION, &SUPPORTED_BUILD_KEYS)?;
+    check_for_unknown_keys(build, QUADLET_SECTION, &SUPPORTED_QUADLET_KEYS)?;
 
-    // Rename old Build group to x-Build so that systemd ignores it
+    // Rename old Build section to X-Build so that systemd ignores it
     service.rename_section(BUILD_SECTION, X_BUILD_SECTION);
+
+    // Rename common Quadlet section
+	service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
 
     let mut podman = get_base_podman_command(build, BUILD_SECTION);
     podman.add("build");
@@ -195,9 +217,10 @@ pub(crate) fn from_container_unit(
 
     // Add a dependency on network-online.target so the image pull does not happen
     // before network is ready https://github.com/containers/podman/issues/21873
-    // Prepend the lines, so the user-provided values override the default ones.
-    service.prepend(UNIT_SECTION, "After", "network-online.target");
-    service.prepend(UNIT_SECTION, "Wants", "network-online.target");
+    if container.lookup_bool(QUADLET_SECTION, "DefaultDependencies").unwrap_or(true) {
+        service.prepend(UNIT_SECTION, "After", "network-online.target");
+        service.prepend(UNIT_SECTION, "Wants", "network-online.target");
+    }
 
     if !container.path().as_os_str().is_empty() {
         service.add(
@@ -211,8 +234,13 @@ pub(crate) fn from_container_unit(
     }
 
     check_for_unknown_keys(container, CONTAINER_SECTION, &SUPPORTED_CONTAINER_KEYS)?;
+    check_for_unknown_keys(container, QUADLET_SECTION, &SUPPORTED_QUADLET_KEYS)?;
 
+    // Rename old Container section to X-Container so that systemd ignores it
     service.rename_section(CONTAINER_SECTION, X_CONTAINER_SECTION);
+
+    // Rename common Quadlet section
+	service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
 
     // One image or rootfs must be specified for the container
     let image = container
@@ -632,9 +660,10 @@ pub(crate) fn from_image_unit(
 
     // Add a dependency on network-online.target so the image pull does not happen
     // before network is ready https://github.com/containers/podman/issues/21873
-    // Prepend the lines, so the user-provided values override the default ones.
-    service.prepend(UNIT_SECTION, "After", "network-online.target");
-    service.prepend(UNIT_SECTION, "Wants", "network-online.target");
+    if image.lookup_bool(QUADLET_SECTION, "DefaultDependencies").unwrap_or(true) {
+        service.prepend(UNIT_SECTION, "After", "network-online.target");
+        service.prepend(UNIT_SECTION, "Wants", "network-online.target");
+    }
 
     if !image.path().as_os_str().is_empty() {
         service.add(
@@ -648,6 +677,7 @@ pub(crate) fn from_image_unit(
     }
 
     check_for_unknown_keys(image, IMAGE_SECTION, &SUPPORTED_IMAGE_KEYS)?;
+    check_for_unknown_keys(image, QUADLET_SECTION, &SUPPORTED_QUADLET_KEYS)?;
 
     let image_name = image
         .lookup_last(IMAGE_SECTION, "Image")
@@ -658,8 +688,11 @@ pub(crate) fn from_image_unit(
         ));
     }
 
-    // Rename old Image group to X-Image so that systemd ignores it
+    // Rename old Image section to X-Image so that systemd ignores it
     service.rename_section(IMAGE_SECTION, X_IMAGE_SECTION);
+
+    // Rename common Quadlet section
+	service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
 
     // Need the containers filesystem mounted to start podman
     service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
@@ -742,9 +775,13 @@ pub(crate) fn from_kube_unit(
     }
 
     check_for_unknown_keys(kube, KUBE_SECTION, &SUPPORTED_KUBE_KEYS)?;
+    check_for_unknown_keys(kube, QUADLET_SECTION, &SUPPORTED_QUADLET_KEYS)?;
 
-    // Rename old Kube group to x-Kube so that systemd ignores it
+    // Rename old Kube section to X-Kube so that systemd ignores it
     service.rename_section(KUBE_SECTION, X_KUBE_SECTION);
+
+    // Rename common Quadlet section
+	service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
 
     let yaml_path = kube.lookup_last(KUBE_SECTION, "Yaml").unwrap_or_default();
     if yaml_path.is_empty() {
@@ -928,9 +965,13 @@ pub(crate) fn from_network_unit(
     }
 
     check_for_unknown_keys(network, NETWORK_SECTION, &SUPPORTED_NETWORK_KEYS)?;
+    check_for_unknown_keys(network, QUADLET_SECTION, &SUPPORTED_QUADLET_KEYS)?;
 
-    // Rename old Network group to x-Network so that systemd ignores it
+    // Rename old Network section to X-Network so that systemd ignores it
     service.rename_section(NETWORK_SECTION, X_NETWORK_SECTION);
+
+    // Rename common Quadlet section
+	service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
 
     // Derive network name from unit name (with added prefix), or use user-provided name.
     let podman_network_name = network
@@ -1057,6 +1098,7 @@ pub(crate) fn from_pod_unit(
     }
 
     check_for_unknown_keys(pod, POD_SECTION, &SUPPORTED_POD_KEYS)?;
+    check_for_unknown_keys(pod, QUADLET_SECTION, &SUPPORTED_QUADLET_KEYS)?;
 
     // Derive pod name from unit name (with added prefix), or use user-provided name.
     let podman_pod_name = pod.lookup(POD_SECTION, "PodName").unwrap_or_default();
@@ -1071,8 +1113,11 @@ pub(crate) fn from_pod_unit(
         podman_pod_name.to_string()
     };
 
-    // Rename old Pod group to x-Pod so that systemd ignores it
+    // Rename old Pod section to X-Pod so that systemd ignores it
     service.rename_section(POD_SECTION, X_POD_SECTION);
+
+    // Rename common Quadlet section
+	service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
 
     // Need the containers filesystem mounted to start podman
     service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
@@ -1234,9 +1279,13 @@ pub(crate) fn from_volume_unit(
     }
 
     check_for_unknown_keys(volume, VOLUME_SECTION, &SUPPORTED_VOLUME_KEYS)?;
+    check_for_unknown_keys(volume, QUADLET_SECTION, &SUPPORTED_QUADLET_KEYS)?;
 
-    // Rename old Volume group to x-Volume so that systemd ignores it
+    // Rename old Volume section to X-Volume so that systemd ignores it
     service.rename_section(VOLUME_SECTION, X_VOLUME_SECTION);
+
+    // Rename common Quadlet section
+	service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
 
     // Derive volume name from unit name (with added prefix), or use user-provided name.
     let podman_volume_name = volume

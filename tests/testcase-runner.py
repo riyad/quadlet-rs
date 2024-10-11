@@ -214,6 +214,15 @@ class Outcome:
         real_values = self.lookup(group, key)
         return real_values == values
 
+    def assert_key_is_empty(self, args):
+        if len(args) < 2:
+            return False
+        group = args[0]
+        key = args[1]
+
+        real_values = self.lookup(group, key)
+        return real_values is None or len(real_values) == 0
+
     def assert_key_is_regex(self, args):
         if len(args) < 3:
             return False
@@ -461,6 +470,7 @@ class Outcome:
         "assert-failed": assert_failed,
         "assert-stderr-contains": assert_stderr_contains,
         "assert-key-is": assert_key_is,
+        "assert-key-is-empty": assert_key_is_empty,
         "assert-key-is-regex": assert_key_is_regex,
         "assert-last-key-is-regex": assert_last_key_is_regex,
         "assert-key-contains": assert_key_contains,
