@@ -89,13 +89,14 @@ def find_check(checks, checkname):
     return None
 
 class QuadletTestCase(unittest.TestCase):
-    def __init__(self, filename: Path):
+    def __init__(self, filename: Path, run_rootless: bool):
         super().__init__()
         self._testMethodDoc = str(filename)
         self.filename = Path(filename)
         self.servicename = to_servicefile_name(testcases_dir.joinpath(filename))
         self.data = testcases_dir.joinpath(filename).read_text()
         self.unit = {}
+        self.rootless = run_rootless
 
     def write_testfile_to(self, indir: Path):
         # Write the tested file to the quadlet dir
@@ -138,7 +139,10 @@ class QuadletTestCase(unittest.TestCase):
             outdir = basedir.joinpath("out")
             outdir.mkdir()
             self.write_testfile_to(indir);
-            cmd = [generator_bin, '--user', '--no-kmsg-log', '-v', outdir]
+            cmd = [generator_bin]
+            if self.rootless:
+                cmd.append('--user')
+            cmd.extend(['--no-kmsg-log', '-v', outdir])
 
             env = {
                 "QUADLET_UNIT_DIRS": indir
@@ -599,7 +603,7 @@ def parse_unitfile(data):
             sections[section][key].append(val)
     return sections
 
-def load_test_suite():
+def load_test_suite(run_rootless: bool):
     if len(sys.argv) < 2:
         print("No dir arg given", file=sys.stderr)
         sys.exit(1)
@@ -623,11 +627,14 @@ def load_test_suite():
                 name.endswith(".network") or
                 name.endswith(".pod") or
                 name.endswith(".volume")) and not name.startswith("."):
-                test_suite.addTest(QuadletTestCase(rel_dirpath.joinpath(name)))
+                test_suite.addTest(QuadletTestCase(rel_dirpath.joinpath(name), run_rootless))
 
     return test_suite
 
 
 if __name__ == '__main__':
     runner = unittest.TextTestRunner()
-    runner.run(load_test_suite())
+    print(f"\n--- rootful test suite ---")
+    runner.run(load_test_suite(False))
+    print(f"\n--- rootless test suite ---")
+    runner.run(load_test_suite(True))
