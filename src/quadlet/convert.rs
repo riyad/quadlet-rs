@@ -533,7 +533,7 @@ pub(crate) fn from_container_unit(
 
     handle_user(container, CONTAINER_SECTION, &mut podman)?;
 
-    handle_user_mappings(container, CONTAINER_SECTION, &mut podman, is_user, true)?;
+    handle_user_mappings(container, CONTAINER_SECTION, &mut podman, true)?;
 
     handle_volumes(
         &container,
@@ -850,7 +850,7 @@ pub(crate) fn from_kube_unit(
     handle_log_driver(kube, KUBE_SECTION, &mut podman_start);
     handle_log_opt(kube, KUBE_SECTION, &mut podman_start);
 
-    handle_user_mappings(kube, KUBE_SECTION, &mut podman_start, is_user, false)?;
+    handle_user_mappings(kube, KUBE_SECTION, &mut podman_start, false)?;
 
     handle_networks(
         kube,
@@ -1179,7 +1179,7 @@ pub(crate) fn from_pod_unit(
     podman_start_pre.add("--exit-policy=stop");
     podman_start_pre.add("--replace");
 
-    handle_user_mappings(pod, POD_SECTION, &mut podman_start_pre, is_user, true)?;
+    handle_user_mappings(pod, POD_SECTION, &mut podman_start_pre, true)?;
 
     handle_publish_ports(pod, POD_SECTION, &mut podman_start_pre);
 
@@ -1753,7 +1753,6 @@ fn handle_user_mappings(
     unit_file: &SystemdUnit,
     section: &str,
     podman: &mut PodmanCommand,
-    is_user: bool,
     support_manual: bool,
 ) -> Result<(), ConversionError> {
     let mut mappings_defined = false;
@@ -1806,14 +1805,13 @@ fn handle_user_mappings(
         return Ok(());
     }
 
-    return handle_user_remap(unit_file, section, podman, is_user, support_manual);
+    return handle_user_remap(unit_file, section, podman, support_manual);
 }
 
 fn handle_user_remap(
     unit_file: &SystemdUnit,
     section: &str,
     podman: &mut PodmanCommand,
-    is_user: bool,
     support_manual: bool,
 ) -> Result<(), ConversionError> {
     // ignore Remap keys if UserNS is set
@@ -1878,12 +1876,6 @@ fn handle_user_remap(
             }
         }
         Some("keep-id") => {
-            if !is_user {
-                return Err(ConversionError::InvalidRemapUsers(
-                    "RemapUsers=keep-id is unsupported for system units".into(),
-                ));
-            }
-
             let mut keepid_opts: Vec<String> = Vec::new();
             if !uid_maps.is_empty() {
                 if uid_maps.len() > 1 {
