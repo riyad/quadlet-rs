@@ -425,7 +425,7 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
             .map(|e| e.to_str().unwrap_or_default())
             .unwrap_or_default()
         {
-            "build" => convert::from_build_unit(&unit, &mut units_info_map),
+            "build" => convert::from_build_unit(&unit, &mut units_info_map, cfg.is_user),
             "container" => {
                 warn_if_ambiguous_image_name(&unit, CONTAINER_SECTION);
                 convert::from_container_unit(&unit, &mut units_info_map, cfg.is_user)
@@ -435,11 +435,11 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
                 convert::from_image_unit(&unit, &mut units_info_map, cfg.is_user)
             }
             "kube" => convert::from_kube_unit(&unit, &mut units_info_map, cfg.is_user),
-            "network" => convert::from_network_unit(&unit, &mut units_info_map),
+            "network" => convert::from_network_unit(&unit, &mut units_info_map, cfg.is_user),
             "pod" => convert::from_pod_unit(&unit, &mut units_info_map, cfg.is_user),
             "volume" => {
                 warn_if_ambiguous_image_name(&unit, VOLUME_SECTION);
-                convert::from_volume_unit(&unit, &mut units_info_map)
+                convert::from_volume_unit(&unit, &mut units_info_map, cfg.is_user)
             }
             _ => {
                 warn!("Unsupported file type {:?}", unit.path());

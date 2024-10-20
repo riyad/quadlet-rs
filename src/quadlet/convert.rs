@@ -38,6 +38,7 @@ fn get_base_podman_command(unit: &SystemdUnitFile, section: &str) -> PodmanComma
 pub(crate) fn from_build_unit(
     build: &SystemdUnitFile,
     units_info_map: &mut UnitsInfoMap,
+    is_user: bool,
 ) -> Result<SystemdUnitFile, ConversionError> {
     let unit_info = units_info_map.0.get(build.file_name()).ok_or_else(|| {
         ConversionError::InternalQuadletError("build".to_string(), build.file_name().into())
@@ -53,12 +54,7 @@ pub(crate) fn from_build_unit(
     service.merge_from(build);
     service.path = unit_info.get_service_file_name().into();
 
-    // Add a dependency on network-online.target so the image pull does not happen
-    // before network is ready https://github.com/containers/podman/issues/21873
-    if build.lookup_bool(QUADLET_SECTION, "DefaultDependencies").unwrap_or(true) {
-        service.prepend(UNIT_SECTION, "After", "network-online.target");
-        service.prepend(UNIT_SECTION, "Wants", "network-online.target");
-    }
+    handle_default_dependencies(&mut service, is_user);
 
     // Need the containers filesystem mounted to start podman
     service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
@@ -215,12 +211,7 @@ pub(crate) fn from_container_unit(
     service.merge_from(container);
     service.path = unit_info.get_service_file_name().into();
 
-    // Add a dependency on network-online.target so the image pull does not happen
-    // before network is ready https://github.com/containers/podman/issues/21873
-    if container.lookup_bool(QUADLET_SECTION, "DefaultDependencies").unwrap_or(true) {
-        service.prepend(UNIT_SECTION, "After", "network-online.target");
-        service.prepend(UNIT_SECTION, "Wants", "network-online.target");
-    }
+    handle_default_dependencies(&mut service, is_user);
 
     if !container.path().as_os_str().is_empty() {
         service.add(
@@ -648,7 +639,7 @@ pub(crate) fn from_container_unit(
 pub(crate) fn from_image_unit(
     image: &SystemdUnitFile,
     units_info_map: &mut UnitsInfoMap,
-    _is_user: bool,
+    is_user: bool,
 ) -> Result<SystemdUnitFile, ConversionError> {
     let unit_info = units_info_map.0.get_mut(image.file_name()).ok_or_else(|| {
         ConversionError::InternalQuadletError("image".into(), image.path().into())
@@ -658,12 +649,7 @@ pub(crate) fn from_image_unit(
     service.merge_from(image);
     service.path = unit_info.get_service_file_name().into();
 
-    // Add a dependency on network-online.target so the image pull does not happen
-    // before network is ready https://github.com/containers/podman/issues/21873
-    if image.lookup_bool(QUADLET_SECTION, "DefaultDependencies").unwrap_or(true) {
-        service.prepend(UNIT_SECTION, "After", "network-online.target");
-        service.prepend(UNIT_SECTION, "Wants", "network-online.target");
-    }
+    handle_default_dependencies(&mut service, is_user);
 
     if !image.path().as_os_str().is_empty() {
         service.add(
@@ -763,6 +749,8 @@ pub(crate) fn from_kube_unit(
     let mut service = SystemdUnitFile::new();
     service.merge_from(kube);
     service.path = unit_info.get_service_file_name().into();
+
+    handle_default_dependencies(&mut service, is_user);
 
     if !kube.path().as_os_str().is_empty() {
         service.add(
@@ -941,6 +929,7 @@ pub(crate) fn from_kube_unit(
 pub(crate) fn from_network_unit(
     network: &SystemdUnitFile,
     units_info_map: &mut UnitsInfoMap,
+    is_user: bool,
 ) -> Result<SystemdUnitFile, ConversionError> {
     let unit_info = units_info_map
         .0
@@ -952,6 +941,8 @@ pub(crate) fn from_network_unit(
     let mut service = SystemdUnitFile::new();
     service.merge_from(network);
     service.path = unit_info.get_service_file_name().into();
+
+    handle_default_dependencies(&mut service, is_user);
 
     if !network.path().as_os_str().is_empty() {
         service.add(
@@ -1086,6 +1077,8 @@ pub(crate) fn from_pod_unit(
     let mut service = SystemdUnitFile::new();
     service.merge_from(pod);
     service.path = unit_info.get_service_file_name().into();
+
+    handle_default_dependencies(&mut service, is_user);
 
     if !pod.path().as_os_str().is_empty() {
         service.add(
@@ -1255,6 +1248,7 @@ pub(crate) fn from_pod_unit(
 pub(crate) fn from_volume_unit(
     volume: &SystemdUnitFile,
     units_info_map: &mut UnitsInfoMap,
+    is_user: bool,
 ) -> Result<SystemdUnitFile, ConversionError> {
     let unit_info = units_info_map
         .0
@@ -1266,6 +1260,8 @@ pub(crate) fn from_volume_unit(
     let mut service = SystemdUnitFile::new();
     service.merge_from(volume);
     service.path = unit_info.get_service_file_name().into();
+
+    handle_default_dependencies(&mut service, is_user);
 
     if !volume.path().as_os_str().is_empty() {
         service.add(
@@ -1412,6 +1408,24 @@ pub(crate) fn from_volume_unit(
     service.add(SERVICE_SECTION, "SyslogIdentifier", "%N");
 
     Ok(service)
+}
+
+fn handle_default_dependencies(service: &mut SystemdUnitFile, is_user: bool) {
+    // Add a dependency on network-online.target so the image pull does not happen
+    // before network is ready.
+    // see https://github.com/containers/podman/issues/21873
+    if service.lookup_bool(QUADLET_SECTION, "DefaultDependencies").unwrap_or(true) {
+        let mut network_unit = "network-online.target";
+        // network-online.target only exists as root and user session cannot wait for it.
+        // Given this pasta will fail to start or use the wrong interface if the network
+        // is not fully set up. We need to work around that.
+        // see https://github.com/containers/podman/issues/22197
+        if is_user {
+            network_unit = "network-online.target";
+        }
+        service.prepend(UNIT_SECTION, "After", network_unit);
+        service.prepend(UNIT_SECTION, "Wants", network_unit);
+    }
 }
 
 fn handle_health(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {
