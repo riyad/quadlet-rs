@@ -28,7 +28,12 @@ fn check_for_unknown_keys(
 fn get_base_podman_command(unit: &SystemdUnitFile, section: &str) -> PodmanCommand {
     let mut podman = PodmanCommand::new();
 
-    lookup_and_add_all_strings(unit, section, &[("ContainersConfModule", "--module")], &mut podman);
+    lookup_and_add_all_strings(
+        unit,
+        section,
+        &[("ContainersConfModule", "--module")],
+        &mut podman,
+    );
 
     podman.extend(unit.lookup_all_args(section, "GlobalArgs"));
 
@@ -70,7 +75,7 @@ pub(crate) fn from_build_unit(
     service.rename_section(BUILD_SECTION, X_BUILD_SECTION);
 
     // Rename common Quadlet section
-	service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
+    service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
 
     let mut podman = get_base_podman_command(build, BUILD_SECTION);
     podman.add("build");
@@ -140,7 +145,11 @@ pub(crate) fn from_build_unit(
 
     let working_directory = service.lookup(SERVICE_SECTION, "WorkingDirectory");
     let file_path = build.lookup(BUILD_SECTION, "File");
-    let (working_directory, file_path) = match (working_directory.as_deref(), file_path.as_deref(), context.as_str()) {
+    let (working_directory, file_path) = match (
+        working_directory.as_deref(),
+        file_path.as_deref(),
+        context.as_str(),
+    ) {
         (None, None, "") => return Err(ConversionError::NoSetWorkingDirectoryNorFileKeySpecified),
         (None, None, _) => ("", ""),
         (Some(""), None, "") => {
@@ -217,7 +226,7 @@ pub(crate) fn from_container_unit(
     service.rename_section(CONTAINER_SECTION, X_CONTAINER_SECTION);
 
     // Rename common Quadlet section
-	service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
+    service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
 
     // One image or rootfs must be specified for the container
     let image = container
@@ -252,7 +261,8 @@ pub(crate) fn from_container_unit(
                 "systemd-%p_%i"
             } else {
                 "systemd-%N"
-            }.to_string()
+            }
+            .to_string()
         };
 
     // Set PODMAN_SYSTEMD_UNIT so that podman auto-update can restart the service.
@@ -318,16 +328,16 @@ pub(crate) fn from_container_unit(
     // We delegate groups to the runtime
     service.add(SERVICE_SECTION, "Delegate", "yes");
 
-    let cgroups_mode =
-        container
-            .lookup(CONTAINER_SECTION, "CgroupsMode")
-            .map_or("split".to_string(), |cgroups_mode| {
-                if cgroups_mode.is_empty() {
-                    return "split".to_string();
-                }
+    let cgroups_mode = container.lookup(CONTAINER_SECTION, "CgroupsMode").map_or(
+        "split".to_string(),
+        |cgroups_mode| {
+            if cgroups_mode.is_empty() {
+                return "split".to_string();
+            }
 
-                cgroups_mode
-            });
+            cgroups_mode
+        },
+    );
     podman.add("--cgroups");
     podman.add(cgroups_mode);
 
@@ -653,7 +663,7 @@ pub(crate) fn from_image_unit(
     service.rename_section(IMAGE_SECTION, X_IMAGE_SECTION);
 
     // Rename common Quadlet section
-	service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
+    service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
 
     // Need the containers filesystem mounted to start podman
     service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
@@ -738,7 +748,7 @@ pub(crate) fn from_kube_unit(
     service.rename_section(KUBE_SECTION, X_KUBE_SECTION);
 
     // Rename common Quadlet section
-	service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
+    service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
 
     let yaml_path = kube.lookup_last(KUBE_SECTION, "Yaml").unwrap_or_default();
     if yaml_path.is_empty() {
@@ -912,7 +922,7 @@ pub(crate) fn from_network_unit(
     service.rename_section(NETWORK_SECTION, X_NETWORK_SECTION);
 
     // Rename common Quadlet section
-	service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
+    service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
 
     // Derive network name from unit name (with added prefix), or use user-provided name.
     let podman_network_name = network
@@ -949,7 +959,6 @@ pub(crate) fn from_network_unit(
         ("IPAMDriver", "--ipam-driver"),
     ];
     lookup_and_add_string(network, NETWORK_SECTION, &string_keys, &mut podman);
-
 
     lookup_and_add_all_strings(network, NETWORK_SECTION, &[("DNS", "--dns")], &mut podman);
 
@@ -1054,7 +1063,7 @@ pub(crate) fn from_pod_unit(
     service.rename_section(POD_SECTION, X_POD_SECTION);
 
     // Rename common Quadlet section
-	service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
+    service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
 
     // Need the containers filesystem mounted to start podman
     service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
@@ -1126,32 +1135,21 @@ pub(crate) fn from_pod_unit(
         &mut podman_start_pre,
     )?;
 
-
     let string_keys = [
         ("IP", "--ip"),
         ("IP6", "--ip6"),
     ];
     // NOTE: Go Quadlet uses `lookup_and_add_all_strings()` here
-    lookup_and_add_string(
-        &pod,
-        POD_SECTION,
-        &string_keys,
-        &mut podman_start_pre,
-    );
+    lookup_and_add_string(&pod, POD_SECTION, &string_keys, &mut podman_start_pre);
 
     let all_string_keys = [
         ("NetworkAlias", "--network-alias"),
         ("DNS", "--dns"),
         ("DNSOption", "--dns-option"),
         ("DNSSearch", "--dns-search"),
-        ("AddHost", "--add-host")
+        ("AddHost", "--add-host"),
     ];
-    lookup_and_add_all_strings(
-        &pod,
-        POD_SECTION,
-        &all_string_keys,
-        &mut podman_start_pre,
-    );
+    lookup_and_add_all_strings(&pod, POD_SECTION, &all_string_keys, &mut podman_start_pre);
 
     handle_volumes(
         pod,
@@ -1216,7 +1214,7 @@ pub(crate) fn from_volume_unit(
     service.rename_section(VOLUME_SECTION, X_VOLUME_SECTION);
 
     // Rename common Quadlet section
-	service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
+    service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
 
     // Derive volume name from unit name (with added prefix), or use user-provided name.
     let podman_volume_name = volume
@@ -1349,7 +1347,10 @@ fn handle_default_dependencies(service: &mut SystemdUnitFile, is_user: bool) {
     // Add a dependency on network-online.target so the image pull does not happen
     // before network is ready.
     // see https://github.com/containers/podman/issues/21873
-    if service.lookup_bool(QUADLET_SECTION, "DefaultDependencies").unwrap_or(true) {
+    if service
+        .lookup_bool(QUADLET_SECTION, "DefaultDependencies")
+        .unwrap_or(true)
+    {
         let mut network_unit = "network-online.target";
         // network-online.target only exists as root and user session cannot wait for it.
         // Given this pasta will fail to start or use the wrong interface if the network

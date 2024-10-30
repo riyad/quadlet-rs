@@ -304,10 +304,7 @@ fn enable_service_file(output_path: &Path, service: &SystemdUnitFile) {
         debug!("Creating symlink {symlink_path:?} -> {target:?}");
         fs::remove_file(&symlink_path).unwrap_or_default(); // overwrite existing symlinks
         if let Err(e) = os::unix::fs::symlink(target, &symlink_path) {
-            warn!(
-                "Failed creating symlink {:?}: {e}",
-                symlink_path.to_str()
-            );
+            warn!("Failed creating symlink {:?}: {e}", symlink_path.to_str());
             continue;
         }
     }

@@ -114,7 +114,9 @@ impl PathBufExt<PathBuf> for PathBuf {
     }
 
     fn to_str(&self) -> &str {
-        (self as &Path).to_str().expect("path is not a valid UTF-8 string")
+        (self as &Path)
+            .to_str()
+            .expect("path is not a valid UTF-8 string")
     }
 }
 
