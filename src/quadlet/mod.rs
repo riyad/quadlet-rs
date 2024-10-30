@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use std::env;
 use std::ffi::OsString;
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum RuntimeError {
@@ -220,7 +220,12 @@ fn get_quadlet_service_name(unit: &SystemdUnitFile, section: &str, name_suffix: 
         return PathBuf::from(service_name);
     }
 
-    quad_replace_extension(unit.path(), "", "", name_suffix)
+    quad_replace_extension(
+        Path::new(unit.path().file_name().unwrap()),
+        "",
+        "",
+        name_suffix,
+    )
 }
 
 fn get_volume_service_name(volume: &SystemdUnitFile) -> PathBuf {
@@ -303,6 +308,34 @@ pub(crate) fn warn_if_ambiguous_image_name(unit: &SystemdUnitFile, section: &str
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod get_quadlet_service_name {
+        use super::*;
+
+        #[test]
+        fn looks_up_service_name_from_unit() {
+            let mut unit_file = SystemdUnitFile::new();
+            let section = "Foo";
+            unit_file.add(section, "ServiceName", "test-name");
+
+            assert_eq!(
+                get_quadlet_service_name(&unit_file, section, "-test"),
+                PathBuf::from("test-name")
+            )
+        }
+
+        #[test]
+        fn use_only_file_name_for_service_name() {
+            let path = PathBuf::from("/foo/bar/baz.buf");
+            let mut unit_file = SystemdUnitFile::new();
+            unit_file.path = path;
+
+            assert_eq!(
+                get_quadlet_service_name(&unit_file, "", "-test"),
+                PathBuf::from("baz-test")
+            )
+        }
+    }
 
     mod is_unambiguous_name {
         use super::*;
