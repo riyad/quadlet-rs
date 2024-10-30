@@ -9,6 +9,7 @@ use log::warn;
 use regex_lite::Regex;
 
 use crate::systemd_unit;
+use crate::systemd_unit::PathBufExt;
 use crate::systemd_unit::SystemdUnitFile;
 
 pub(crate) use self::constants::*;
@@ -135,40 +136,22 @@ impl UnitsInfoMap {
                 .expect("unit path is not a valid UTF-8 string")
             {
                 "container" => {
-                    unit_info.service_name = get_container_service_name(unit)
-                        .to_str()
-                        .expect("service name is not a valid UTF-8 string")
-                        .into();
+                    unit_info.service_name = get_container_service_name(unit).to_str().to_owned();
                 }
                 "volume" => {
-                    unit_info.service_name = get_volume_service_name(unit)
-                        .to_str()
-                        .expect("service name is not a valid UTF-8 string")
-                        .into();
+                    unit_info.service_name = get_volume_service_name(unit).to_str().to_owned();
                 }
                 "kube" => {
-                    unit_info.service_name = get_kube_service_name(unit)
-                        .to_str()
-                        .expect("service name is not a valid UTF-8 string")
-                        .into();
+                    unit_info.service_name = get_kube_service_name(unit).to_str().to_owned();
                 }
                 "network" => {
-                    unit_info.service_name = get_network_service_name(unit)
-                        .to_str()
-                        .expect("service name is not a valid UTF-8 string")
-                        .into();
+                    unit_info.service_name = get_network_service_name(unit).to_str().to_owned();
                 }
                 "image" => {
-                    unit_info.service_name = get_image_service_name(unit)
-                        .to_str()
-                        .expect("service name is not a valid UTF-8 string")
-                        .into();
+                    unit_info.service_name = get_image_service_name(unit).to_str().to_owned();
                 }
                 "build" => {
-                    unit_info.service_name = get_build_service_name(unit)
-                        .to_str()
-                        .expect("service name is not a valid UTF-8 string")
-                        .into();
+                    unit_info.service_name = get_build_service_name(unit).to_str().to_owned();
 
                     // Prefill `resouce_name`s for .build files. This is significantly less complex than
                     // pre-computing all `resource_name`s for all Quadlet types (which is rather complex for a few
@@ -177,10 +160,7 @@ impl UnitsInfoMap {
                     unit_info.resource_name = get_built_image_name(unit).unwrap_or_default();
                 }
                 "pod" => {
-                    unit_info.service_name = get_pod_service_name(unit)
-                        .to_str()
-                        .expect("service name is not a valid UTF-8 string")
-                        .into();
+                    unit_info.service_name = get_pod_service_name(unit).to_str().to_owned();
                 }
                 _ => {
                     warn!("Unsupported file type {:?}", unit.file_name());

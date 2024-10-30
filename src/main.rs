@@ -306,7 +306,7 @@ fn enable_service_file(output_path: &Path, service: &SystemdUnitFile) {
         if let Err(e) = os::unix::fs::symlink(target, &symlink_path) {
             warn!(
                 "Failed creating symlink {:?}: {e}",
-                symlink_path.to_str().unwrap()
+                symlink_path.to_str()
             );
             continue;
         }

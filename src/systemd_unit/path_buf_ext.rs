@@ -10,6 +10,7 @@ pub trait PathBufExt<T> {
     fn cleaned(&self) -> T;
     fn file_name_template_parts(&self) -> (Option<&str>, Option<&str>);
     fn starts_with_systemd_specifier(&self) -> bool;
+    fn to_str(&self) -> &str;
 }
 
 impl PathBufExt<PathBuf> for PathBuf {
@@ -110,6 +111,10 @@ impl PathBufExt<PathBuf> for PathBuf {
         }
 
         false
+    }
+
+    fn to_str(&self) -> &str {
+        (self as &Path).to_str().expect("path is not a valid UTF-8 string")
     }
 }
 
