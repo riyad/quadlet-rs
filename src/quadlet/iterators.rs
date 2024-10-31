@@ -258,6 +258,10 @@ impl UnitSearchDirsBuilder {
 
         let mut dirs = Vec::new();
 
+        if !path.exists() {
+            return dirs;
+        }
+
         for entry in WalkDir::new(&path)
             .into_iter()
             .filter_entry(|e| e.path().is_dir())
