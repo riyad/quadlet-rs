@@ -11,13 +11,12 @@ dirs = "5.0"
 log = { version = "0.4.22", features = ['std'] }
 ordered-multimap = "0.7"
 regex-lite = "0.1.6"
-thiserror = "1.0.56"
+thiserror = "2.0.1"
 users = "0.11"
 walkdir = "2"
 
 [dev-dependencies]
 serial_test = { version = "*", default_features = false, features = [
-  "log",
   "logging",
 ] } # ignore `async` and `futures`
 tempfile = "3.12.0"
