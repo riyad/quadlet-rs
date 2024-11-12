@@ -187,11 +187,7 @@ pub(crate) fn from_build_unit(
         podman.to_escaped_string().as_str(),
     )?;
 
-    service.add(SERVICE_SECTION, "Type", "oneshot");
-    service.add(SERVICE_SECTION, "RemainAfterExit", "yes");
-    // The default syslog identifier is the exec basename (podman)
-    // which isn't very useful here
-    service.add(SERVICE_SECTION, "SyslogIdentifier", "%N");
+    handle_one_shot_service_section(&mut service, false);
 
     return Ok(service);
 }
@@ -699,11 +695,7 @@ pub(crate) fn from_image_unit(
         podman.to_escaped_string().as_str(),
     )?;
 
-    service.add(SERVICE_SECTION, "Type", "oneshot");
-    service.add(SERVICE_SECTION, "RemainAfterExit", "yes");
-
-    // The default syslog identifier is the exec basename (podman) which isn't very useful here
-    service.add(SERVICE_SECTION, "SyslogIdentifier", "%N");
+    handle_one_shot_service_section(&mut service, true);
 
     let podman_image_name = if let Some(image) = image.lookup(IMAGE_SECTION, "ImageTag") {
         if !image.is_empty() {
@@ -1012,10 +1004,7 @@ pub(crate) fn from_network_unit(
         podman.to_escaped_string().as_str(),
     )?;
 
-    service.add(SERVICE_SECTION, "Type", "oneshot");
-    service.add(SERVICE_SECTION, "RemainAfterExit", "yes");
-    // The default syslog identifier is the exec basename (podman) which isn't very useful here
-    service.add(SERVICE_SECTION, "SyslogIdentifier", "%N");
+    handle_one_shot_service_section(&mut service, true);
 
     // Store the name of the created resource
     unit_info.resource_name = podman_network_name;
@@ -1335,10 +1324,7 @@ pub(crate) fn from_volume_unit(
         podman.to_escaped_string().as_str(),
     )?;
 
-    service.add(SERVICE_SECTION, "Type", "oneshot");
-    service.add(SERVICE_SECTION, "RemainAfterExit", "yes");
-    // The default syslog identifier is the exec basename (podman) which isn't very useful here
-    service.add(SERVICE_SECTION, "SyslogIdentifier", "%N");
+    handle_one_shot_service_section(&mut service, true);
 
     Ok(service)
 }
@@ -1488,6 +1474,21 @@ fn handle_networks(
     }
 
     Ok(())
+}
+
+fn handle_one_shot_service_section(service: &mut SystemdUnitFile, remain_after_exit: bool) {
+    // The default syslog identifier is the exec basename (podman) which isn't very useful here
+    if service.lookup(SERVICE_SECTION, "SyslogIdentifier").is_none() {
+        service.set(SERVICE_SECTION, "SyslogIdentifier", "%N")
+    }
+    if service.lookup(SERVICE_SECTION, "Type").is_none() {
+        service.set(SERVICE_SECTION, "Type", "oneshot")
+    }
+    if remain_after_exit {
+        if service.lookup(SERVICE_SECTION, "RemainAfterExit").is_none() {
+            service.set(SERVICE_SECTION, "RemainAfterExit", "yes")
+        }
+    }
 }
 
 fn handle_podman_args(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {
