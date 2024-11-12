@@ -1919,10 +1919,10 @@ fn find_mount_type(input: &str) -> Result<(String, Vec<String>), ConversionError
         .has_headers(false)
         .from_reader(input.as_bytes());
     for result in csv_reader.records() {
-        let record = dbg!(result)?;
+        let record = result?;
         for field in record.iter() {
-            let mut kv = dbg!(field).split('=');
-            if dbg!(found) || !(dbg!(kv.clone().count()) == 2 && dbg!(kv.next()) == Some("type")) {
+            let mut kv = field.split('=');
+            if found || !(kv.clone().count() == 2 && kv.next() == Some("type")) {
                 tokens.push(field.to_string());
                 continue;
             }
@@ -1931,7 +1931,7 @@ fn find_mount_type(input: &str) -> Result<(String, Vec<String>), ConversionError
         }
     }
 
-    if !dbg!(found) {
+    if !found {
         return Err(ConversionError::InvalidMountFormat(input.into()));
     }
 
