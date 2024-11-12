@@ -82,6 +82,8 @@ pub(crate) enum ConversionError {
     Parsing(#[from] systemd_unit::Error),
     #[error("Quadlet pod unit {0:?} does not exist")]
     PodNotFound(String),
+    #[error("requested Quadlet source {0:?} was not found")]
+    SourceNotFound(String),
     #[error("{0}")]
     UnknownKey(String),
     #[error("unsupported value for {0:?}: {1:?}")]

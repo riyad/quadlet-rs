@@ -1478,7 +1478,10 @@ fn handle_networks(
 
 fn handle_one_shot_service_section(service: &mut SystemdUnitFile, remain_after_exit: bool) {
     // The default syslog identifier is the exec basename (podman) which isn't very useful here
-    if service.lookup(SERVICE_SECTION, "SyslogIdentifier").is_none() {
+    if service
+        .lookup(SERVICE_SECTION, "SyslogIdentifier")
+        .is_none()
+    {
         service.set(SERVICE_SECTION, "SyslogIdentifier", "%N")
     }
     if service.lookup(SERVICE_SECTION, "Type").is_none() {
@@ -1632,6 +1635,7 @@ fn handle_storage_source(
     service_unit_file: &mut SystemdUnitFile,
     source: &str,
     units_info_map: &UnitsInfoMap,
+    check_image: bool,
 ) -> Result<String, ConversionError> {
     let mut source = source.to_owned();
 
@@ -1645,14 +1649,14 @@ fn handle_storage_source(
     if source.starts_with('/') {
         // Absolute path
         service_unit_file.add(UNIT_SECTION, "RequiresMountsFor", &source);
-    } else if source.ends_with(".volume") {
-        let volume_unit_info = units_info_map
+    } else if source.ends_with(".volume") || (check_image && source.ends_with(".image")) {
+        let source_unit_info = units_info_map
             .0
             .get(&OsString::from(&source))
-            .ok_or_else(|| ConversionError::ImageNotFound(source))?;
+            .ok_or_else(|| ConversionError::SourceNotFound(source))?;
 
         // the systemd unit name is $name-volume.service
-        let volume_service_name = volume_unit_info.get_service_file_name();
+        let volume_service_name = source_unit_info.get_service_file_name();
 
         service_unit_file.add(
             UNIT_SECTION,
@@ -1661,7 +1665,7 @@ fn handle_storage_source(
         );
         service_unit_file.add(UNIT_SECTION, "After", volume_service_name.to_str().unwrap());
 
-        source = volume_unit_info.resource_name.clone();
+        source = source_unit_info.resource_name.clone();
     }
 
     Ok(source)
@@ -1887,6 +1891,7 @@ fn handle_volumes(
                 service_unit_file,
                 &source,
                 units_info_map,
+                false,
             )?;
         }
 
@@ -2083,7 +2088,11 @@ fn resolve_container_mount_params(
     let (mount_type, tokens) = find_mount_type(mount.as_str())?;
 
     // Source resolution is required only for these types of mounts
-    if !(mount_type == "volume" || mount_type == "bind" || mount_type == "glob") {
+    if !(mount_type == "volume"
+        || mount_type == "bind"
+        || mount_type == "glob"
+        || mount_type == "image")
+    {
         return Ok(mount);
     }
 
@@ -2097,6 +2106,7 @@ fn resolve_container_mount_params(
                     service_unit_file,
                     v,
                     units_info_map,
+                    true,
                 )?;
                 csv_writer.write_field(format!("source={resolved_source}"))?;
             } else {
