@@ -1,0 +1,10 @@
+## depends-on startwithpod_no.container
+## depends-on startwithpod_yes.container
+
+## assert-key-contains "Unit" "Wants" "startwithpod_yes.service"
+## assert-key-contains "Unit" "Before" "startwithpod_yes.service"
+
+## !assert-key-contains "Unit" "Wants" "startwithpod_no.service"
+## !assert-key-contains "Unit" "Before" "startwithpod_no.service"
+
+[Pod]

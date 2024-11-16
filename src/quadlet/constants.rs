@@ -56,7 +56,7 @@ pub static SUPPORTED_BUILD_KEYS: [&str; 24] = [
     "Volume",
 ];
 
-pub static SUPPORTED_CONTAINER_KEYS: [&str; 83] = [
+pub static SUPPORTED_CONTAINER_KEYS: [&str; 84] = [
     "AddCapability",
     "AddDevice",
     "AddHost",
@@ -125,6 +125,7 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 83] = [
     "Secret",
     "ServiceName",
     "ShmSize",
+    "StartWithPod",
     "StopSignal",
     "StopTimeout",
     "SubGIDMap",
@@ -200,6 +201,7 @@ pub static SUPPORTED_NETWORK_KEYS: [&str; 16] = [
     "ServiceName",
     "Subnet",
 ];
+
 pub static SUPPORTED_POD_KEYS: [&str; 24] = [
     "AddHost",
     "ContainersConfModule",

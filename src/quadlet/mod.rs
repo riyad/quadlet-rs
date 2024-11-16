@@ -107,8 +107,8 @@ pub(crate) struct UnitInfo {
     pub(crate) resource_name: String,
 
     // For .pod units
-    // List of containers in a pod
-    pub(crate) containers: Vec<PathBuf>,
+    // List of containers to start with the pod
+    pub(crate) containers_to_start: Vec<PathBuf>,
 }
 
 impl UnitInfo {

@@ -1057,7 +1057,7 @@ pub(crate) fn from_pod_unit(
     // Need the containers filesystem mounted to start podman
     service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
 
-    for container_service in &unit_info.containers {
+    for container_service in &unit_info.containers_to_start {
         let container_service = container_service.to_str();
         service.add(UNIT_SECTION, "Wants", container_service);
         service.add(UNIT_SECTION, "Before", container_service);
@@ -1526,7 +1526,16 @@ fn handle_pod(
             service_unit_file.add(UNIT_SECTION, "BindsTo", &pod_service_name);
             service_unit_file.add(UNIT_SECTION, "After", &pod_service_name);
 
-            pod_info.containers.push(service_unit_file.path.clone());
+            // If we want to start the container with the pod, we add it to this list.
+            // This creates corresponding Wants=/Before= statements in the pod service.
+            if quadlet_unit
+                .lookup_bool(section, "StartWithPod")
+                .unwrap_or(true)
+            {
+                pod_info
+                    .containers_to_start
+                    .push(service_unit_file.path.clone());
+            }
         }
     }
     Ok(())
