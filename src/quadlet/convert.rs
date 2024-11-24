@@ -80,10 +80,17 @@ pub(crate) fn from_build_unit(
     let mut podman = get_base_podman_command(build, BUILD_SECTION);
     podman.add("build");
 
+    // The `--pull` flag has to be handled separately and the `=` sign must be present
+    // see https://github.com/containers/podman/issues/24599
+    if let Some(pull) = build.lookup(BUILD_SECTION, "Pull") {
+        if !pull.is_empty() {
+            podman.add(format!("--pull={pull}"));
+        }
+    }
+
     let string_keys = [
         ("Arch", "--arch"),
         ("AuthFile", "--authfile"),
-        ("Pull", "--pull"),
         ("Target", "--target"),
         ("Variant", "--variant"),
     ];
