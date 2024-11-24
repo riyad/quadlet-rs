@@ -87,7 +87,9 @@ impl SystemdUnitFile {
         // For instantiated templates, also look in the non-instanced template dropin dirs
         if let (Some(template_base), Some(_)) = self.path().file_name_template_parts() {
             for source_path in &source_paths {
-                let template_dropin_dir = self.path().with_file_name(format!("{template_base}@.{}.d", self.unit_type()));
+                let template_dropin_dir = self
+                    .path()
+                    .with_file_name(format!("{template_base}@.{}.d", self.unit_type()));
                 dropin_dirs.push(source_path.join(template_dropin_dir));
             }
         }
@@ -166,7 +168,11 @@ impl SystemdUnitFile {
     }
 
     pub fn unit_type(&self) -> &str {
-        self.path.extension().expect("should have an extension").to_str().expect("path is not a valid UTF-8 string")
+        self.path
+            .extension()
+            .expect("should have an extension")
+            .to_str()
+            .expect("path is not a valid UTF-8 string")
     }
 }
 
@@ -178,23 +184,32 @@ mod tests {
         use super::*;
 
         #[test]
-        #[should_panic]  // FIXME
+        #[should_panic] // FIXME
         fn with_empty_path() {
-            let unit_file = SystemdUnitFile { path: PathBuf::new(), ..Default::default() };
+            let unit_file = SystemdUnitFile {
+                path: PathBuf::new(),
+                ..Default::default()
+            };
 
             assert_eq!(unit_file.file_name(), "");
         }
 
         #[test]
         fn with_simple_path() {
-            let unit_file = SystemdUnitFile { path: PathBuf::from("foo.timer"), ..Default::default() };
+            let unit_file = SystemdUnitFile {
+                path: PathBuf::from("foo.timer"),
+                ..Default::default()
+            };
 
             assert_eq!(unit_file.file_name(), "foo.timer");
         }
 
         #[test]
         fn with_long_path() {
-            let unit_file = SystemdUnitFile { path: PathBuf::from("foo/bar.netdev"), ..Default::default() };
+            let unit_file = SystemdUnitFile {
+                path: PathBuf::from("foo/bar.netdev"),
+                ..Default::default()
+            };
 
             assert_eq!(unit_file.file_name(), "bar.netdev");
         }
@@ -215,30 +230,42 @@ mod tests {
     mod is_template_unit {
         use super::*;
 
-            #[test]
+        #[test]
         fn with_empty_path() {
-            let unit_file = SystemdUnitFile { path: PathBuf::new(), ..Default::default() };
+            let unit_file = SystemdUnitFile {
+                path: PathBuf::new(),
+                ..Default::default()
+            };
 
             assert!(!unit_file.is_template_unit());
         }
 
         #[test]
         fn with_simple_path() {
-            let unit_file = SystemdUnitFile { path: PathBuf::from("foo/bar.timer"), ..Default::default() };
+            let unit_file = SystemdUnitFile {
+                path: PathBuf::from("foo/bar.timer"),
+                ..Default::default()
+            };
 
             assert!(!unit_file.is_template_unit());
         }
 
         #[test]
         fn with_template_base_path() {
-            let unit_file = SystemdUnitFile { path: PathBuf::from("foo/bar@.netdev"), ..Default::default() };
+            let unit_file = SystemdUnitFile {
+                path: PathBuf::from("foo/bar@.netdev"),
+                ..Default::default()
+            };
 
             assert!(unit_file.is_template_unit());
         }
 
         #[test]
         fn with_template_instance_path() {
-            let unit_file = SystemdUnitFile { path: PathBuf::from("foo/bar@baz.netdev"), ..Default::default() };
+            let unit_file = SystemdUnitFile {
+                path: PathBuf::from("foo/bar@baz.netdev"),
+                ..Default::default()
+            };
 
             assert!(unit_file.is_template_unit());
         }
@@ -248,16 +275,22 @@ mod tests {
         use super::*;
 
         #[test]
-        #[should_panic]  // FIXME
+        #[should_panic] // FIXME
         fn with_empty_path() {
-            let unit_file = SystemdUnitFile { path: PathBuf::new(), ..Default::default() };
+            let unit_file = SystemdUnitFile {
+                path: PathBuf::new(),
+                ..Default::default()
+            };
 
             assert_eq!(unit_file.unit_type(), "");
         }
 
         #[test]
         fn is_same_as_extension() {
-            let unit_file = SystemdUnitFile { path: PathBuf::from("foo.timer"), ..Default::default() };
+            let unit_file = SystemdUnitFile {
+                path: PathBuf::from("foo.timer"),
+                ..Default::default()
+            };
 
             assert_eq!(unit_file.unit_type(), "timer");
         }
