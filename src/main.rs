@@ -346,10 +346,17 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
         .recursive(true)
         .build();
 
-    let mut units: Vec<SystemdUnitFile> = source_paths
+    let mut units: Vec<QuadletUnitFile> = source_paths
         .iter()
         .flat_map(|dir| load_units_from_dir(dir.as_path(), &mut seen))
-        .filter_map(|r| match r {
+        .map(|result| match result {
+            Ok(u) => match QuadletUnitFile::from_unit_file(u) {
+                Ok(u) => Ok(u),
+                Err(e) => Err(e),
+            },
+            Err(e) => Err(e),
+        })
+        .filter_map(|result| match result {
             Ok(u) => Some(u),
             Err(e) => {
                 prev_errors.push(e);
@@ -365,12 +372,13 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
         return prev_errors;
     }
 
-    for unit in units.iter_mut() {
-        let _ = unit
+    for quadlet in units.iter_mut() {
+        let _ = quadlet
+            .unit_file
             .load_dropins_from(source_paths.dirs().iter().map(|d| d.as_path()))
             .map_err(|e| {
                 prev_errors.push(RuntimeError::Conversion(
-                    format!("failed loading drop-ins for {unit:?}"),
+                    format!("failed loading drop-ins for {quadlet:?}"),
                     e.into(),
                 ))
             });
@@ -402,11 +410,11 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
     // units taking precedence over all others.
     // resulting order: .image < (.network | .volume) < .build < (.container | .kube) < .pod
     units.sort_unstable_by(|a, b| {
-        let a_typ = match QuadletType::from_path(a.path()) {
+        let a_typ = match QuadletType::from_path(a.unit_file.path()) {
             Ok(typ) => sorting_priority.get(&typ).unwrap_or(&usize::MAX),
             Err(_) => &usize::MAX,
         };
-        let b_typ = match QuadletType::from_path(b.path()) {
+        let b_typ = match QuadletType::from_path(b.unit_file.path()) {
             Ok(typ) => sorting_priority.get(&typ).unwrap_or(&usize::MAX),
             Err(_) => &usize::MAX,
         };
@@ -415,38 +423,32 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
     });
 
     // Generate the PodsInfoMap to allow containers to link to their pods and add themselves to the pod's containers list
-    // NOTE: errors will be "re-handled" in the loop below
-    let (mut units_info_map, _) = UnitsInfoMap::from_units(&units);
+    let mut units_info_map = UnitsInfoMap::from_quadlet_units(units.clone());
 
-    for unit in units {
-        let service_result = match QuadletType::from_path(unit.path()) {
-            Ok(QuadletType::Build) => {
-                convert::from_build_unit(&unit, &mut units_info_map, cfg.is_user)
+    for quadlet in units {
+        let unit = &quadlet.unit_file;
+        let service_result = match quadlet.quadlet_type {
+            QuadletType::Build => convert::from_build_unit(unit, &mut units_info_map, cfg.is_user),
+            QuadletType::Container => {
+                warn_if_ambiguous_image_name(unit, CONTAINER_SECTION);
+                convert::from_container_unit(unit, &mut units_info_map, cfg.is_user)
             }
-            Ok(QuadletType::Container) => {
-                warn_if_ambiguous_image_name(&unit, CONTAINER_SECTION);
-                convert::from_container_unit(&unit, &mut units_info_map, cfg.is_user)
+            QuadletType::Image => {
+                warn_if_ambiguous_image_name(unit, IMAGE_SECTION);
+                convert::from_image_unit(unit, &mut units_info_map, cfg.is_user)
             }
-            Ok(QuadletType::Image) => {
-                warn_if_ambiguous_image_name(&unit, IMAGE_SECTION);
-                convert::from_image_unit(&unit, &mut units_info_map, cfg.is_user)
+            QuadletType::Kube => convert::from_kube_unit(unit, &mut units_info_map, cfg.is_user),
+            QuadletType::Network => {
+                convert::from_network_unit(unit, &mut units_info_map, cfg.is_user)
             }
-            Ok(QuadletType::Kube) => {
-                convert::from_kube_unit(&unit, &mut units_info_map, cfg.is_user)
-            }
-            Ok(QuadletType::Network) => {
-                convert::from_network_unit(&unit, &mut units_info_map, cfg.is_user)
-            }
-            Ok(QuadletType::Pod) => convert::from_pod_unit(&unit, &mut units_info_map, cfg.is_user),
-            Ok(QuadletType::Volume) => {
-                warn_if_ambiguous_image_name(&unit, VOLUME_SECTION);
-                convert::from_volume_unit(&unit, &mut units_info_map, cfg.is_user)
-            }
-            Err(e) => {
-                // assuming we've ignored the errors from `UnitsInfoMap::from_units()` above
-                warn!("{e}");
-                continue;
-            }
+            QuadletType::Pod => convert::from_pod_unit(unit, &mut units_info_map, cfg.is_user),
+            QuadletType::Volume => {
+                warn_if_ambiguous_image_name(unit, VOLUME_SECTION);
+                convert::from_volume_unit(unit, &mut units_info_map, cfg.is_user)
+            } // _ => {
+              //     warn!("Unsupported file type {:?}", unit.path());
+              //     continue;
+              // }
         };
 
         let mut service = match service_result {
