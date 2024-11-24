@@ -29,6 +29,8 @@ pub(crate) enum RuntimeError {
     Io(String, #[source] io::Error),
     #[error("{0}: {1}")]
     Conversion(String, #[source] ConversionError),
+    #[error("unsupported file type {0:?}")]
+    UnsupportedQuadletType(PathBuf),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -99,12 +101,44 @@ impl From<systemd_unit::IoError> for ConversionError {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Eq, Hash, PartialEq)]
+#[non_exhaustive]
+pub(crate) enum QuadletType {
+    Build,
+    Container,
+    Image,
+    Kube,
+    Network,
+    Pod,
+    Volume,
+}
+
+impl QuadletType {
+    pub(crate) fn from_path(path: &Path) -> Result<QuadletType, RuntimeError> {
+        match path
+            .extension()
+            .map(|e| e.to_str().unwrap_or_default())
+            .unwrap_or_default()
+        {
+            "build" => Ok(QuadletType::Build),
+            "container" => Ok(QuadletType::Container),
+            "image" => Ok(QuadletType::Image),
+            "kube" => Ok(QuadletType::Kube),
+            "network" => Ok(QuadletType::Network),
+            "pod" => Ok(QuadletType::Pod),
+            "volume" => Ok(QuadletType::Volume),
+            _ => Err(RuntimeError::UnsupportedQuadletType(path.to_path_buf())),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub(crate) struct UnitInfo {
     // The name of the generated systemd service unit
     pub(crate) service_name: String,
     // The name of the podman resource created by the service
     pub(crate) resource_name: String,
+    pub(crate) unit_type: QuadletType,
 
     // For .pod units
     // List of containers to start with the pod
@@ -112,6 +146,35 @@ pub(crate) struct UnitInfo {
 }
 
 impl UnitInfo {
+    pub(crate) fn from_unit_file(unit_file: &SystemdUnitFile) -> Result<UnitInfo, RuntimeError> {
+        let quadlet_type = QuadletType::from_path(unit_file.path())?;
+        let service_name = match quadlet_type {
+            QuadletType::Container => get_container_service_name(unit_file).to_str().to_owned(),
+            QuadletType::Volume => get_volume_service_name(unit_file).to_str().to_owned(),
+            QuadletType::Kube => get_kube_service_name(unit_file).to_str().to_owned(),
+            QuadletType::Network => get_network_service_name(unit_file).to_str().to_owned(),
+            QuadletType::Image => get_image_service_name(unit_file).to_str().to_owned(),
+            QuadletType::Build => get_build_service_name(unit_file).to_str().to_owned(),
+            QuadletType::Pod => get_pod_service_name(unit_file).to_str().to_owned(),
+        };
+        let resource_name = if quadlet_type == QuadletType::Build {
+            // Prefill `resouce_name`s for .build files. This is significantly less complex than
+            // pre-computing all `resource_name`s for all Quadlet types (which is rather complex for a few
+            // types), but still breaks the dependency cycle between .volume and .build ([Volume] can
+            // have Image=some.build, and [Build] can have Volume=some.volume:/some-volume)
+            get_built_image_name(unit_file).unwrap_or_default()
+        } else {
+            String::default()
+        };
+
+        Ok(UnitInfo {
+            service_name: service_name,
+            resource_name: resource_name,
+            unit_type: quadlet_type,
+            containers_to_start: Vec::default(),
+        })
+    }
+
     pub(crate) fn get_service_file_name(&self) -> OsString {
         PathBuf::from(format!("{}.service", self.service_name))
             .file_name()
@@ -124,58 +187,24 @@ impl UnitInfo {
 pub(crate) struct UnitsInfoMap(HashMap<OsString, UnitInfo>);
 
 impl UnitsInfoMap {
-    pub(crate) fn from_units(units: &Vec<SystemdUnitFile>) -> UnitsInfoMap {
+    pub(crate) fn from_units(units: &Vec<SystemdUnitFile>) -> (UnitsInfoMap, Vec<RuntimeError>) {
         let mut units_info_map = UnitsInfoMap::default();
+        let mut errors = Vec::default();
 
         for unit in units {
-            let mut unit_info = UnitInfo::default();
-
-            match unit
-                .path
-                .extension()
-                .unwrap_or(OsString::from("").as_os_str())
-                .to_str()
-                .expect("unit path is not a valid UTF-8 string")
-            {
-                "container" => {
-                    unit_info.service_name = get_container_service_name(unit).to_str().to_owned();
+            match UnitInfo::from_unit_file(unit) {
+                Ok(unit_info) => {
+                    units_info_map
+                        .0
+                        .insert(unit.file_name().to_os_string(), unit_info);
                 }
-                "volume" => {
-                    unit_info.service_name = get_volume_service_name(unit).to_str().to_owned();
-                }
-                "kube" => {
-                    unit_info.service_name = get_kube_service_name(unit).to_str().to_owned();
-                }
-                "network" => {
-                    unit_info.service_name = get_network_service_name(unit).to_str().to_owned();
-                }
-                "image" => {
-                    unit_info.service_name = get_image_service_name(unit).to_str().to_owned();
-                }
-                "build" => {
-                    unit_info.service_name = get_build_service_name(unit).to_str().to_owned();
-
-                    // Prefill `resouce_name`s for .build files. This is significantly less complex than
-                    // pre-computing all `resource_name`s for all Quadlet types (which is rather complex for a few
-                    // types), but still breaks the dependency cycle between .volume and .build ([Volume] can
-                    // have Image=some.build, and [Build] can have Volume=some.volume:/some-volume)
-                    unit_info.resource_name = get_built_image_name(unit).unwrap_or_default();
-                }
-                "pod" => {
-                    unit_info.service_name = get_pod_service_name(unit).to_str().to_owned();
-                }
-                _ => {
-                    warn!("Unsupported file type {:?}", unit.file_name());
-                    continue;
+                Err(e) => {
+                    errors.push(e);
                 }
             }
-
-            units_info_map
-                .0
-                .insert(unit.file_name().to_os_string(), unit_info);
         }
 
-        units_info_map
+        (units_info_map, errors)
     }
 }
 

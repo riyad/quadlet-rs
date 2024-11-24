@@ -388,58 +388,63 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
 
     // Key: Extension
     // Value: Processing order for resource naming dependencies
-    let sorting_priority: HashMap<OsString, usize> = HashMap::from([
-        ("container".into(), 4),
-        ("volume".into(), 2),
-        ("kube".into(), 4),
-        ("network".into(), 2),
-        ("image".into(), 1),
-        ("build".into(), 3),
-        ("pod".into(), 5),
+    let sorting_priority: HashMap<QuadletType, usize> = HashMap::from([
+        (QuadletType::Container, 4),
+        (QuadletType::Build, 3),
+        (QuadletType::Image, 1),
+        (QuadletType::Kube, 4),
+        (QuadletType::Network, 2),
+        (QuadletType::Pod, 5),
+        (QuadletType::Volume, 2),
     ]);
 
     // Sort unit files according to potential inter-dependencies, with Image, Volume and Network
     // units taking precedence over all others.
     // resulting order: .image < (.network | .volume) < .build < (.container | .kube) < .pod
     units.sort_unstable_by(|a, b| {
-        let a_ext = a.path().extension().unwrap_or_default();
-        let b_ext = b.path().extension().unwrap_or_default();
+        let a_typ = match QuadletType::from_path(a.path()) {
+            Ok(typ) => sorting_priority.get(&typ).unwrap_or(&usize::MAX),
+            Err(_) => &usize::MAX,
+        };
+        let b_typ = match QuadletType::from_path(b.path()) {
+            Ok(typ) => sorting_priority.get(&typ).unwrap_or(&usize::MAX),
+            Err(_) => &usize::MAX,
+        };
 
-        sorting_priority
-            .get(a_ext)
-            .unwrap_or(&usize::MAX)
-            .partial_cmp(sorting_priority.get(b_ext).unwrap_or(&usize::MAX))
-            .unwrap_or(Ordering::Less)
+        a_typ.partial_cmp(b_typ).unwrap_or(Ordering::Less)
     });
 
     // Generate the PodsInfoMap to allow containers to link to their pods and add themselves to the pod's containers list
-    let mut units_info_map = UnitsInfoMap::from_units(&units);
+    // NOTE: errors will be "re-handled" in the loop below
+    let (mut units_info_map, _) = UnitsInfoMap::from_units(&units);
 
     for unit in units {
-        let ext = unit.path().extension();
-
-        let service_result = match ext
-            .map(|e| e.to_str().unwrap_or_default())
-            .unwrap_or_default()
-        {
-            "build" => convert::from_build_unit(&unit, &mut units_info_map, cfg.is_user),
-            "container" => {
+        let service_result = match QuadletType::from_path(unit.path()) {
+            Ok(QuadletType::Build) => {
+                convert::from_build_unit(&unit, &mut units_info_map, cfg.is_user)
+            }
+            Ok(QuadletType::Container) => {
                 warn_if_ambiguous_image_name(&unit, CONTAINER_SECTION);
                 convert::from_container_unit(&unit, &mut units_info_map, cfg.is_user)
             }
-            "image" => {
+            Ok(QuadletType::Image) => {
                 warn_if_ambiguous_image_name(&unit, IMAGE_SECTION);
                 convert::from_image_unit(&unit, &mut units_info_map, cfg.is_user)
             }
-            "kube" => convert::from_kube_unit(&unit, &mut units_info_map, cfg.is_user),
-            "network" => convert::from_network_unit(&unit, &mut units_info_map, cfg.is_user),
-            "pod" => convert::from_pod_unit(&unit, &mut units_info_map, cfg.is_user),
-            "volume" => {
+            Ok(QuadletType::Kube) => {
+                convert::from_kube_unit(&unit, &mut units_info_map, cfg.is_user)
+            }
+            Ok(QuadletType::Network) => {
+                convert::from_network_unit(&unit, &mut units_info_map, cfg.is_user)
+            }
+            Ok(QuadletType::Pod) => convert::from_pod_unit(&unit, &mut units_info_map, cfg.is_user),
+            Ok(QuadletType::Volume) => {
                 warn_if_ambiguous_image_name(&unit, VOLUME_SECTION);
                 convert::from_volume_unit(&unit, &mut units_info_map, cfg.is_user)
             }
-            _ => {
-                warn!("Unsupported file type {:?}", unit.path());
+            Err(e) => {
+                // assuming we've ignored the errors from `UnitsInfoMap::from_units()` above
+                warn!("{e}");
                 continue;
             }
         };
