@@ -20,7 +20,7 @@ pub enum IoError {
     Unit(#[from] super::Error),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SystemdUnitFile {
     pub(crate) path: PathBuf,
     unit: SystemdUnit,

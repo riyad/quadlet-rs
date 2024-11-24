@@ -4,7 +4,7 @@ use std::io;
 
 use super::{parser, Entries, EntryValue, SectionKey, SplitStrv, SplitWord};
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SystemdUnit {
     pub(crate) sections: ListOrderedMultimap<SectionKey, Entries>,
 }
