@@ -1454,7 +1454,9 @@ fn handle_networks(
 
                 // XXX: this is usually because a '@' in service name
                 if unit_info.resource_name.is_empty() {
-                    return Err(ConversionError::InvalidResourceNameIn(quadlet_network_name.into()));
+                    return Err(ConversionError::InvalidResourceNameIn(
+                        quadlet_network_name.into(),
+                    ));
                 }
 
                 // the systemd unit name is $name-network.service
@@ -1464,11 +1466,7 @@ fn handle_networks(
                     "Requires",
                     service_file_name.to_str().unwrap(),
                 );
-                service_unit_file.add(
-                    UNIT_SECTION,
-                    "After",
-                    service_file_name.to_str().unwrap(),
-                );
+                service_unit_file.add(UNIT_SECTION, "After", service_file_name.to_str().unwrap());
 
                 quadlet_network_name = unit_info.resource_name.as_str();
             }
