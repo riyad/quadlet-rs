@@ -1,3 +1,4 @@
+use std::env;
 use std::fs::{File, OpenOptions};
 use std::io::{stderr, Write};
 use std::os::unix::fs::OpenOptionsExt;
@@ -15,6 +16,31 @@ pub(crate) struct KmsgLogger {
 }
 
 impl KmsgLogger {
+    // Honor Systemd telling us to use DEBUG log level
+    pub(crate) fn from_systemd_env() -> Self {
+        let mut kmsg_logger = Self {
+            debug_enabled: false,
+            dry_run: false,
+            kmsg_file: Mutex::new(None),
+            kmsg_enabled: AtomicBool::new(true),
+        };
+
+        // see https://www.freedesktop.org/software/systemd/man/devel/systemd.generator.html#Examples
+        if let Some(systed_log_level) = env::var("SYSTEMD_LOG_LEVEL").ok() {
+            if systed_log_level == "debug" {
+                kmsg_logger.debug_enabled = true;
+            }
+        }
+        // see https://mastodon.social/@pid_eins/113548790734704600
+        if let Some(debug_invocation_env) = env::var("DEBUG_INVOCATION").ok() {
+            if !debug_invocation_env.is_empty() {
+                kmsg_logger.debug_enabled = true;
+            }
+        }
+
+        kmsg_logger
+    }
+
     pub(crate) fn init(self) -> Result<(), log::SetLoggerError> {
         let max_log_level = if self.debug_enabled {
             log::LevelFilter::Debug

@@ -311,7 +311,7 @@ fn enable_service_file(output_path: &Path, service: &SystemdUnitFile) {
 }
 
 fn main() {
-    let kmsg_logger = KmsgLogger::new();
+    let kmsg_logger = KmsgLogger::from_systemd_env();
 
     let cfg = match validate_args(kmsg_logger) {
         Ok(cfg) => cfg,
