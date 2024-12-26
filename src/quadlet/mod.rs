@@ -140,7 +140,7 @@ impl QuadletType {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct QuadletUnitFile {
+pub(crate) struct QuadletSourceUnitFile {
     pub(crate) unit_file: SystemdUnitFile,
     pub(crate) quadlet_type: QuadletType,
 
@@ -148,18 +148,16 @@ pub(crate) struct QuadletUnitFile {
     pub(crate) service_name: String,
     // The name of the podman resource created by the service
     pub(crate) resource_name: String,
-    // The generated systemd service unit
-    pub(crate) service_file: SystemdUnitFile,
 
     // For .pod units
     // List of containers to start with the pod
     pub(crate) containers_to_start: Vec<PathBuf>,
 }
 
-impl QuadletUnitFile {
+impl QuadletSourceUnitFile {
     pub(crate) fn from_unit_file(
         unit_file: SystemdUnitFile,
-    ) -> Result<QuadletUnitFile, RuntimeError> {
+    ) -> Result<QuadletSourceUnitFile, RuntimeError> {
         let quadlet_type = QuadletType::from_path(unit_file.path())?;
         let service_name = match quadlet_type {
             QuadletType::Container => get_container_service_name(&unit_file).to_str().to_owned(),
@@ -185,16 +183,32 @@ impl QuadletUnitFile {
             _ => String::default(),
         };
 
-        Ok(QuadletUnitFile {
+        Ok(QuadletSourceUnitFile {
             unit_file,
             service_name,
             resource_name,
-            service_file: SystemdUnitFile::default(),
             quadlet_type,
             containers_to_start: Vec::default(),
         })
     }
 
+    pub(crate) fn get_service_file_name(&self) -> OsString {
+        PathBuf::from(format!("{}.service", self.service_name))
+            .file_name()
+            .expect("should have a file name")
+            .to_os_string()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct QuadletServiceUnitFile<'q> {
+    pub(crate) quadlet: &'q QuadletSourceUnitFile,
+
+    // The generated systemd service unit
+    pub(crate) service_file: SystemdUnitFile,
+}
+
+impl QuadletServiceUnitFile<'_> {
     pub(crate) fn generate_service_file(&self) -> io::Result<()> {
         let out_filename = self.service_file.path();
 
@@ -210,20 +224,13 @@ impl QuadletUnitFile {
 
         Ok(())
     }
-
-    pub(crate) fn get_service_file_name(&self) -> OsString {
-        PathBuf::from(format!("{}.service", self.service_name))
-            .file_name()
-            .expect("should have a file name")
-            .to_os_string()
-    }
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct UnitsInfoMap(pub(crate) HashMap<OsString, QuadletUnitFile>);
+pub(crate) struct UnitsInfoMap(pub(crate) HashMap<OsString, QuadletSourceUnitFile>);
 
 impl UnitsInfoMap {
-    pub(crate) fn from_quadlet_units(quadlet_units: Vec<QuadletUnitFile>) -> UnitsInfoMap {
+    pub(crate) fn from_quadlet_units(quadlet_units: Vec<QuadletSourceUnitFile>) -> UnitsInfoMap {
         let mut units_info_map = UnitsInfoMap::default();
 
         for quadlet in quadlet_units {

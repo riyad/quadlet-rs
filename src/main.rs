@@ -1,7 +1,7 @@
 mod quadlet;
 mod systemd_unit;
 
-use log::{debug, error, warn};
+use log::{debug, error};
 
 use self::quadlet::logger::*;
 use self::quadlet::*;
@@ -240,11 +240,11 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
         .recursive(true)
         .build();
 
-    let mut units: Vec<QuadletUnitFile> = source_paths
+    let mut units: Vec<QuadletSourceUnitFile> = source_paths
         .iter()
         .flat_map(|dir| load_units_from_dir(dir.as_path(), &mut seen))
         .map(|result| match result {
-            Ok(u) => match QuadletUnitFile::from_unit_file(u) {
+            Ok(u) => match QuadletSourceUnitFile::from_unit_file(u) {
                 Ok(u) => Ok(u),
                 Err(e) => Err(e),
             },
@@ -319,37 +319,14 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
     // Generate the PodsInfoMap to allow containers to link to their pods and add themselves to the pod's containers list
     let mut units_info_map = UnitsInfoMap::from_quadlet_units(units.clone());
 
-    for mut quadlet in units {
-        let unit = &quadlet.unit_file;
-        let service_result = match quadlet.quadlet_type {
-            QuadletType::Build => convert::from_build_unit(unit, &mut units_info_map, cfg.is_user),
-            QuadletType::Container => {
-                warn_if_ambiguous_image_name(unit, CONTAINER_SECTION);
-                convert::from_container_unit(unit, &mut units_info_map, cfg.is_user)
-            }
-            QuadletType::Image => {
-                warn_if_ambiguous_image_name(unit, IMAGE_SECTION);
-                convert::from_image_unit(unit, &mut units_info_map, cfg.is_user)
-            }
-            QuadletType::Kube => convert::from_kube_unit(unit, &mut units_info_map, cfg.is_user),
-            QuadletType::Network => {
-                convert::from_network_unit(unit, &mut units_info_map, cfg.is_user)
-            }
-            QuadletType::Pod => convert::from_pod_unit(unit, &mut units_info_map, cfg.is_user),
-            QuadletType::Volume => {
-                warn_if_ambiguous_image_name(unit, VOLUME_SECTION);
-                convert::from_volume_unit(unit, &mut units_info_map, cfg.is_user)
-            } // _ => {
-              //     warn!("Unsupported file type {:?}", unit.path());
-              //     continue;
-              // }
-        };
+    for quadlet_source in units {
+        let quadlet_result = convert(&quadlet_source, &mut units_info_map, cfg.is_user);
 
-        let mut service = match service_result {
+        let mut quadlet_service = match quadlet_result {
             Ok(service_unit) => service_unit,
             Err(e) => {
                 prev_errors.push(RuntimeError::Conversion(
-                    format!("Converting {:?}", unit.path()),
+                    format!("Converting {:?}", quadlet_source.unit_file.path()),
                     e,
                 ));
                 continue;
@@ -357,15 +334,13 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
         };
 
         let mut service_output_path = cfg.output_path.clone();
-        service_output_path.push(service.file_name());
-        service.path = service_output_path;
-
-        quadlet.service_file = service;
+        service_output_path.push(quadlet_service.service_file.file_name());
+        quadlet_service.service_file.path = service_output_path;
 
         if cfg.dry_run {
-            println!("---{:?}---", quadlet.service_file.path());
+            println!("---{:?}---", quadlet_service.service_file.path());
             _ = io::stdout()
-                .write(quadlet.service_file.to_string().as_bytes())
+                .write(quadlet_service.service_file.to_string().as_bytes())
                 .expect("should write to STDOUT");
             // NOTE: currently setting entries can fail, because of (un-)quoting errors, so we can't fail here any more
             // TODO: revisit this decision, then we could use the following code ...
@@ -381,17 +356,56 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
             continue;
         }
 
-        if let Err(e) = quadlet.generate_service_file() {
+        if let Err(e) = quadlet_service.generate_service_file() {
             prev_errors.push(RuntimeError::Io(
-                format!("Generatring service file {:?}", quadlet.service_file.path()),
+                format!(
+                    "Generatring service file {:?}",
+                    quadlet_service.service_file.path()
+                ),
                 e,
             ));
             continue; // NOTE: Go Quadlet doesn't do this, but it probably should
         }
-        quadlet.service_file.enable_service_file(&cfg.output_path);
+        quadlet_service
+            .service_file
+            .enable_service_file(&cfg.output_path);
     }
 
     prev_errors
+}
+
+fn convert<'q>(
+    quadlet: &'q QuadletSourceUnitFile,
+    units_info_map: &mut UnitsInfoMap,
+    is_user: bool,
+) -> Result<QuadletServiceUnitFile<'q>, ConversionError> {
+    let unit = &quadlet.unit_file;
+    let service_result = match quadlet.quadlet_type {
+        QuadletType::Build => convert::from_build_unit(unit, units_info_map, is_user),
+        QuadletType::Container => {
+            warn_if_ambiguous_image_name(unit, CONTAINER_SECTION);
+            convert::from_container_unit(unit, units_info_map, is_user)
+        }
+        QuadletType::Image => {
+            warn_if_ambiguous_image_name(unit, IMAGE_SECTION);
+            convert::from_image_unit(unit, units_info_map, is_user)
+        }
+        QuadletType::Kube => convert::from_kube_unit(unit, units_info_map, is_user),
+        QuadletType::Network => convert::from_network_unit(unit, units_info_map, is_user),
+        QuadletType::Pod => convert::from_pod_unit(unit, units_info_map, is_user),
+        QuadletType::Volume => {
+            warn_if_ambiguous_image_name(unit, VOLUME_SECTION);
+            convert::from_volume_unit(unit, units_info_map, is_user)
+        } // _ => {
+          //     warn!("Unsupported file type {:?}", unit.path());
+          //     continue;
+          // }
+    };
+
+    service_result.map(|service_file| QuadletServiceUnitFile {
+        quadlet: &quadlet,
+        service_file,
+    })
 }
 
 #[cfg(test)]
