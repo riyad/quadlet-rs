@@ -14,10 +14,8 @@ use std::env;
 
 use std::ffi::OsString;
 use std::fs;
-use std::fs::File;
 use std::io;
-use std::io::{BufWriter, Write};
-use std::os;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process;
 
@@ -206,94 +204,6 @@ fn load_units_from_dir(
     results
 }
 
-// This parses the `Install` section of the unit file and creates the required
-// symlinks to get systemd to start the newly generated file as needed.
-// In a traditional setup this is done by "systemctl enable", but that doesn't
-// work for auto-generated files like these.
-fn enable_service_file(output_path: &Path, service: &SystemdUnitFile) {
-    let mut symlinks: Vec<PathBuf> = Vec::new();
-
-    let mut alias: Vec<PathBuf> = service
-        .lookup_all_strv(INSTALL_SECTION, "Alias")
-        .iter()
-        .map(|s| PathBuf::from(s).cleaned())
-        .collect();
-    symlinks.append(&mut alias);
-
-    let mut service_name = service.file_name().to_os_string();
-    let (template_base, template_instance) = service.path().file_name_template_parts();
-
-    // For non-instantiated template service we only support installs if a
-    // DefaultInstance is given. Otherwise we ignore the Install group, but
-    // it is still useful when instantiating the unit via a symlink.
-    if let Some(template_base) = template_base {
-        if template_instance.is_none() {
-            if let Some(default_instance) = service.lookup(INSTALL_SECTION, "DefaultInstance") {
-                service_name = OsString::from(format!(
-                    "{template_base}@{default_instance}.{}",
-                    service.unit_type()
-                ));
-            } else {
-                service_name = OsString::default();
-            }
-        }
-    }
-
-    if !service_name.is_empty() {
-        let mut wanted_by: Vec<PathBuf> = service
-            .lookup_all_strv(INSTALL_SECTION, "WantedBy")
-            .iter()
-            .filter(|s| !s.contains('/')) // Only allow filenames, not paths
-            .map(|wanted_by_unit| {
-                let mut path = PathBuf::from(format!("{wanted_by_unit}.wants/"));
-                path.push(&service_name);
-                path
-            })
-            .collect();
-        symlinks.append(&mut wanted_by);
-
-        let mut required_by: Vec<PathBuf> = service
-            .lookup_all_strv(INSTALL_SECTION, "RequiredBy")
-            .iter()
-            .filter(|s| !s.contains('/')) // Only allow filenames, not paths
-            .map(|required_by_unit| {
-                let mut path = PathBuf::from(format!("{required_by_unit}.requires/"));
-                path.push(&service_name);
-                path
-            })
-            .collect();
-        symlinks.append(&mut required_by);
-    }
-
-    // construct relative symlink targets so that <output_path>/<symlink_rel (aka. foo/<service_name>)>
-    // links to <output_path>/<service_name>
-    for symlink_rel in symlinks {
-        let mut target = PathBuf::new();
-
-        // At this point the symlinks are all relative, canonicalized
-        // paths, so the number of slashes corresponds to its path depth
-        // i.e. number of slashes == components - 1
-        for _ in 1..symlink_rel.components().count() {
-            target.push("..");
-        }
-        target.push(service.file_name());
-
-        let symlink_path = output_path.join(symlink_rel);
-        let symlink_dir = symlink_path.parent().unwrap();
-        if let Err(e) = fs::create_dir_all(symlink_dir) {
-            warn!("Can't create dir {:?}: {e}", symlink_dir.to_str().unwrap());
-            continue;
-        }
-
-        debug!("Creating symlink {symlink_path:?} -> {target:?}");
-        fs::remove_file(&symlink_path).unwrap_or_default(); // overwrite existing symlinks
-        if let Err(e) = os::unix::fs::symlink(target, &symlink_path) {
-            warn!("Failed creating symlink {:?}: {e}", symlink_path.to_str());
-            continue;
-        }
-    }
-}
-
 fn main() {
     let kmsg_logger = KmsgLogger::from_systemd_env();
 
@@ -478,7 +388,7 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
             ));
             continue; // NOTE: Go Quadlet doesn't do this, but it probably should
         }
-        enable_service_file(&cfg.output_path, &quadlet.service_file);
+        quadlet.service_file.enable_service_file(&cfg.output_path);
     }
 
     prev_errors
