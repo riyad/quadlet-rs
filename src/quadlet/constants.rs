@@ -202,7 +202,7 @@ pub static SUPPORTED_NETWORK_KEYS: [&str; 16] = [
     "Subnet",
 ];
 
-pub static SUPPORTED_POD_KEYS: [&str; 24] = [
+pub static SUPPORTED_POD_KEYS: [&str; 25] = [
     "AddHost",
     "ContainersConfModule",
     "DNS",
@@ -222,6 +222,7 @@ pub static SUPPORTED_POD_KEYS: [&str; 24] = [
     "RemapUidSize", // deprecated, use UserNS instead
     "RemapUsers",   // deprecated, use UserNS instead
     "ServiceName",
+    "ShmSize",
     "SubGIDMap",
     "SubUIDMap",
     "UIDMap",

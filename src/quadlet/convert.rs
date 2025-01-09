@@ -1126,8 +1126,8 @@ pub(crate) fn from_pod_unit(
     let string_keys = [
         ("IP", "--ip"),
         ("IP6", "--ip6"),
+        ("ShmSize","--shm-size"),
     ];
-    // NOTE: Go Quadlet uses `lookup_and_add_all_strings()` here
     lookup_and_add_string(&pod, POD_SECTION, &string_keys, &mut podman_start_pre);
 
     let all_string_keys = [
