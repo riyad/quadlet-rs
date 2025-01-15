@@ -79,6 +79,12 @@ impl<'a> SplitStrv<'a> {
     }
 }
 
+impl<'a> Default for SplitStrv<'_> {
+    fn default() -> Self {
+        Self::new("")
+    }
+}
+
 impl Iterator for SplitStrv<'_> {
     type Item = String;
 
@@ -288,10 +294,7 @@ impl<'a> SplitWord<'a> {
 
 impl<'a> Default for SplitWord<'_> {
     fn default() -> Self {
-        Self {
-            chars: "".chars(),
-            c: Default::default(),
-        }
+        Self::new("")
     }
 }
 

@@ -610,7 +610,7 @@ pub(crate) fn from_container_unit(
 
     let exec_args = container
         .lookup_last_value(CONTAINER_SECTION, "Exec")
-        .map(|v| SplitWord::new(v.raw()))
+        .map(|v| v.split_strv())
         .unwrap_or_default();
     podman.extend(exec_args);
 

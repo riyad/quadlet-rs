@@ -1,4 +1,4 @@
-use super::{parse_bool, quote_value, unquote_value, Error};
+use super::{parse_bool, quote_value, unquote_value, Error, SplitStrv, SplitWord};
 use ordered_multimap::ListOrderedMultimap;
 use std::str::FromStr;
 use std::sync::OnceLock;
@@ -33,6 +33,14 @@ impl EntryValue {
 
     pub(crate) fn raw(&self) -> &String {
         &self.0
+    }
+
+    pub fn split_strv(&self) -> SplitStrv {
+        SplitStrv::new(self.0.as_str())
+    }
+
+    pub fn split_words(&self) -> SplitWord {
+        SplitWord::new(self.0.as_str())
     }
 
     pub fn to_bool(&self) -> Result<bool, Error> {

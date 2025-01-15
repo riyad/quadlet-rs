@@ -83,7 +83,7 @@ impl SystemdUnit {
     pub(crate) fn lookup_all_args(&self, section: &str, key: &str) -> Vec<String> {
         self.lookup_all_values(section, key)
             .iter()
-            .flat_map(|v| SplitWord::new(v.raw()))
+            .flat_map(|v| v.split_words())
             .collect()
     }
 
@@ -94,7 +94,7 @@ impl SystemdUnit {
         let mut res = HashMap::with_capacity(all_key_vals.len());
 
         for key_vals in all_key_vals {
-            for assigns in SplitWord::new(key_vals.raw().as_str()) {
+            for assigns in key_vals.split_words() {
                 if let Some((key, value)) = assigns.split_once('=') {
                     res.insert(key.to_string(), value.to_string());
                 }
@@ -107,7 +107,7 @@ impl SystemdUnit {
     pub(crate) fn lookup_all_strv(&self, section: &str, key: &str) -> Vec<String> {
         self.lookup_all_values(section, key)
             .iter()
-            .flat_map(|v| SplitStrv::new(v.raw()))
+            .flat_map(|v| v.split_strv())
             .collect()
     }
 
@@ -1468,7 +1468,7 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
                     Some("/some/path an arg a;b\nc\td\'e a;b\nc\td a\"b".into())
                 );
 
-                let split_words: Vec<String> = SplitWord::new(exec_start.unwrap().raw()).collect();
+                let split_words: Vec<String> = exec_start.unwrap().split_words().collect();
                 let mut split = split_words.iter();
                 assert_eq!(split.next(), Some(&"/some/path".into()));
                 assert_eq!(split.next(), Some(&"an arg".into()));
