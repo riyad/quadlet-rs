@@ -51,7 +51,7 @@ impl KmsgLogger {
         log::set_boxed_logger(Box::new(self)).map(|()| log::set_max_level(max_log_level))
     }
 
-    pub(crate) fn new() -> Self {
+    fn new() -> Self {
         Self {
             debug_enabled: false,
             dry_run: false,

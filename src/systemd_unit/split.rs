@@ -19,7 +19,7 @@ impl<'a> SplitStrv<'a> {
         self.c = self.chars.next();
     }
 
-    pub fn new(src: &'a str) -> Self {
+    pub(crate) fn new(src: &'a str) -> Self {
         let mut s = Self {
             chars: src.chars(),
             c: None,
@@ -28,7 +28,7 @@ impl<'a> SplitStrv<'a> {
         s
     }
 
-    pub fn next(&mut self) -> Option<String> {
+    fn next(&mut self) -> Option<String> {
         let separators = &WHITESPACE;
         let mut word = String::new();
 
@@ -110,7 +110,7 @@ impl<'a> SplitWord<'a> {
         self.c = self.chars.next();
     }
 
-    pub fn new(src: &'a str) -> Self {
+    pub(crate) fn new(src: &'a str) -> Self {
         let mut s = Self {
             chars: src.chars(),
             c: None,
@@ -119,7 +119,7 @@ impl<'a> SplitWord<'a> {
         s
     }
 
-    pub fn next(&mut self) -> Option<String> {
+    fn next(&mut self) -> Option<String> {
         let separators = &WHITESPACE;
         let mut word = String::new();
 
