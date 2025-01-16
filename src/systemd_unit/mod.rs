@@ -9,7 +9,7 @@ mod value;
 
 pub use self::constants::*;
 pub use self::path_buf_ext::*;
-pub use self::quoted::*;
+pub use self::quoted::{quote_value, quote_words, unquote_value};
 pub use self::split::{SplitStrv, SplitWord};
 pub use self::unit::*;
 pub use self::unit_file::*;

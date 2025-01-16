@@ -2,7 +2,7 @@ use ordered_multimap::list_ordered_multimap::ListOrderedMultimap;
 use std::collections::HashMap;
 use std::io;
 
-use super::{parser, Entries, EntryValue, SectionKey, SplitStrv, SplitWord};
+use super::{parser, Entries, EntryValue, SectionKey};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SystemdUnit {
