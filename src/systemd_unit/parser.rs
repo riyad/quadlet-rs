@@ -306,12 +306,46 @@ mod tests {
         use super::*;
 
         #[test]
-        fn test_success_consumes_token() {
+        fn test_success_consumes_token_hash() {
             let input = "# foo\n; bar";
             let mut parser = Parser::new(input);
             let old_line = parser.line;
             let _old_col = parser.column;
             assert_eq!(parser.parse_comment(), Ok("# foo".into()));
+            assert_eq!(parser.line, old_line + 1);
+            assert_eq!(parser.column, 0);
+        }
+
+        #[test]
+        fn test_success_consumes_token_semicolon() {
+            let input = "; foo\n# bar";
+            let mut parser = Parser::new(input);
+            let old_line = parser.line;
+            let _old_col = parser.column;
+            assert_eq!(parser.parse_comment(), Ok("; foo".into()));
+            assert_eq!(parser.line, old_line + 1);
+            assert_eq!(parser.column, 0);
+        }
+
+        #[test]
+        #[ignore = "until proper comment handling is implemented"]
+        fn test_combining_multiple_lines() {
+            let input = "# foo\n; bar";
+            let mut parser = Parser::new(input);
+            let old_line = parser.line;
+            let _old_col = parser.column;
+            assert_eq!(parser.parse_comment(), Ok("# foo\n; bar".into()));
+            assert_eq!(parser.line, old_line + 1);
+            assert_eq!(parser.column, 0);
+        }
+
+        #[test]
+        fn test_ignore_line_coninuation() {
+            let input = "# foo \\\nbar=baz";
+            let mut parser = Parser::new(input);
+            let old_line = parser.line;
+            let _old_col = parser.column;
+            assert_eq!(parser.parse_comment(), Ok("# foo \\".into()));
             assert_eq!(parser.line, old_line + 1);
             assert_eq!(parser.column, 0);
         }
