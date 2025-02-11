@@ -31,6 +31,19 @@ pub(crate) struct CliOptions {
     version: bool,
 }
 
+impl CliOptions {
+    fn from_systemd_env() -> Self {
+        Self {
+            dry_run: false,
+            is_user: env::var("SYSTEMD_SCOPE").map_or(false, |scope| scope == "user"),
+            no_kmsg: false,
+            output_path: PathBuf::new(),
+            verbose: env::var("SYSTEMD_LOG_LEVEL").map_or(false, |log_level| log_level == "debug"),
+            version: false,
+        }
+    }
+}
+
 fn help() {
     println!(
         "Usage:
@@ -48,15 +61,9 @@ Options:
 }
 
 fn parse_args(args: Vec<String>) -> Result<CliOptions, RuntimeError> {
-    let mut cfg = CliOptions {
-        dry_run: false,
-        is_user: false,
-        no_kmsg: false,
-        output_path: PathBuf::new(),
-        verbose: false,
-        version: false,
-    };
+    let mut cfg = CliOptions::from_systemd_env();
 
+    // NOTE: overrides value set by SYSTEMD_SCOPE env var
     cfg.is_user = args[0].contains("user");
 
     if args.len() < 2 {
@@ -412,6 +419,99 @@ fn convert<'q>(
 mod tests {
     use super::*;
 
+    mod cli_options {
+        use super::*;
+
+        mod from_systemd_env {
+            use super::*;
+
+            #[test]
+            #[serial_test::serial]
+            fn defaults_to_system_scope() {
+                // remember global state
+                let _systemd_scope = env::var("SYSTEMD_SCOPE");
+
+                env::remove_var("SYSTEMD_SCOPE");
+
+                assert_eq!(CliOptions::from_systemd_env().is_user, false);
+
+                // restore global setate
+                match _systemd_scope {
+                    Ok(val) => env::set_var("SYSTEMD_SCOPE", val),
+                    Err(_) => env::remove_var("SYSTEMD_SCOPE"),
+                }
+            }
+
+            #[test]
+            #[serial_test::serial]
+            fn recognizes_system_scope_from_env() {
+                // remember global state
+                let _systemd_scope = env::var("SYSTEMD_SCOPE");
+
+                env::set_var("SYSTEMD_SCOPE", "system");
+
+                assert_eq!(CliOptions::from_systemd_env().is_user, false);
+
+                // restore global setate
+                match _systemd_scope {
+                    Ok(val) => env::set_var("SYSTEMD_SCOPE", val),
+                    Err(_) => env::remove_var("SYSTEMD_SCOPE"),
+                }
+            }
+
+            #[test]
+            #[serial_test::serial]
+            fn recognizes_user_scope_from_env() {
+                // remember global state
+                let _systemd_scope = env::var("SYSTEMD_SCOPE");
+
+                env::set_var("SYSTEMD_SCOPE", "user");
+
+                assert_eq!(CliOptions::from_systemd_env().is_user, true);
+
+                // restore global setate
+                match _systemd_scope {
+                    Ok(val) => env::set_var("SYSTEMD_SCOPE", val),
+                    Err(_) => env::remove_var("SYSTEMD_SCOPE"),
+                }
+            }
+
+            #[test]
+            #[serial_test::serial]
+            fn defaults_to_non_verbose_log_level() {
+                // remember global state
+                let _systemd_log_level = env::var("SYSTEMD_LOG_LEVEL");
+
+                env::set_var("SYSTEMD_LOG_LEVEL", "foo");
+
+                assert_eq!(CliOptions::from_systemd_env().verbose, false);
+
+                // restore global setate
+                match _systemd_log_level {
+                    Ok(val) => env::set_var("SYSTEMD_LOG_LEVEL", val),
+                    Err(_) => env::remove_var("SYSTEMD_LOG_LEVEL"),
+                }
+            }
+
+            #[test]
+            #[serial_test::serial]
+            fn recognizes_debug_log_level_from_env() {
+                // remember global state
+                let _systemd_log_level = env::var("SYSTEMD_LOG_LEVEL");
+
+                env::set_var("SYSTEMD_LOG_LEVEL", "debug");
+
+                assert_eq!(CliOptions::from_systemd_env().verbose, true);
+
+                // restore global setate
+                match _systemd_log_level {
+                    Ok(val) => env::set_var("SYSTEMD_LOG_LEVEL", val),
+                    Err(_) => env::remove_var("SYSTEMD_LOG_LEVEL"),
+                }
+            }
+        }
+    }
+
     mod parse_args {
         use super::*;
 
@@ -426,9 +526,24 @@ mod tests {
         }
 
         #[test]
-        fn parses_user_invocation_from_arg_0() {
+        fn recognizes_user_scope_from_arg_0_filename() {
             let args: Vec<String> =
                 vec!["./quadlet-rs-user-generator".into(), "./output_dir".into()];
+
+            assert_eq!(
+                parse_args(args).ok().unwrap(),
+                CliOptions {
+                    is_user: true,
+                    output_path: "./output_dir".into(),
+                    ..Default::default()
+                }
+            );
+        }
+
+        #[test]
+        fn recognizes_user_scope_from_arg_0_path() {
+            let args: Vec<String> =
+                vec!["./user-generators/quadlet-rs-generator".into(), "./output_dir".into()];
 
             assert_eq!(
                 parse_args(args).ok().unwrap(),
