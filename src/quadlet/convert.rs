@@ -348,6 +348,7 @@ pub(crate) fn from_container_unit(
         ("StopSignal", "--stop-signal"),
         ("StopTimeout", "--stop-timeout"),
         ("Pull", "--pull"),
+        ("Memory", "--memory"),
     ];
     lookup_and_add_string(container, CONTAINER_SECTION, &string_keys, &mut podman);
 

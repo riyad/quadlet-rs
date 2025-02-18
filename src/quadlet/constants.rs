@@ -56,7 +56,7 @@ pub static SUPPORTED_BUILD_KEYS: [&str; 24] = [
     "Volume",
 ];
 
-pub static SUPPORTED_CONTAINER_KEYS: [&str; 84] = [
+pub static SUPPORTED_CONTAINER_KEYS: [&str; 85] = [
     "AddCapability",
     "AddDevice",
     "AddHost",
@@ -98,6 +98,7 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 84] = [
     "LogDriver",
     "LogOpt",
     "Mask",
+    "Memory",
     "Mount",
     "Network",
     "NetworkAlias",
