@@ -93,6 +93,8 @@ pub(crate) fn from_build_unit(
         ("AuthFile", "--authfile"),
         ("Target", "--target"),
         ("Variant", "--variant"),
+        ("Retry", "--retry"),
+        ("RetryDelay", "--retry-delay"),
     ];
     lookup_and_add_string(build, BUILD_SECTION, &string_keys, &mut podman);
 
@@ -349,6 +351,8 @@ pub(crate) fn from_container_unit(
         ("StopTimeout", "--stop-timeout"),
         ("Pull", "--pull"),
         ("Memory", "--memory"),
+        ("Retry", "--retry"),
+        ("RetryDelay", "--retry-delay"),
     ];
     lookup_and_add_string(container, CONTAINER_SECTION, &string_keys, &mut podman);
 
@@ -676,6 +680,8 @@ pub(crate) fn from_image_unit(
         ("DecryptionKey", "--decryption-key"),
         ("OS", "--os"),
         ("Variant", "--variant"),
+        ("Retry", "--retry"),
+        ("RetryDelay", "--retry-delay"),
     ];
     lookup_and_add_string(image, IMAGE_SECTION, &string_keys, &mut podman);
 
