@@ -87,29 +87,33 @@ impl SystemdUnitFile {
         }
 
         if !service_name.is_empty() {
-            let mut wanted_by: Vec<PathBuf> = self
-                .lookup_all_strv(INSTALL_SECTION, "WantedBy")
-                .iter()
-                .filter(|s| !s.contains('/')) // Only allow filenames, not paths
-                .map(|wanted_by_unit| {
-                    let mut path = PathBuf::from(format!("{wanted_by_unit}.wants/"));
-                    path.push(&service_name);
-                    path
-                })
-                .collect();
-            symlinks.append(&mut wanted_by);
-
-            let mut required_by: Vec<PathBuf> = self
-                .lookup_all_strv(INSTALL_SECTION, "RequiredBy")
-                .iter()
-                .filter(|s| !s.contains('/')) // Only allow filenames, not paths
-                .map(|required_by_unit| {
-                    let mut path = PathBuf::from(format!("{required_by_unit}.requires/"));
-                    path.push(&service_name);
-                    path
-                })
-                .collect();
-            symlinks.append(&mut required_by);
+            symlinks.append(
+                &mut self.gather_dependent_symlinks(
+                    "WantedBy",
+                    "wants",
+                    service_name
+                        .to_str()
+                        .expect("service_name is not valid UTF-8"),
+                ),
+            );
+            symlinks.append(
+                &mut self.gather_dependent_symlinks(
+                    "RequiredBy",
+                    "requires",
+                    service_name
+                        .to_str()
+                        .expect("service_name is not valid UTF-8"),
+                ),
+            );
+            symlinks.append(
+                &mut self.gather_dependent_symlinks(
+                    "UpheldBy",
+                    "upholds",
+                    service_name
+                        .to_str()
+                        .expect("service_name is not valid UTF-8"),
+                ),
+            );
         }
 
         // construct relative symlink targets so that <output_path>/<symlink_rel (aka. foo/<service_name>)>
@@ -143,6 +147,14 @@ impl SystemdUnitFile {
 
     pub fn file_name(&self) -> &OsStr {
         self.path().file_name().expect("should have a file name")
+    }
+
+    fn gather_dependent_symlinks(&self, key: &str, dir_ext: &str, file_name: &str) -> Vec<PathBuf> {
+        self.lookup_all_strv(INSTALL_SECTION, key)
+            .iter()
+            .filter(|s| !s.contains('/')) // Only allow filenames, not paths
+            .map(|group_by_unit| PathBuf::from(format!("{group_by_unit}.{dir_ext}/{file_name}")))
+            .collect()
     }
 
     pub fn is_template_unit(&self) -> bool {
