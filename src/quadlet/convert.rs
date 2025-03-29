@@ -1457,7 +1457,6 @@ fn handle_networks(
                             quadlet_network_name.into(),
                         )
                     })?;
-                dbg!(&unit_info);
 
                 // XXX: this is usually because a '@' in service name
                 if unit_info.resource_name.is_empty() {
