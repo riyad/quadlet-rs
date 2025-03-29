@@ -29,7 +29,7 @@ pub const AUTO_UPDATE_LABEL: &str = "io.containers.autoupdate";
 pub static SUPPORTED_EXTENSIONS: [&str; 7] =
     ["build", "container", "image", "kube", "network", "pod", "volume"];
 
-pub static SUPPORTED_BUILD_KEYS: [&str; 24] = [
+pub static SUPPORTED_BUILD_KEYS: [&str; 26] = [
     "Annotation",
     "Arch",
     "AuthFile",
@@ -47,6 +47,8 @@ pub static SUPPORTED_BUILD_KEYS: [&str; 24] = [
     "Network",
     "PodmanArgs",
     "Pull",
+    "Retry",
+    "RetryDelay",
     "Secret",
     "ServiceName",
     "SetWorkingDirectory",
@@ -56,7 +58,7 @@ pub static SUPPORTED_BUILD_KEYS: [&str; 24] = [
     "Volume",
 ];
 
-pub static SUPPORTED_CONTAINER_KEYS: [&str; 85] = [
+pub static SUPPORTED_CONTAINER_KEYS: [&str; 87] = [
     "AddCapability",
     "AddDevice",
     "AddHost",
@@ -109,6 +111,8 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 85] = [
     "Pod",
     "PublishPort",
     "Pull",
+    "Retry",
+    "RetryDelay",
     "ReadOnly",
     "ReadOnlyTmpfs",
     "RemapGid",     // deprecated, use UserNS instead
@@ -144,7 +148,7 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 85] = [
     "WorkingDir",
 ];
 
-pub static SUPPORTED_IMAGE_KEYS: [&str; 15] = [
+pub static SUPPORTED_IMAGE_KEYS: [&str; 17] = [
     "AllTags",
     "Arch",
     "AuthFile",
@@ -156,6 +160,8 @@ pub static SUPPORTED_IMAGE_KEYS: [&str; 15] = [
     "Image",
     "ImageTag",
     "PodmanArgs",
+    "Retry",
+    "RetryDelay",
     "OS",
     "ServiceName",
     "TLSVerify",
