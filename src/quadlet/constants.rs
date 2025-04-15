@@ -26,8 +26,15 @@ pub const X_VOLUME_SECTION: &str    = "X-Volume";
 
 pub const AUTO_UPDATE_LABEL: &str = "io.containers.autoupdate";
 
-pub static SUPPORTED_EXTENSIONS: [&str; 7] =
-    ["build", "container", "image", "kube", "network", "pod", "volume"];
+pub static SUPPORTED_EXTENSIONS: [&str; 7] = [
+    "build",
+    "container",
+    "image",
+    "kube",
+    "network",
+    "pod",
+    "volume",
+];
 
 pub static SUPPORTED_BUILD_KEYS: [&str; 26] = [
     "Annotation",
@@ -190,7 +197,7 @@ pub static SUPPORTED_KUBE_KEYS: [&str; 19] = [
     "Yaml",
 ];
 
-pub static SUPPORTED_NETWORK_KEYS: [&str; 16] = [
+pub static SUPPORTED_NETWORK_KEYS: [&str; 17] = [
     "ContainersConfModule",
     "DisableDNS",
     "DNS",
@@ -203,6 +210,7 @@ pub static SUPPORTED_NETWORK_KEYS: [&str; 16] = [
     "IPv6",
     "Label",
     "NetworkName",
+    "NetworkDeleteOnStop",
     "Options",
     "PodmanArgs",
     "ServiceName",

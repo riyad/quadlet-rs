@@ -940,6 +940,19 @@ pub(crate) fn from_network_unit(
     // Need the containers filesystem mounted to start podman
     service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
 
+    if network
+        .lookup_bool(NETWORK_SECTION, "NetworkDeleteOnStop")
+        .unwrap_or(false)
+    {
+        let mut podman_stop_post = get_base_podman_command(network, NETWORK_SECTION);
+        podman_stop_post.add_slice(&["network", "rm", &podman_network_name]);
+        service.add_raw(
+            SERVICE_SECTION,
+            "ExecStopPost",
+            podman_stop_post.to_escaped_string().as_str(),
+        )?
+    }
+
     let mut podman = get_base_podman_command(network, NETWORK_SECTION);
     podman.add("network");
     podman.add("create");
