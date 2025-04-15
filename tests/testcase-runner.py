@@ -359,6 +359,24 @@ class Outcome:
             return False
         return match_sublist_regex_at(getattr(self, key), len(getattr(self, key)) - len(args), args)
 
+    def assert_reload_podman_args(self, *args):
+        return self.assert_podman_args(*args, '_Service_ExecReload', False, False)
+
+    def assert_reload_podman_global_args(self, *args):
+        return self.assert_podman_args(*args, '_Service_ExecReload', False, True)
+
+    def assert_reload_podman_final_args(self, *args):
+        return self.assert_podman_final_args(*args, '_Service_ExecReload')
+
+    def assert_reload_podman_final_args_regex(self, *args):
+        return self.assert_podman_final_args_regex(*args, '_Service_ExecReload')
+
+    def assert_reload_podman_args_key_val(self, *args):
+        return self.assert_podman_args_key_val(*args, '_Service_ExecReload', False, False)
+
+    def assert_reload_podman_args_key_val_regex(self, *args):
+        return self.assert_podman_args_key_val(*args, '_Service_ExecReload', True, False)
+
     def assert_start_podman_args(self, *args):
         return self.assert_podman_args(*args, '_Service_ExecStart', False, False)
 
@@ -498,7 +516,12 @@ class Outcome:
         "assert-podman-pre-global-args-key-val-regex": assert_start_pre_podman_global_args_key_val_regex,
         "assert-podman-pre-final-args": assert_start_pre_podman_final_args,
         "assert-podman-pre-final-args-regex": assert_start_pre_podman_final_args_regex,
-        "assert-symlink": assert_symlink,
+        "assert-podman-reload-args": assert_reload_podman_args,
+        "assert-podman-reload-global-args": assert_reload_podman_global_args,
+        "assert-podman-reload-final-args": assert_reload_podman_final_args,
+        "assert-podman-reload-final-args-regex": assert_reload_podman_final_args_regex,
+        "assert-podman-reload-args-key-val": assert_reload_podman_args_key_val,
+        "assert-podman-reload-args-key-val-regex": assert_reload_podman_args_key_val_regex,
         "assert-podman-stop-args": assert_stop_podman_args,
         "assert-podman-stop-global-args": assert_stop_podman_global_args,
         "assert-podman-stop-final-args": assert_stop_podman_final_args,
@@ -511,6 +534,7 @@ class Outcome:
         "assert-podman-stop-post-final-args-regex": assert_stop_post_podman_final_args_regex,
         "assert-podman-stop-post-args-key-val": assert_stop_post_podman_args_key_val,
         "assert-podman-stop-post-args-key-val-regex": assert_stop_post_podman_args_key_val_regex,
+        "assert-symlink": assert_symlink,
     }
 
     def check(self):
@@ -536,6 +560,7 @@ class Outcome:
         if not self.expect_fail:
             self.outdata = outdir.joinpath(self.testcase.servicename).read_text()
             self.sections = parse_unitfile(canonicalize_unitfile(self.outdata))
+            self._Service_ExecReload = shlex.split(self.sections.get("Service", {}).get("ExecReload", ["podman"])[0])
             self._Service_ExecStart = shlex.split(self.sections.get("Service", {}).get("ExecStart", ["podman"])[0])
             self._Service_ExecStartPre = shlex.split(self.sections.get("Service", {}).get("ExecStartPre", ["podman"])[0])
             self._Service_ExecStop = shlex.split(self.sections.get("Service", {}).get("ExecStop", ["podman"])[0])
