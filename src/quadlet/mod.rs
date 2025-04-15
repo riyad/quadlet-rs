@@ -79,6 +79,8 @@ pub(crate) enum ConversionError {
     InvalidSubnet(String),
     #[error("{0}")]
     Io(#[from] io::Error),
+    #[error("{0} and {1} are mutually exclusive, but both are set")]
+    MutuallyExclusiveKeys(String, String),
     #[error("no ImageTag key specified")]
     NoImageTagKeySpecified,
     #[error("no File key specified")]

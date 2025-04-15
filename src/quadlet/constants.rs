@@ -65,7 +65,7 @@ pub static SUPPORTED_BUILD_KEYS: [&str; 26] = [
     "Volume",
 ];
 
-pub static SUPPORTED_CONTAINER_KEYS: [&str; 87] = [
+pub static SUPPORTED_CONTAINER_KEYS: [&str; 89] = [
     "AddCapability",
     "AddDevice",
     "AddHost",
@@ -118,6 +118,8 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 87] = [
     "Pod",
     "PublishPort",
     "Pull",
+    "ReloadCmd",
+    "ReloadSignal",
     "Retry",
     "RetryDelay",
     "ReadOnly",

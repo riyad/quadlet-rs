@@ -303,6 +303,8 @@ pub(crate) fn from_container_unit(
         service_stop_cmd.to_escaped_string().as_str(),
     )?;
 
+    handle_exec_reload(container, &mut service, CONTAINER_SECTION)?;
+
     let mut podman = get_base_podman_command(container, CONTAINER_SECTION);
 
     podman.add("run");
@@ -1367,6 +1369,43 @@ fn handle_default_dependencies(service: &mut SystemdUnitFile, is_user: bool) {
         service.prepend(UNIT_SECTION, "After", network_unit);
         service.prepend(UNIT_SECTION, "Wants", network_unit);
     }
+}
+
+fn handle_exec_reload(
+    quadlet: &SystemdUnitFile,
+    service: &mut SystemdUnitFile,
+    quadlet_section: &str,
+) -> Result<(), ConversionError> {
+    let reload_cmd: Vec<String> = quadlet
+        .lookup_last_value(quadlet_section, "ReloadCmd")
+        .unwrap_or(&EntryValue::default())
+        .split_words()
+        .collect();
+    let reload_signal = quadlet
+        .lookup(quadlet_section, "ReloadSignal")
+        .unwrap_or_default();
+
+    if !reload_cmd.is_empty() && !reload_signal.is_empty() {
+        return Err(ConversionError::MutuallyExclusiveKeys(
+            "ReloadCmd".into(),
+            "ReloadSignal".into(),
+        ));
+    }
+
+    let mut podman_reload = get_base_podman_command(quadlet, quadlet_section);
+    if !reload_cmd.is_empty() {
+        podman_reload.add_slice(&["exec", "--cidfile=%t/%N.cid"]);
+        podman_reload.extend(reload_cmd);
+    } else {
+        podman_reload.add_slice(&["kill", "--cidfile=%t/%N.cid", "--signal", &reload_signal]);
+    }
+    service.add_raw(
+        SERVICE_SECTION,
+        "ExecReload",
+        podman_reload.to_escaped_string().as_str(),
+    )?;
+
+    Ok(())
 }
 
 fn handle_health(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {
