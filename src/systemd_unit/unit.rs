@@ -208,6 +208,10 @@ impl SystemdUnit {
         }
     }
 
+    pub(crate) fn remove_section(&mut self, section: &str) {
+        self.sections.remove_all(section);
+    }
+
     pub(crate) fn rename_section<S: Into<String>>(&mut self, from: S, to: S) {
         let from_key = from.into();
 
@@ -1180,6 +1184,32 @@ KeyOne=value 2.1";
                 assert_eq!(iter.next(), Some(("KeyTwo", "value 2".into())));
                 assert_eq!(iter.next(), Some(("KeyOne", "value 2.1".into())));
                 assert_eq!(iter.next(), None);
+            }
+        }
+
+        mod remove_section {
+            use super::*;
+
+            #[test]
+            fn with_single_instance_of_the_section() {
+                let input = "[Section A]
+KeyOne=value 1
+KeyTwo=value 2
+
+[Section B]
+KeyOne=value 3
+
+[Section A]
+KeyOne=value 4";
+
+                let mut unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 2);
+
+                unit.remove_section("Section A");
+                assert_eq!(unit.len(), 1);
+
+                assert!(!unit.has_section("Section A"));
+                assert!(unit.has_section("Section B"));
             }
         }
 
