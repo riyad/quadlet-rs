@@ -45,7 +45,7 @@ pub(crate) fn from_build_unit(
     units_info_map: &mut UnitsInfoMap,
     is_user: bool,
 ) -> Result<SystemdUnitFile, ConversionError> {
-    let unit_info = units_info_map.0.get(build.file_name()).ok_or_else(|| {
+    let unit_info = units_info_map.get_source_unit_info(build).ok_or_else(|| {
         ConversionError::InternalQuadletError("build".to_string(), build.file_name().into())
     })?;
 
@@ -635,7 +635,7 @@ pub(crate) fn from_image_unit(
     units_info_map: &mut UnitsInfoMap,
     is_user: bool,
 ) -> Result<SystemdUnitFile, ConversionError> {
-    let unit_info = units_info_map.0.get_mut(image.file_name()).ok_or_else(|| {
+    let unit_info = units_info_map.get_source_unit_info(image).ok_or_else(|| {
         ConversionError::InternalQuadletError("image".into(), image.path().into())
     })?;
 
@@ -899,8 +899,7 @@ pub(crate) fn from_network_unit(
     is_user: bool,
 ) -> Result<SystemdUnitFile, ConversionError> {
     let unit_info = units_info_map
-        .0
-        .get_mut(network.file_name())
+        .get_source_unit_info(network)
         .ok_or_else(|| {
             ConversionError::InternalQuadletError("network".into(), network.path().into())
         })?;
@@ -1039,8 +1038,7 @@ pub(crate) fn from_pod_unit(
     is_user: bool,
 ) -> Result<SystemdUnitFile, ConversionError> {
     let unit_info = units_info_map
-        .0
-        .get(pod.file_name())
+        .get_source_unit_info(pod)
         .ok_or_else(|| ConversionError::InternalQuadletError("pod".into(), pod.path().into()))?;
 
     let mut service = SystemdUnitFile::new();
@@ -1200,12 +1198,9 @@ pub(crate) fn from_volume_unit(
     units_info_map: &mut UnitsInfoMap,
     is_user: bool,
 ) -> Result<SystemdUnitFile, ConversionError> {
-    let unit_info = units_info_map
-        .0
-        .get_mut(volume.file_name())
-        .ok_or_else(|| {
-            ConversionError::InternalQuadletError("volume".into(), volume.path().into())
-        })?;
+    let unit_info = units_info_map.get_source_unit_info(volume).ok_or_else(|| {
+        ConversionError::InternalQuadletError("volume".into(), volume.path().into())
+    })?;
 
     let mut service = SystemdUnitFile::new();
     service.merge_from(volume);
