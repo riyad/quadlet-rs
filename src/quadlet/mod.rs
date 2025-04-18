@@ -229,7 +229,7 @@ impl QuadletServiceUnitFile<'_> {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct UnitsInfoMap(pub(crate) HashMap<OsString, QuadletSourceUnitFile>);
+pub(crate) struct UnitsInfoMap(HashMap<OsString, QuadletSourceUnitFile>);
 
 impl UnitsInfoMap {
     pub(crate) fn from_quadlet_units(quadlet_units: Vec<QuadletSourceUnitFile>) -> UnitsInfoMap {
@@ -242,6 +242,20 @@ impl UnitsInfoMap {
         }
 
         units_info_map
+    }
+
+    pub(crate) fn get_source_unit_info(
+        &self,
+        quadlet: &SystemdUnitFile,
+    ) -> Option<&QuadletSourceUnitFile> {
+        self.0.get(quadlet.file_name())
+    }
+
+    pub(crate) fn get_mut_source_unit_info(
+        &mut self,
+        quadlet: &SystemdUnitFile,
+    ) -> Option<&mut QuadletSourceUnitFile> {
+        self.0.get_mut(quadlet.file_name())
     }
 }
 
