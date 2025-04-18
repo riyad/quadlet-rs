@@ -11,6 +11,7 @@ pub trait PathBufExt<T> {
     fn file_name_template_parts(&self) -> (Option<&str>, Option<&str>);
     fn starts_with_systemd_specifier(&self) -> bool;
     fn to_str(&self) -> &str;
+    fn unit_type(&self) -> &str;
 }
 
 impl PathBufExt<PathBuf> for PathBuf {
@@ -115,6 +116,13 @@ impl PathBufExt<PathBuf> for PathBuf {
 
     fn to_str(&self) -> &str {
         (self as &Path)
+            .to_str()
+            .expect("path is not a valid UTF-8 string")
+    }
+
+    fn unit_type(&self) -> &str {
+        self.extension()
+            .expect("should have an extension")
             .to_str()
             .expect("path is not a valid UTF-8 string")
     }
@@ -493,6 +501,35 @@ mod tests {
                 let path = PathBuf::from(input.0);
                 assert_eq!(path.starts_with_systemd_specifier(), input.1, "{path:?}");
             }
+        }
+    }
+
+    mod unit_type {
+        use super::*;
+
+        #[test]
+        fn test_systemd_unit_type() {
+            let path = PathBuf::from("some/test_unit.timer");
+            assert_eq!(path.unit_type(), "timer");
+        }
+
+        #[test]
+        fn test_quadlet_unit_type() {
+            let path = PathBuf::from("some/test_unit.pod");
+            assert_eq!(path.unit_type(), "pod");
+        }
+
+        #[test]
+        fn test_multiple_extensions() {
+            let path = PathBuf::from("some/test_unit.custom.build");
+            assert_eq!(path.unit_type(), "build");
+        }
+
+        #[test]
+        #[ignore = "until support for drop-ins is added"]
+        fn test_dropin() {
+            let path = PathBuf::from("some/test_unit.pod.d/dropin.conf");
+            assert_eq!(path.unit_type(), "pod");
         }
     }
 }
