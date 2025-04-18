@@ -208,6 +208,15 @@ impl SystemdUnit {
         }
     }
 
+    pub(crate) fn remove_entries(&mut self, section: &str, key: &str) {
+        self.sections
+            .entry(section.into())
+            .or_insert_entry(Entries::default())
+            .into_mut()
+            .data
+            .remove(key);
+    }
+
     pub(crate) fn remove_section(&mut self, section: &str) {
         self.sections.remove_all(section);
     }
@@ -1183,6 +1192,35 @@ KeyOne=value 2.1";
                 assert_eq!(iter.next(), Some(("KeyOne", "value 1.2".into())));
                 assert_eq!(iter.next(), Some(("KeyTwo", "value 2".into())));
                 assert_eq!(iter.next(), Some(("KeyOne", "value 2.1".into())));
+                assert_eq!(iter.next(), None);
+            }
+        }
+
+        mod remove_entries {
+            use super::*;
+
+            #[test]
+            fn remove_all_entries_for_specific_key() {
+                let input = "[Section A]
+KeyOne=value 1
+KeyTwo=value 2
+KeyOne=value 2
+
+[Section B]
+KeyOne=value 3";
+
+                let mut unit = SystemdUnit::load_from_str(input).unwrap();
+                assert_eq!(unit.len(), 2);
+
+                unit.remove_entries("Section A", "KeyOne");
+                assert_eq!(unit.len(), 2);
+
+                let mut iter = unit.section_entries("Section A");
+                assert_eq!(iter.next(), Some(("KeyTwo", "value 2".into())));
+                assert_eq!(iter.next(), None);
+
+                let mut iter = unit.section_entries("Section B");
+                assert_eq!(iter.next(), Some(("KeyOne", "value 3".into())));
                 assert_eq!(iter.next(), None);
             }
         }
