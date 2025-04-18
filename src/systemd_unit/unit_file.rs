@@ -271,11 +271,7 @@ impl SystemdUnitFile {
     }
 
     pub fn unit_type(&self) -> &str {
-        self.path
-            .extension()
-            .expect("should have an extension")
-            .to_str()
-            .expect("path is not a valid UTF-8 string")
+        self.path.unit_type()
     }
 }
 
