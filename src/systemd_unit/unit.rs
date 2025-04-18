@@ -228,18 +228,19 @@ impl SystemdUnit {
             return;
         }
 
-        let from_values: Vec<_> = self.sections.remove_all(&from_key).collect();
-
-        if from_values.is_empty() {
-            return;
-        }
+        let from_aggregated_data: Vec<_> = self
+            .sections
+            .remove_all(&from_key)
+            .flat_map(|entries| entries.data)
+            .collect();
 
         let to_key = to.into();
-        for entries in from_values {
-            for (ek, ev) in entries.data {
-                self.add_entry_value(to_key.clone(), ek, ev);
-            }
-        }
+        self.sections
+            .entry(to_key)
+            .or_insert_entry(Entries::default())
+            .into_mut()
+            .data
+            .extend(from_aggregated_data);
     }
 
     pub(crate) fn section_entries<S: Into<String>>(
