@@ -1172,6 +1172,7 @@ pub(crate) fn from_pod_unit(
         ("DNSOption", "--dns-option"),
         ("DNSSearch", "--dns-search"),
         ("AddHost", "--add-host"),
+        ("HostName", "--hostname"),
     ];
     lookup_and_add_all_strings(&pod, POD_SECTION, &all_string_keys, &mut podman_start_pre);
 
