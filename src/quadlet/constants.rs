@@ -219,7 +219,7 @@ pub static SUPPORTED_NETWORK_KEYS: [&str; 17] = [
     "Subnet",
 ];
 
-pub static SUPPORTED_POD_KEYS: [&str; 25] = [
+pub static SUPPORTED_POD_KEYS: [&str; 26] = [
     "AddHost",
     "ContainersConfModule",
     "DNS",
@@ -227,6 +227,7 @@ pub static SUPPORTED_POD_KEYS: [&str; 25] = [
     "DNSSearch",
     "GIDMap",
     "GlobalArgs",
+    "HostName",
     "IP",
     "IP6",
     "Network",
