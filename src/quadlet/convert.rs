@@ -1151,6 +1151,9 @@ pub(crate) fn from_pod_unit(
 
     handle_publish_ports(pod, POD_SECTION, &mut podman_start_pre);
 
+    let labels = pod.lookup_all_key_val(POD_SECTION, "Label");
+    podman_start_pre.add_labels(&labels);
+
     handle_networks(
         pod,
         POD_SECTION,
