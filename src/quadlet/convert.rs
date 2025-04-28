@@ -2162,16 +2162,15 @@ fn is_port_range(port: &str) -> bool {
     chars.next().is_none()
 }
 
-fn lookup_and_add_bool(
+fn lookup_and_add_all_key_vals(
     unit: &SystemdUnit,
     section: &str,
     keys: &[(&str, &str)],
     podman: &mut PodmanCommand,
 ) {
     for (key, flag) in keys {
-        if let Some(val) = unit.lookup_bool(section, *key) {
-            podman.add_bool(*flag, val);
-        }
+        let key_vals = unit.lookup_all_key_val(section, *key);
+        podman.add_keys(flag, &key_vals);
     }
 }
 
@@ -2193,6 +2192,19 @@ fn lookup_and_add_all_strings(
                 .flat_map(|val| [*flag, val])
                 .map(str::to_string),
         );
+    }
+}
+
+fn lookup_and_add_bool(
+    unit: &SystemdUnit,
+    section: &str,
+    keys: &[(&str, &str)],
+    podman: &mut PodmanCommand,
+) {
+    for (key, flag) in keys {
+        if let Some(val) = unit.lookup_bool(section, *key) {
+            podman.add_bool(*flag, val);
+        }
     }
 }
 
