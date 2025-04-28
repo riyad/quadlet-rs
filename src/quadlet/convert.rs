@@ -115,14 +115,12 @@ pub(crate) fn from_build_unit(
     ];
     lookup_and_add_all_strings(build, BUILD_SECTION, &all_string_keys, &mut podman);
 
-    let annotations = build.lookup_all_key_val(BUILD_SECTION, "Annotation");
-    podman.add_annotations(&annotations);
-
-    let podman_env = build.lookup_all_key_val(BUILD_SECTION, "Environment");
-    podman.add_env(&podman_env);
-
-    let labels = build.lookup_all_key_val(BUILD_SECTION, "Label");
-    podman.add_labels(&labels);
+    let all_key_val_keys = [
+        ("Annotation", "--annotation"),
+        ("Environment", "--env"),
+        ("Label", "--label"),
+    ];
+    lookup_and_add_all_key_vals(build, BUILD_SECTION, &all_key_val_keys, &mut podman);
 
     handle_networks(
         build,
@@ -280,9 +278,6 @@ pub(crate) fn from_container_unit(
             return Err(ConversionError::InvalidKillMode(kill_mode.into()));
         }
     }
-
-    // Read env early so we can override it below
-    let podman_env = container.lookup_all_key_val(CONTAINER_SECTION, "Environment");
 
     // Need the containers filesystem mounted to start podman
     service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
@@ -540,7 +535,7 @@ pub(crate) fn from_container_unit(
         if !update.is_empty() {
             let mut labels: HashMap<String, String> = HashMap::new();
             labels.insert(AUTO_UPDATE_LABEL.to_string(), update.to_string());
-            podman.add_labels(&labels);
+            podman.add_keys("--label", &labels);
         }
     }
 
@@ -557,13 +552,12 @@ pub(crate) fn from_container_unit(
 
     handle_publish_ports(container, CONTAINER_SECTION, &mut podman);
 
-    podman.add_env(&podman_env);
-
-    let labels = container.lookup_all_key_val(CONTAINER_SECTION, "Label");
-    podman.add_labels(&labels);
-
-    let annotations = container.lookup_all_key_val(CONTAINER_SECTION, "Annotation");
-    podman.add_annotations(&annotations);
+    let all_key_val_keys = [
+        ("Annotation", "--annotation"),
+        ("Environment", "--env"),
+        ("Label", "--label"),
+    ];
+    lookup_and_add_all_key_vals(container, CONTAINER_SECTION, &all_key_val_keys, &mut podman);
 
     for mask in container.lookup_all_args(CONTAINER_SECTION, "Mask") {
         podman.add("--security-opt");
@@ -1018,13 +1012,8 @@ pub(crate) fn from_network_unit(
         ));
     }
 
-    let network_options = network.lookup_all_key_val(NETWORK_SECTION, "Options");
-    if !network_options.is_empty() {
-        podman.add_keys("--opt", &network_options);
-    }
-
-    let labels = network.lookup_all_key_val(NETWORK_SECTION, "Label");
-    podman.add_labels(&labels);
+    let all_key_val_keys = [("Label", "--label"), ("Options", "--opt")];
+    lookup_and_add_all_key_vals(network, NETWORK_SECTION, &all_key_val_keys, &mut podman);
 
     handle_podman_args(network, NETWORK_SECTION, &mut podman);
 
@@ -1151,8 +1140,8 @@ pub(crate) fn from_pod_unit(
 
     handle_publish_ports(pod, POD_SECTION, &mut podman_start_pre);
 
-    let labels = pod.lookup_all_key_val(POD_SECTION, "Label");
-    podman_start_pre.add_labels(&labels);
+    let all_key_val_keys = [("Label", "--label")];
+    lookup_and_add_all_key_vals(pod, POD_SECTION, &all_key_val_keys, &mut podman_start_pre);
 
     handle_networks(
         pod,
@@ -1357,7 +1346,8 @@ pub(crate) fn from_volume_unit(
         }
     }
 
-    podman.add_labels(&labels);
+    let all_key_val_keys = [("Label", "--label")];
+    lookup_and_add_all_key_vals(volume, VOLUME_SECTION, &all_key_val_keys, &mut podman);
 
     handle_podman_args(volume, VOLUME_SECTION, &mut podman);
 
