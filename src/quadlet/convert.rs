@@ -100,10 +100,7 @@ pub(crate) fn from_build_unit(
     ];
     lookup_and_add_string(build, BUILD_SECTION, &string_keys, &mut podman);
 
-    let bool_keys = [
-        ("TLSVerify", "--tls-verify"),
-        ("ForceRM", "--force-rm"),
-    ];
+    let bool_keys = [("TLSVerify", "--tls-verify"), ("ForceRM", "--force-rm")];
     lookup_and_add_bool(build, BUILD_SECTION, &bool_keys, &mut podman);
 
     let all_string_keys = [
@@ -687,10 +684,7 @@ pub(crate) fn from_image_unit(
     ];
     lookup_and_add_string(image, IMAGE_SECTION, &string_keys, &mut podman);
 
-    let bool_keys = [
-        ("AllTags", "--all-tags"),
-        ("TLSVerify", "--tls-verify"),
-    ];
+    let bool_keys = [("AllTags", "--all-tags"), ("TLSVerify", "--tls-verify")];
     lookup_and_add_bool(image, IMAGE_SECTION, &bool_keys, &mut podman);
 
     handle_podman_args(image, IMAGE_SECTION, &mut podman);
@@ -972,10 +966,7 @@ pub(crate) fn from_network_unit(
     ];
     lookup_and_add_bool(network, NETWORK_SECTION, &bool_keys, &mut podman);
 
-    let string_keys = [
-        ("Driver", "--driver"),
-        ("IPAMDriver", "--ipam-driver"),
-    ];
+    let string_keys = [("Driver", "--driver"), ("IPAMDriver", "--ipam-driver")];
     lookup_and_add_string(network, NETWORK_SECTION, &string_keys, &mut podman);
 
     lookup_and_add_all_strings(network, NETWORK_SECTION, &[("DNS", "--dns")], &mut podman);
@@ -1151,11 +1142,7 @@ pub(crate) fn from_pod_unit(
         &mut podman_start_pre,
     )?;
 
-    let string_keys = [
-        ("IP", "--ip"),
-        ("IP6", "--ip6"),
-        ("ShmSize","--shm-size"),
-    ];
+    let string_keys = [("IP", "--ip"), ("IP6", "--ip6"), ("ShmSize", "--shm-size")];
     lookup_and_add_string(&pod, POD_SECTION, &string_keys, &mut podman_start_pre);
 
     let all_string_keys = [
