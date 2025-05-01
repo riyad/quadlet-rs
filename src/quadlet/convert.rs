@@ -67,7 +67,7 @@ pub(crate) fn from_build_unit(
     service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
 
     if !build.path().as_os_str().is_empty() {
-        service.add(UNIT_SECTION, "SourcePath", build.path().to_str());
+        service.add(UNIT_SECTION, "SourcePath", build.path().to_unwrapped_str());
     }
 
     check_for_unknown_keys(build, BUILD_SECTION, &SUPPORTED_BUILD_KEYS)?;
@@ -573,7 +573,7 @@ pub(crate) fn from_container_unit(
         .collect();
     for env_file in env_files {
         podman.add("--env-file");
-        podman.add(env_file.to_str());
+        podman.add(env_file.to_unwrapped_str());
     }
 
     podman.extend(
@@ -643,7 +643,7 @@ pub(crate) fn from_image_unit(
     handle_default_dependencies(&mut service, is_user);
 
     if !image.path().as_os_str().is_empty() {
-        service.add(UNIT_SECTION, "SourcePath", image.path().to_str());
+        service.add(UNIT_SECTION, "SourcePath", image.path().to_unwrapped_str());
     }
 
     check_for_unknown_keys(image, IMAGE_SECTION, &SUPPORTED_IMAGE_KEYS)?;
@@ -736,7 +736,7 @@ pub(crate) fn from_kube_unit(
     handle_default_dependencies(&mut service, is_user);
 
     if !kube.path().as_os_str().is_empty() {
-        service.add(UNIT_SECTION, "SourcePath", kube.path().to_str());
+        service.add(UNIT_SECTION, "SourcePath", kube.path().to_unwrapped_str());
     }
 
     check_for_unknown_keys(kube, KUBE_SECTION, &SUPPORTED_KUBE_KEYS)?;
@@ -849,14 +849,14 @@ pub(crate) fn from_kube_unit(
     for config_map in config_maps {
         let config_map_path = config_map.absolute_from_unit(kube);
         podman_start.add("--configmap");
-        podman_start.add(config_map_path.to_str());
+        podman_start.add(config_map_path.to_unwrapped_str());
     }
 
     handle_publish_ports(kube, KUBE_SECTION, &mut podman_start);
 
     handle_podman_args(kube, KUBE_SECTION, &mut podman_start);
 
-    podman_start.add(yaml_path.to_str());
+    podman_start.add(yaml_path.to_unwrapped_str());
 
     service.add_raw(
         SERVICE_SECTION,
@@ -874,7 +874,7 @@ pub(crate) fn from_kube_unit(
         podman_stop.add_bool("--force", kube_down_force)
     }
 
-    podman_stop.add(yaml_path.to_str());
+    podman_stop.add(yaml_path.to_unwrapped_str());
     service.add_raw(
         SERVICE_SECTION,
         "ExecStopPost",
@@ -911,7 +911,11 @@ pub(crate) fn from_network_unit(
     handle_default_dependencies(&mut service, is_user);
 
     if !network.path().as_os_str().is_empty() {
-        service.add(UNIT_SECTION, "SourcePath", network.path().to_str());
+        service.add(
+            UNIT_SECTION,
+            "SourcePath",
+            network.path().to_unwrapped_str(),
+        );
     }
 
     check_for_unknown_keys(network, NETWORK_SECTION, &SUPPORTED_NETWORK_KEYS)?;
@@ -1044,7 +1048,7 @@ pub(crate) fn from_pod_unit(
     handle_default_dependencies(&mut service, is_user);
 
     if !pod.path().as_os_str().is_empty() {
-        service.add(UNIT_SECTION, "SourcePath", pod.path().to_str());
+        service.add(UNIT_SECTION, "SourcePath", pod.path().to_unwrapped_str());
     }
 
     check_for_unknown_keys(pod, POD_SECTION, &SUPPORTED_POD_KEYS)?;
@@ -1073,7 +1077,7 @@ pub(crate) fn from_pod_unit(
     service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
 
     for container_service in &unit_info.containers_to_start {
-        let container_service = container_service.to_str();
+        let container_service = container_service.to_unwrapped_str();
         service.add(UNIT_SECTION, "Wants", container_service);
         service.add(UNIT_SECTION, "Before", container_service);
     }
@@ -1212,7 +1216,7 @@ pub(crate) fn from_volume_unit(
     handle_default_dependencies(&mut service, is_user);
 
     if !volume.path().as_os_str().is_empty() {
-        service.add(UNIT_SECTION, "SourcePath", volume.path().to_str());
+        service.add(UNIT_SECTION, "SourcePath", volume.path().to_unwrapped_str());
     }
 
     check_for_unknown_keys(volume, VOLUME_SECTION, &SUPPORTED_VOLUME_KEYS)?;
@@ -1725,14 +1729,14 @@ fn handle_unit_dependencies(
         let mut translated = false;
         for dep in deps {
             let dep_path = PathBuf::from(&dep);
-            let translated_dep = if SUPPORTED_EXTENSIONS.contains(&dep_path.unit_type()) {
+            let translated_dep = if SUPPORTED_EXTENSIONS.contains(&dep_path.systemd_unit_type()) {
                 let unit_info = units_info_map
                     .0
                     .get(dep_path.as_os_str())
                     .ok_or(ConversionError::InvalidUnitDependency(dep))?;
                 translated = true;
                 PathBuf::from(unit_info.get_service_file_name())
-                    .to_str()
+                    .to_unwrapped_str()
                     .to_string()
             } else {
                 dep
@@ -1765,7 +1769,7 @@ fn handle_storage_source(
     if source.starts_with('.') {
         source = PathBuf::from(source)
             .absolute_from_unit(quadlet_unit_file)
-            .to_str()
+            .to_unwrapped_str()
             .to_string();
     }
 
