@@ -25,59 +25,64 @@ fn check_for_unknown_keys(
     Ok(())
 }
 
-fn get_base_podman_command(unit: &SystemdUnitFile, section: &str) -> PodmanCommand {
-    let mut podman = PodmanCommand::new();
+// FindMountType parses the input and extracts the type of the mount type and
+// the remaining non-type tokens.
+fn find_mount_type(input: &str) -> Result<(String, Vec<String>), ConversionError> {
+    // Split by comma, iterate over the slice and look for
+    // "type=$mountType". Everything else is appended to tokens.
+    let mut csv_reader = csv::ReaderBuilder::new()
+        .has_headers(false)
+        .from_reader(input.as_bytes());
+    if csv_reader.records().count() != 1 {
+        return Err(ConversionError::InvalidMountFormat(input.into()));
+    }
 
-    lookup_and_add_all_strings(
-        unit,
-        section,
-        &[("ContainersConfModule", "--module")],
-        &mut podman,
-    );
+    let mut found = false;
+    let mut mount_type = String::new();
+    let mut tokens = Vec::with_capacity(3);
+    let mut csv_reader = csv::ReaderBuilder::new()
+        .has_headers(false)
+        .from_reader(input.as_bytes());
+    for result in csv_reader.records() {
+        let record = result?;
+        for field in record.iter() {
+            let mut kv = field.split('=');
+            if found || !(kv.clone().count() == 2 && kv.next() == Some("type")) {
+                tokens.push(field.to_string());
+                continue;
+            }
+            mount_type = kv.next().expect("should have type value").to_string();
+            found = true;
+        }
+    }
 
-    podman.extend(unit.lookup_all_args(section, "GlobalArgs"));
+    if !found {
+        return Err(ConversionError::InvalidMountFormat(input.into()));
+    }
 
-    podman
+    Ok((mount_type, tokens))
 }
 
-pub(crate) fn from_build_unit(
-    build: &SystemdUnitFile,
+pub(crate) fn from_build_unit<'q>(
+    build_source: &'q QuadletSourceUnitFile,
     units_info_map: &mut UnitsInfoMap,
     is_user: bool,
-) -> Result<SystemdUnitFile, ConversionError> {
-    let unit_info = units_info_map.get_source_unit_info(build).ok_or_else(|| {
-        ConversionError::InternalQuadletError("build".to_string(), build.file_name().into())
-    })?;
+) -> Result<QuadletServiceUnitFile<'q>, ConversionError> {
+    let mut quadlet_service = init_service_unit_file(
+        build_source,
+        BUILD_SECTION,
+        X_BUILD_SECTION,
+        &SUPPORTED_BUILD_KEYS,
+        units_info_map,
+        is_user,
+    )?;
+    let build = &quadlet_service.quadlet.unit_file;
+    let mut service = quadlet_service.service_file;
 
     // fail fast if resource name is not set
-    if unit_info.resource_name.is_empty() {
+    if build_source.resource_name.is_empty() {
         return Err(ConversionError::NoImageTagKeySpecified);
     }
-
-    let mut service = SystemdUnitFile::new();
-
-    service.merge_from(build);
-    service.path = unit_info.get_service_file_name().into();
-
-    handle_unit_dependencies(&mut service, units_info_map)?;
-
-    handle_default_dependencies(&mut service, is_user);
-
-    // Need the containers filesystem mounted to start podman
-    service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
-
-    if !build.path().as_os_str().is_empty() {
-        service.add(UNIT_SECTION, "SourcePath", build.path().to_unwrapped_str());
-    }
-
-    check_for_unknown_keys(build, BUILD_SECTION, &SUPPORTED_BUILD_KEYS)?;
-    check_for_unknown_keys(build, QUADLET_SECTION, &SUPPORTED_QUADLET_KEYS)?;
-
-    // Rename old Build section to X-Build so that systemd ignores it
-    service.rename_section(BUILD_SECTION, X_BUILD_SECTION);
-
-    // Rename common Quadlet section
-    service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
 
     let mut podman = get_base_podman_command(build, BUILD_SECTION);
     podman.add("build");
@@ -195,45 +200,28 @@ pub(crate) fn from_build_unit(
 
     handle_one_shot_service_section(&mut service, false);
 
-    return Ok(service);
+    quadlet_service.service_file = service;
+    Ok(quadlet_service)
 }
 
 // Convert a quadlet container file (unit file with a Container group) to a systemd
 // service file (unit file with Service group) based on the options in the Container group.
 // The original Container group is kept around as X-Container.
-pub(crate) fn from_container_unit(
-    container: &SystemdUnitFile,
+pub(crate) fn from_container_unit<'q>(
+    container_source: &'q QuadletSourceUnitFile,
     units_info_map: &mut UnitsInfoMap,
     is_user: bool,
-) -> Result<SystemdUnitFile, ConversionError> {
-    let mut service = SystemdUnitFile::new();
-    service.merge_from(container);
-
-    // scope access to unit_info
-    {
-        let unit_info = units_info_map.0.get(container.file_name()).ok_or_else(|| {
-            ConversionError::InternalQuadletError("container".into(), container.file_name().into())
-        })?;
-
-        service.path = unit_info.get_service_file_name().into();
-    }
-
-    handle_unit_dependencies(&mut service, units_info_map)?;
-
-    handle_default_dependencies(&mut service, is_user);
-
-    if !container.path().as_os_str().is_empty() {
-        service.add(UNIT_SECTION, "SourcePath", container.path().to_str());
-    }
-
-    check_for_unknown_keys(container, CONTAINER_SECTION, &SUPPORTED_CONTAINER_KEYS)?;
-    check_for_unknown_keys(container, QUADLET_SECTION, &SUPPORTED_QUADLET_KEYS)?;
-
-    // Rename old Container section to X-Container so that systemd ignores it
-    service.rename_section(CONTAINER_SECTION, X_CONTAINER_SECTION);
-
-    // Rename common Quadlet section
-    service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
+) -> Result<QuadletServiceUnitFile<'q>, ConversionError> {
+    let mut quadlet_service = init_service_unit_file(
+        container_source,
+        CONTAINER_SECTION,
+        X_CONTAINER_SECTION,
+        &SUPPORTED_CONTAINER_KEYS,
+        units_info_map,
+        is_user,
+    )?;
+    let container = &quadlet_service.quadlet.unit_file;
+    let mut service = quadlet_service.service_file;
 
     // One image or rootfs must be specified for the container
     let image = container
@@ -275,9 +263,6 @@ pub(crate) fn from_container_unit(
             return Err(ConversionError::InvalidKillMode(kill_mode.into()));
         }
     }
-
-    // Need the containers filesystem mounted to start podman
-    service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
 
     // If conmon exited uncleanly it may not have removed the container, so
     // force it, -i makes it ignore non-existing files.
@@ -622,32 +607,25 @@ pub(crate) fn from_container_unit(
         podman.to_escaped_string().as_str(),
     )?;
 
-    Ok(service)
+    quadlet_service.service_file = service;
+    Ok(quadlet_service)
 }
 
-pub(crate) fn from_image_unit(
-    image: &SystemdUnitFile,
+pub(crate) fn from_image_unit<'q>(
+    image_source: &'q QuadletSourceUnitFile,
     units_info_map: &mut UnitsInfoMap,
     is_user: bool,
-) -> Result<SystemdUnitFile, ConversionError> {
-    let unit_info = units_info_map.get_source_unit_info(image).ok_or_else(|| {
-        ConversionError::InternalQuadletError("image".into(), image.path().into())
-    })?;
-
-    let mut service = SystemdUnitFile::new();
-    service.merge_from(image);
-    service.path = unit_info.get_service_file_name().into();
-
-    handle_unit_dependencies(&mut service, units_info_map)?;
-
-    handle_default_dependencies(&mut service, is_user);
-
-    if !image.path().as_os_str().is_empty() {
-        service.add(UNIT_SECTION, "SourcePath", image.path().to_unwrapped_str());
-    }
-
-    check_for_unknown_keys(image, IMAGE_SECTION, &SUPPORTED_IMAGE_KEYS)?;
-    check_for_unknown_keys(image, QUADLET_SECTION, &SUPPORTED_QUADLET_KEYS)?;
+) -> Result<QuadletServiceUnitFile<'q>, ConversionError> {
+    let mut quadlet_service = init_service_unit_file(
+        image_source,
+        IMAGE_SECTION,
+        X_IMAGE_SECTION,
+        &SUPPORTED_IMAGE_KEYS,
+        units_info_map,
+        is_user,
+    )?;
+    let image = &quadlet_service.quadlet.unit_file;
+    let mut service = quadlet_service.service_file;
 
     let image_name = image
         .lookup_last(IMAGE_SECTION, "Image")
@@ -657,15 +635,6 @@ pub(crate) fn from_image_unit(
             "no Image key specified".into(),
         ));
     }
-
-    // Rename old Image section to X-Image so that systemd ignores it
-    service.rename_section(IMAGE_SECTION, X_IMAGE_SECTION);
-
-    // Rename common Quadlet section
-    service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
-
-    // Need the containers filesystem mounted to start podman
-    service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
 
     let mut podman = get_base_podman_command(image, IMAGE_SECTION);
     podman.add("image");
@@ -714,39 +683,25 @@ pub(crate) fn from_image_unit(
         unit_info.resource_name = podman_image_name.to_string();
     };
 
-    Ok(service)
+    quadlet_service.service_file = service;
+    Ok(quadlet_service)
 }
 
-pub(crate) fn from_kube_unit(
-    kube: &SystemdUnitFile,
+pub(crate) fn from_kube_unit<'q>(
+    kube_source: &'q QuadletSourceUnitFile,
     units_info_map: &mut UnitsInfoMap,
     is_user: bool,
-) -> Result<SystemdUnitFile, ConversionError> {
-    let unit_info = units_info_map
-        .0
-        .get(kube.file_name())
-        .ok_or_else(|| ConversionError::InternalQuadletError("kube".into(), kube.path().into()))?;
-
-    let mut service = SystemdUnitFile::new();
-    service.merge_from(kube);
-    service.path = unit_info.get_service_file_name().into();
-
-    handle_unit_dependencies(&mut service, units_info_map)?;
-
-    handle_default_dependencies(&mut service, is_user);
-
-    if !kube.path().as_os_str().is_empty() {
-        service.add(UNIT_SECTION, "SourcePath", kube.path().to_unwrapped_str());
-    }
-
-    check_for_unknown_keys(kube, KUBE_SECTION, &SUPPORTED_KUBE_KEYS)?;
-    check_for_unknown_keys(kube, QUADLET_SECTION, &SUPPORTED_QUADLET_KEYS)?;
-
-    // Rename old Kube section to X-Kube so that systemd ignores it
-    service.rename_section(KUBE_SECTION, X_KUBE_SECTION);
-
-    // Rename common Quadlet section
-    service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
+) -> Result<QuadletServiceUnitFile<'q>, ConversionError> {
+    let mut quadlet_service = init_service_unit_file(
+        kube_source,
+        KUBE_SECTION,
+        X_KUBE_SECTION,
+        &SUPPORTED_KUBE_KEYS,
+        units_info_map,
+        is_user,
+    )?;
+    let kube = &quadlet_service.quadlet.unit_file;
+    let mut service = quadlet_service.service_file;
 
     let yaml_path = kube.lookup_last(KUBE_SECTION, "Yaml").unwrap_or_default();
     if yaml_path.is_empty() {
@@ -769,9 +724,6 @@ pub(crate) fn from_kube_unit(
 
     // Set PODMAN_SYSTEMD_UNIT so that podman auto-update can restart the service.
     service.add(SERVICE_SECTION, "Environment", "PODMAN_SYSTEMD_UNIT=%n");
-
-    // Need the containers filesystem mounted to start podman
-    service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
 
     // Allow users to set the Service Type to oneshot to allow resources only kube yaml
     match service.lookup(SERVICE_SECTION, "Type") {
@@ -883,7 +835,8 @@ pub(crate) fn from_kube_unit(
 
     handle_set_working_directory(kube, &mut service, KUBE_SECTION)?;
 
-    Ok(service)
+    quadlet_service.service_file = service;
+    Ok(quadlet_service)
 }
 
 // Convert a quadlet network file (unit file with a Network group) to a systemd
@@ -891,41 +844,21 @@ pub(crate) fn from_kube_unit(
 // The original Network group is kept around as X-Network.
 // Also returns the canonical network name, either auto-generated or user-defined via the
 // NetworkName key-value.
-pub(crate) fn from_network_unit(
-    network: &SystemdUnitFile,
+pub(crate) fn from_network_unit<'q>(
+    network_source: &'q QuadletSourceUnitFile,
     units_info_map: &mut UnitsInfoMap,
     is_user: bool,
-) -> Result<SystemdUnitFile, ConversionError> {
-    let unit_info = units_info_map
-        .get_source_unit_info(network)
-        .ok_or_else(|| {
-            ConversionError::InternalQuadletError("network".into(), network.path().into())
-        })?;
-
-    let mut service = SystemdUnitFile::new();
-    service.merge_from(network);
-    service.path = unit_info.get_service_file_name().into();
-
-    handle_unit_dependencies(&mut service, units_info_map)?;
-
-    handle_default_dependencies(&mut service, is_user);
-
-    if !network.path().as_os_str().is_empty() {
-        service.add(
-            UNIT_SECTION,
-            "SourcePath",
-            network.path().to_unwrapped_str(),
-        );
-    }
-
-    check_for_unknown_keys(network, NETWORK_SECTION, &SUPPORTED_NETWORK_KEYS)?;
-    check_for_unknown_keys(network, QUADLET_SECTION, &SUPPORTED_QUADLET_KEYS)?;
-
-    // Rename old Network section to X-Network so that systemd ignores it
-    service.rename_section(NETWORK_SECTION, X_NETWORK_SECTION);
-
-    // Rename common Quadlet section
-    service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
+) -> Result<QuadletServiceUnitFile<'q>, ConversionError> {
+    let mut quadlet_service = init_service_unit_file(
+        network_source,
+        NETWORK_SECTION,
+        X_NETWORK_SECTION,
+        &SUPPORTED_NETWORK_KEYS,
+        units_info_map,
+        is_user,
+    )?;
+    let network = &quadlet_service.quadlet.unit_file;
+    let mut service = quadlet_service.service_file;
 
     // Derive network name from unit name (with added prefix), or use user-provided name.
     let podman_network_name = network
@@ -941,9 +874,6 @@ pub(crate) fn from_network_unit(
     } else {
         podman_network_name.to_string()
     };
-
-    // Need the containers filesystem mounted to start podman
-    service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
 
     if network
         .lookup_bool(NETWORK_SECTION, "NetworkDeleteOnStop")
@@ -1027,32 +957,25 @@ pub(crate) fn from_network_unit(
         unit_info.resource_name = podman_network_name;
     }
 
-    Ok(service)
+    quadlet_service.service_file = service;
+    Ok(quadlet_service)
 }
 
-pub(crate) fn from_pod_unit(
-    pod: &SystemdUnitFile,
+pub(crate) fn from_pod_unit<'q>(
+    pod_source: &'q QuadletSourceUnitFile,
     units_info_map: &mut UnitsInfoMap,
     is_user: bool,
-) -> Result<SystemdUnitFile, ConversionError> {
-    let unit_info = units_info_map
-        .get_source_unit_info(pod)
-        .ok_or_else(|| ConversionError::InternalQuadletError("pod".into(), pod.path().into()))?;
-
-    let mut service = SystemdUnitFile::new();
-    service.merge_from(pod);
-    service.path = unit_info.get_service_file_name().into();
-
-    handle_unit_dependencies(&mut service, units_info_map)?;
-
-    handle_default_dependencies(&mut service, is_user);
-
-    if !pod.path().as_os_str().is_empty() {
-        service.add(UNIT_SECTION, "SourcePath", pod.path().to_unwrapped_str());
-    }
-
-    check_for_unknown_keys(pod, POD_SECTION, &SUPPORTED_POD_KEYS)?;
-    check_for_unknown_keys(pod, QUADLET_SECTION, &SUPPORTED_QUADLET_KEYS)?;
+) -> Result<QuadletServiceUnitFile<'q>, ConversionError> {
+    let mut quadlet_service = init_service_unit_file(
+        pod_source,
+        POD_SECTION,
+        X_POD_SECTION,
+        &SUPPORTED_POD_KEYS,
+        units_info_map,
+        is_user,
+    )?;
+    let pod = &quadlet_service.quadlet.unit_file;
+    let mut service = quadlet_service.service_file;
 
     // Derive pod name from unit name (with added prefix), or use user-provided name.
     let podman_pod_name = pod.lookup(POD_SECTION, "PodName").unwrap_or_default();
@@ -1067,15 +990,10 @@ pub(crate) fn from_pod_unit(
         podman_pod_name.to_string()
     };
 
-    // Rename old Pod section to X-Pod so that systemd ignores it
-    service.rename_section(POD_SECTION, X_POD_SECTION);
-
-    // Rename common Quadlet section
-    service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
-
-    // Need the containers filesystem mounted to start podman
-    service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
-
+    let unit_info = units_info_map
+        .get_source_unit_info(pod)
+        .ok_or_else(|| ConversionError::InternalQuadletError("pod".into(), pod.path().into()))?;
+    // FIXME: why can't this be `&quadlet_service.quadlet.containers_to_start`
     for container_service in &unit_info.containers_to_start {
         let container_service = container_service.to_unwrapped_str();
         service.add(UNIT_SECTION, "Wants", container_service);
@@ -1189,7 +1107,8 @@ pub(crate) fn from_pod_unit(
         unit_info.resource_name = podman_pod_name
     };
 
-    Ok(service)
+    quadlet_service.service_file = service;
+    Ok(quadlet_service)
 }
 
 // Convert a quadlet volume file (unit file with a Volume group) to a systemd
@@ -1198,35 +1117,21 @@ pub(crate) fn from_pod_unit(
 // The original Volume group is kept around as X-Volume.
 // Also returns the canonical volume name, either auto-generated or user-defined via the VolumeName
 // key-value.
-pub(crate) fn from_volume_unit(
-    volume: &SystemdUnitFile,
+pub(crate) fn from_volume_unit<'q>(
+    volume_source: &'q QuadletSourceUnitFile,
     units_info_map: &mut UnitsInfoMap,
     is_user: bool,
-) -> Result<SystemdUnitFile, ConversionError> {
-    let unit_info = units_info_map.get_source_unit_info(volume).ok_or_else(|| {
-        ConversionError::InternalQuadletError("volume".into(), volume.path().into())
-    })?;
-
-    let mut service = SystemdUnitFile::new();
-    service.merge_from(volume);
-    service.path = unit_info.get_service_file_name().into();
-
-    handle_unit_dependencies(&mut service, units_info_map)?;
-
-    handle_default_dependencies(&mut service, is_user);
-
-    if !volume.path().as_os_str().is_empty() {
-        service.add(UNIT_SECTION, "SourcePath", volume.path().to_unwrapped_str());
-    }
-
-    check_for_unknown_keys(volume, VOLUME_SECTION, &SUPPORTED_VOLUME_KEYS)?;
-    check_for_unknown_keys(volume, QUADLET_SECTION, &SUPPORTED_QUADLET_KEYS)?;
-
-    // Rename old Volume section to X-Volume so that systemd ignores it
-    service.rename_section(VOLUME_SECTION, X_VOLUME_SECTION);
-
-    // Rename common Quadlet section
-    service.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
+) -> Result<QuadletServiceUnitFile<'q>, ConversionError> {
+    let mut quadlet_service = init_service_unit_file(
+        volume_source,
+        VOLUME_SECTION,
+        X_VOLUME_SECTION,
+        &SUPPORTED_VOLUME_KEYS,
+        units_info_map,
+        is_user,
+    )?;
+    let volume = &quadlet_service.quadlet.unit_file;
+    let mut service = quadlet_service.service_file;
 
     // Derive volume name from unit name (with added prefix), or use user-provided name.
     let podman_volume_name = volume
@@ -1246,11 +1151,6 @@ pub(crate) fn from_volume_unit(
     units_info_map
         .get_mut_source_unit_info(volume)
         .map(|unit_info| unit_info.resource_name = podman_volume_name.clone());
-
-    // Need the containers filesystem mounted to start podman
-    service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
-
-    let labels = volume.lookup_all_key_val(VOLUME_SECTION, "Label");
 
     let mut podman = get_base_podman_command(volume, VOLUME_SECTION);
     podman.add("volume");
@@ -1352,7 +1252,23 @@ pub(crate) fn from_volume_unit(
 
     handle_one_shot_service_section(&mut service, true);
 
-    Ok(service)
+    quadlet_service.service_file = service;
+    Ok(quadlet_service)
+}
+
+fn get_base_podman_command(unit: &SystemdUnitFile, section: &str) -> PodmanCommand {
+    let mut podman = PodmanCommand::new();
+
+    lookup_and_add_all_strings(
+        unit,
+        section,
+        &[("ContainersConfModule", "--module")],
+        &mut podman,
+    );
+
+    podman.extend(unit.lookup_all_args(section, "GlobalArgs"));
+
+    podman
 }
 
 fn handle_default_dependencies(service: &mut SystemdUnitFile, is_user: bool) {
@@ -2033,42 +1949,58 @@ fn handle_volumes(
     Ok(())
 }
 
-// FindMountType parses the input and extracts the type of the mount type and
-// the remaining non-type tokens.
-fn find_mount_type(input: &str) -> Result<(String, Vec<String>), ConversionError> {
-    // Split by comma, iterate over the slice and look for
-    // "type=$mountType". Everything else is appended to tokens.
-    let mut csv_reader = csv::ReaderBuilder::new()
-        .has_headers(false)
-        .from_reader(input.as_bytes());
-    if csv_reader.records().count() != 1 {
-        return Err(ConversionError::InvalidMountFormat(input.into()));
+fn init_service_unit_file<'q>(
+    quadlet: &'q QuadletSourceUnitFile,
+    section: &str,
+    x_section: &str,
+    supported_keys: &[&str],
+    units_info_map: &UnitsInfoMap,
+    is_user: bool,
+) -> Result<QuadletServiceUnitFile<'q>, ConversionError> {
+    let quadlet_file = &quadlet.unit_file;
+    check_for_unknown_keys(quadlet_file, section, &supported_keys)?;
+    check_for_unknown_keys(quadlet_file, QUADLET_SECTION, &SUPPORTED_QUADLET_KEYS)?;
+
+    let mut service_file = SystemdUnitFile::new();
+    service_file.merge_from(quadlet_file);
+
+    let unit_info = units_info_map
+        .0
+        .get(quadlet_file.file_name())
+        .ok_or_else(|| {
+            ConversionError::InternalQuadletError(
+                quadlet_file.unit_type().into(),
+                quadlet_file.file_name().into(),
+            )
+        })?;
+
+    service_file.path = unit_info.get_service_file_name().into();
+
+    handle_unit_dependencies(&mut service_file, units_info_map)?;
+
+    handle_default_dependencies(&mut service_file, is_user);
+
+    if !quadlet_file.path().as_os_str().is_empty() {
+        service_file.add(
+            UNIT_SECTION,
+            "SourcePath",
+            quadlet_file.path().to_unwrapped_str(),
+        );
     }
 
-    let mut found = false;
-    let mut mount_type = String::new();
-    let mut tokens = Vec::with_capacity(3);
-    let mut csv_reader = csv::ReaderBuilder::new()
-        .has_headers(false)
-        .from_reader(input.as_bytes());
-    for result in csv_reader.records() {
-        let record = result?;
-        for field in record.iter() {
-            let mut kv = field.split('=');
-            if found || !(kv.clone().count() == 2 && kv.next() == Some("type")) {
-                tokens.push(field.to_string());
-                continue;
-            }
-            mount_type = kv.next().expect("should have type value").to_string();
-            found = true;
-        }
-    }
+    // Need the containers filesystem mounted to start podman
+    service_file.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
 
-    if !found {
-        return Err(ConversionError::InvalidMountFormat(input.into()));
-    }
+    // Rename old Container section to X-Container so that systemd ignores it
+    service_file.rename_section(section, x_section);
 
-    Ok((mount_type, tokens))
+    // Rename common Quadlet section
+    service_file.rename_section(QUADLET_SECTION, X_QUADLET_SECTION);
+
+    Ok(QuadletServiceUnitFile {
+        service_file,
+        quadlet,
+    })
 }
 
 fn is_port_range(port: &str) -> bool {
