@@ -389,33 +389,27 @@ fn convert<'q>(
     units_info_map: &mut UnitsInfoMap,
     is_user: bool,
 ) -> Result<QuadletServiceUnitFile<'q>, ConversionError> {
-    let unit = &quadlet.unit_file;
-    let service_result = match quadlet.quadlet_type {
-        QuadletType::Build => convert::from_build_unit(unit, units_info_map, is_user),
+    match quadlet.quadlet_type {
+        QuadletType::Build => convert::from_build_unit(quadlet, units_info_map, is_user),
         QuadletType::Container => {
-            warn_if_ambiguous_image_name(unit, CONTAINER_SECTION);
-            convert::from_container_unit(unit, units_info_map, is_user)
+            warn_if_ambiguous_image_name(&quadlet.unit_file, CONTAINER_SECTION);
+            convert::from_container_unit(quadlet, units_info_map, is_user)
         }
         QuadletType::Image => {
-            warn_if_ambiguous_image_name(unit, IMAGE_SECTION);
-            convert::from_image_unit(unit, units_info_map, is_user)
+            warn_if_ambiguous_image_name(&quadlet.unit_file, IMAGE_SECTION);
+            convert::from_image_unit(quadlet, units_info_map, is_user)
         }
-        QuadletType::Kube => convert::from_kube_unit(unit, units_info_map, is_user),
-        QuadletType::Network => convert::from_network_unit(unit, units_info_map, is_user),
-        QuadletType::Pod => convert::from_pod_unit(unit, units_info_map, is_user),
+        QuadletType::Kube => convert::from_kube_unit(quadlet, units_info_map, is_user),
+        QuadletType::Network => convert::from_network_unit(quadlet, units_info_map, is_user),
+        QuadletType::Pod => convert::from_pod_unit(quadlet, units_info_map, is_user),
         QuadletType::Volume => {
-            warn_if_ambiguous_image_name(unit, VOLUME_SECTION);
-            convert::from_volume_unit(unit, units_info_map, is_user)
+            warn_if_ambiguous_image_name(&quadlet.unit_file, VOLUME_SECTION);
+            convert::from_volume_unit(quadlet, units_info_map, is_user)
         } // _ => {
           //     warn!("Unsupported file type {:?}", unit.path());
           //     continue;
           // }
-    };
-
-    service_result.map(|service_file| QuadletServiceUnitFile {
-        quadlet: &quadlet,
-        service_file,
-    })
+    }
 }
 
 #[cfg(test)]
