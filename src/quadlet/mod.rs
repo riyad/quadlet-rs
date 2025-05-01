@@ -10,7 +10,7 @@ use log::warn;
 use regex_lite::Regex;
 
 use crate::systemd_unit;
-use crate::systemd_unit::PathBufExt;
+use crate::systemd_unit::PathExt;
 use crate::systemd_unit::SystemdUnitFile;
 
 pub(crate) use self::constants::*;
@@ -164,13 +164,27 @@ impl QuadletSourceUnitFile {
     ) -> Result<QuadletSourceUnitFile, RuntimeError> {
         let quadlet_type = QuadletType::from_path(unit_file.path())?;
         let service_name = match quadlet_type {
-            QuadletType::Container => get_container_service_name(&unit_file).to_str().to_owned(),
-            QuadletType::Volume => get_volume_service_name(&unit_file).to_str().to_owned(),
-            QuadletType::Kube => get_kube_service_name(&unit_file).to_str().to_owned(),
-            QuadletType::Network => get_network_service_name(&unit_file).to_str().to_owned(),
-            QuadletType::Image => get_image_service_name(&unit_file).to_str().to_owned(),
-            QuadletType::Build => get_build_service_name(&unit_file).to_str().to_owned(),
-            QuadletType::Pod => get_pod_service_name(&unit_file).to_str().to_owned(),
+            QuadletType::Container => get_container_service_name(&unit_file)
+                .to_unwrapped_str()
+                .to_owned(),
+            QuadletType::Volume => get_volume_service_name(&unit_file)
+                .to_unwrapped_str()
+                .to_owned(),
+            QuadletType::Kube => get_kube_service_name(&unit_file)
+                .to_unwrapped_str()
+                .to_owned(),
+            QuadletType::Network => get_network_service_name(&unit_file)
+                .to_unwrapped_str()
+                .to_owned(),
+            QuadletType::Image => get_image_service_name(&unit_file)
+                .to_unwrapped_str()
+                .to_owned(),
+            QuadletType::Build => get_build_service_name(&unit_file)
+                .to_unwrapped_str()
+                .to_owned(),
+            QuadletType::Pod => get_pod_service_name(&unit_file)
+                .to_unwrapped_str()
+                .to_owned(),
         };
         let resource_name = match quadlet_type {
             QuadletType::Build => {
@@ -301,8 +315,10 @@ fn get_container_resource_name(container: &SystemdUnitFile) -> String {
 
     // XXX: only %N is handled.
     // it is difficult to properly implement specifiers handling without consulting systemd.
-    let resource_name =
-        container_name.replace("%N", get_container_service_name(container).to_str());
+    let resource_name = container_name.replace(
+        "%N",
+        get_container_service_name(container).to_unwrapped_str(),
+    );
 
     if !resource_name.contains("%") {
         resource_name

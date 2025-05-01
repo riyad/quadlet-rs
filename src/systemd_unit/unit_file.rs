@@ -12,6 +12,7 @@ use log::warn;
 use walkdir::WalkDir;
 
 use super::path_buf_ext::PathBufExt;
+use super::path_ext::PathExt;
 use super::unit::SystemdUnit;
 use super::INSTALL_SECTION;
 
@@ -271,7 +272,7 @@ impl SystemdUnitFile {
     }
 
     pub fn unit_type(&self) -> &str {
-        self.path.unit_type()
+        self.path.systemd_unit_type()
     }
 }
 

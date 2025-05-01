@@ -1,6 +1,7 @@
 mod constants;
 mod parser;
 mod path_buf_ext;
+mod path_ext;
 mod quoted;
 mod split;
 mod unit;
@@ -9,6 +10,7 @@ mod value;
 
 pub use self::constants::*;
 pub use self::path_buf_ext::*;
+pub use self::path_ext::*;
 pub use self::quoted::{quote_value, quote_words, unquote_value};
 pub use self::split::{SplitStrv, SplitWord};
 pub use self::unit::*;
