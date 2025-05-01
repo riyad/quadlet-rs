@@ -32,8 +32,6 @@ pub(crate) enum RuntimeError {
     Io(String, #[source] io::Error),
     #[error("{0}: {1}")]
     Conversion(String, #[source] ConversionError),
-    #[error("unsupported file type {0:?}")]
-    UnsupportedQuadletType(PathBuf),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -99,6 +97,8 @@ pub(crate) enum ConversionError {
     SourceNotFound(String),
     #[error("{0}")]
     UnknownKey(String),
+    #[error("unsupported file type {0:?}")]
+    UnsupportedQuadletType(PathBuf),
     #[error("unsupported value for {0:?}: {1:?}")]
     UnsupportedValueForKey(String, String),
 }
@@ -125,7 +125,7 @@ pub(crate) enum QuadletType {
 }
 
 impl QuadletType {
-    pub(crate) fn from_path(path: &Path) -> Result<QuadletType, RuntimeError> {
+    pub(crate) fn from_path(path: &Path) -> Result<QuadletType, ConversionError> {
         match path
             .extension()
             .map(|e| e.to_str().unwrap_or_default())
@@ -138,7 +138,7 @@ impl QuadletType {
             "network" => Ok(QuadletType::Network),
             "pod" => Ok(QuadletType::Pod),
             "volume" => Ok(QuadletType::Volume),
-            _ => Err(RuntimeError::UnsupportedQuadletType(path.to_path_buf())),
+            _ => Err(ConversionError::UnsupportedQuadletType(path.to_path_buf())),
         }
     }
 }
@@ -161,7 +161,7 @@ pub(crate) struct QuadletSourceUnitFile {
 impl QuadletSourceUnitFile {
     pub(crate) fn from_unit_file(
         unit_file: SystemdUnitFile,
-    ) -> Result<QuadletSourceUnitFile, RuntimeError> {
+    ) -> Result<QuadletSourceUnitFile, ConversionError> {
         let quadlet_type = QuadletType::from_path(unit_file.path())?;
         let service_name = match quadlet_type {
             QuadletType::Container => get_container_service_name(&unit_file)

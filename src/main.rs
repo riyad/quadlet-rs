@@ -253,7 +253,10 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
         .map(|result| match result {
             Ok(u) => match QuadletSourceUnitFile::from_unit_file(u) {
                 Ok(u) => Ok(u),
-                Err(e) => Err(e),
+                Err(e) => Err(RuntimeError::Conversion(
+                    format!("initializing Quadlet source unit"),
+                    e.into(),
+                )),
             },
             Err(e) => Err(e),
         })
