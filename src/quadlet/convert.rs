@@ -267,7 +267,7 @@ pub(crate) fn from_container_unit<'q>(
     // If conmon exited uncleanly it may not have removed the container, so
     // force it, -i makes it ignore non-existing files.
     let mut service_stop_cmd = get_base_podman_command(container, CONTAINER_SECTION);
-    service_stop_cmd.add_slice(&["rm", "-v", "-f", "-i", "--cidfile=%t/%N.cid"]);
+    service_stop_cmd.add_slice(&["rm", "-v", "-f", "-i", &podman_container_name]);
     service.add_raw(
         SERVICE_SECTION,
         "ExecStop",
@@ -284,7 +284,12 @@ pub(crate) fn from_container_unit<'q>(
         service_stop_cmd.to_escaped_string().as_str(),
     )?;
 
-    handle_exec_reload(container, &mut service, CONTAINER_SECTION)?;
+    handle_exec_reload(
+        container,
+        &mut service,
+        CONTAINER_SECTION,
+        &podman_container_name,
+    )?;
 
     let mut podman = get_base_podman_command(container, CONTAINER_SECTION);
 
@@ -292,9 +297,6 @@ pub(crate) fn from_container_unit<'q>(
 
     podman.add("--name");
     podman.add(&podman_container_name);
-
-    // We store the container id so we can clean it up in case of failure
-    podman.add("--cidfile=%t/%N.cid");
 
     // And replace any previous container with the same name, not fail
     podman.add("--replace");
@@ -977,18 +979,7 @@ pub(crate) fn from_pod_unit<'q>(
     let pod = &quadlet_service.quadlet.unit_file;
     let mut service = quadlet_service.service_file;
 
-    // Derive pod name from unit name (with added prefix), or use user-provided name.
-    let podman_pod_name = pod.lookup(POD_SECTION, "PodName").unwrap_or_default();
-    let podman_pod_name = if podman_pod_name.is_empty() {
-        quad_replace_extension(pod.path(), "", "systemd-", "")
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_string()
-    } else {
-        podman_pod_name.to_string()
-    };
+    let podman_pod_name = &pod_source.resource_name;
 
     let unit_info = units_info_map
         .get_source_unit_info(pod)
@@ -1010,7 +1001,7 @@ pub(crate) fn from_pod_unit<'q>(
     let mut podman_start = get_base_podman_command(pod, POD_SECTION);
     podman_start.add("pod");
     podman_start.add("start");
-    podman_start.add("--pod-id-file=%t/%N.pod-id");
+    podman_start.add(podman_pod_name);
     service.add_raw(
         SERVICE_SECTION,
         "ExecStart",
@@ -1020,9 +1011,9 @@ pub(crate) fn from_pod_unit<'q>(
     let mut podman_stop = get_base_podman_command(pod, POD_SECTION);
     podman_stop.add("pod");
     podman_stop.add("stop");
-    podman_stop.add("--pod-id-file=%t/%N.pod-id");
     podman_stop.add("--ignore");
     podman_stop.add("--time=10");
+    podman_stop.add(podman_pod_name);
     service.add_raw(
         SERVICE_SECTION,
         "ExecStop",
@@ -1032,9 +1023,9 @@ pub(crate) fn from_pod_unit<'q>(
     let mut podman_stop_post = get_base_podman_command(pod, POD_SECTION);
     podman_stop_post.add("pod");
     podman_stop_post.add("rm");
-    podman_stop_post.add("--pod-id-file=%t/%N.pod-id");
     podman_stop_post.add("--ignore");
     podman_stop_post.add("--force");
+    podman_stop_post.add(podman_pod_name);
     service.add_raw(
         SERVICE_SECTION,
         "ExecStopPost",
@@ -1045,7 +1036,6 @@ pub(crate) fn from_pod_unit<'q>(
     podman_start_pre.add("pod");
     podman_start_pre.add("create");
     podman_start_pre.add("--infra-conmon-pidfile=%t/%N.pid");
-    podman_start_pre.add("--pod-id-file=%t/%N.pod-id");
     podman_start_pre.add("--exit-policy=stop");
     podman_start_pre.add("--replace");
 
@@ -1088,7 +1078,7 @@ pub(crate) fn from_pod_unit<'q>(
     podman_start_pre.add("--infra-name");
     podman_start_pre.add(format!("{podman_pod_name}-infra"));
     podman_start_pre.add("--name");
-    podman_start_pre.add(&podman_pod_name);
+    podman_start_pre.add(podman_pod_name);
 
     handle_podman_args(pod, POD_SECTION, &mut podman_start_pre);
     service.add_raw(
@@ -1104,7 +1094,7 @@ pub(crate) fn from_pod_unit<'q>(
 
     if let Some(unit_info) = units_info_map.get_mut_source_unit_info(pod) {
         // Store the name of the created resource
-        unit_info.resource_name = podman_pod_name
+        unit_info.resource_name = podman_pod_name.to_string();
     };
 
     quadlet_service.service_file = service;
@@ -1296,6 +1286,7 @@ fn handle_exec_reload(
     quadlet: &SystemdUnitFile,
     service: &mut SystemdUnitFile,
     quadlet_section: &str,
+    container_name: &str,
 ) -> Result<(), ConversionError> {
     let reload_cmd: Vec<String> = quadlet
         .lookup_last_value(quadlet_section, "ReloadCmd")
@@ -1315,10 +1306,10 @@ fn handle_exec_reload(
 
     let mut podman_reload = get_base_podman_command(quadlet, quadlet_section);
     if !reload_cmd.is_empty() {
-        podman_reload.add_slice(&["exec", "--cidfile=%t/%N.cid"]);
+        podman_reload.add_slice(&["exec", &container_name]);
         podman_reload.extend(reload_cmd);
     } else {
-        podman_reload.add_slice(&["kill", "--cidfile=%t/%N.cid", "--signal", &reload_signal]);
+        podman_reload.add_slice(&["kill", "--signal", &reload_signal, &container_name]);
     }
     service.add_raw(
         SERVICE_SECTION,
@@ -1508,8 +1499,8 @@ fn handle_pod(
                 .0
                 .get_mut(&OsString::from(&pod))
                 .ok_or_else(|| ConversionError::PodNotFound(pod))?;
-            podman.add("--pod-id-file");
-            podman.add(format!("%t/{}.pod-id", pod_info.service_name));
+            podman.add("--pod");
+            podman.add(&pod_info.resource_name);
 
             let pod_service_name = pod_info
                 .get_service_file_name()
