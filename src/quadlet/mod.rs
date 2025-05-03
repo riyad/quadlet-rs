@@ -198,6 +198,11 @@ impl QuadletSourceUnitFile {
                 // Prefill resouceNames for .container files. This solves network reusing.
                 get_container_resource_name(&unit_file)
             }
+            QuadletType::Pod => {
+                // Prefill resouceNames for .pod files.
+                // This is requires for referencing the pod from .container files
+                get_pod_resource_name(&unit_file)
+            }
             _ => String::default(),
         };
 
@@ -341,6 +346,16 @@ fn get_kube_service_name(kube: &SystemdUnitFile) -> PathBuf {
 
 fn get_network_service_name(network: &SystemdUnitFile) -> PathBuf {
     get_quadlet_service_name(network, NETWORK_SECTION, "-network")
+}
+
+fn get_pod_resource_name(pod: &SystemdUnitFile) -> String {
+    // Derive pod name from unit name (with added prefix), or use user-provided name.
+    let podman_pod_name = pod.lookup(POD_SECTION, "PodName").unwrap_or_default();
+    if podman_pod_name.is_empty() {
+        String::from("systemd-%N")
+    } else {
+        podman_pod_name.to_string()
+    }
 }
 
 fn get_pod_service_name(pod: &SystemdUnitFile) -> PathBuf {
