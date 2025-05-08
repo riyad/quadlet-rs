@@ -597,10 +597,7 @@ pub(crate) fn from_container_unit<'q>(
         podman.add(rootfs);
     }
 
-    let exec_args = container
-        .lookup_last_value(CONTAINER_SECTION, "Exec")
-        .map(|v| v.split_strv())
-        .unwrap_or_default();
+    let exec_args = container.lookup_all_args(CONTAINER_SECTION, "Exec");
     podman.extend(exec_args);
 
     service.add_raw(
