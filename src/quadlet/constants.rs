@@ -267,3 +267,21 @@ pub static SUPPORTED_VOLUME_KEYS: [&str; 14] = [
     "User",
     "VolumeName",
 ];
+
+pub static UNIT_DEPENDENCY_KEYS: [&str; 15] = [
+    "After",
+    "Before",
+    "BindsTo",
+    "Conflicts",
+    "OnFailure",
+    "OnSuccess",
+    "PartOf",
+    "PropagatesReloadTo",
+    "PropagatesStopTo",
+    "ReloadPropagatedFrom",
+    "Requires",
+    "Requisite",
+    "StopPropagatedFrom",
+    "Upholds",
+    "Wants",
+];
