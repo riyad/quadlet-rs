@@ -90,8 +90,34 @@ impl<'a> Quoted<'a> {
         while self.cur.is_some() {
             match self.cur {
                 None => return Err(Error::Unquoting("found early EOF".into())),
-                Some('\'' | '"') if result.ends_with([' ', '\t', '\n']) || result.is_empty() => {
+                // quotes can only start at the beginning or after whitespace
+                Some('\'' | '"')
+                    if quote.is_none()
+                        && (result.ends_with([' ', '\t', '\n']) || result.is_empty()) =>
+                {
                     quote = self.cur;
+                }
+                // we've encountered the quote character again. is this the  end of the quote?
+                Some(q) if self.cur == quote => {
+                    // look at next character
+                    self.bump();
+                    match self.cur {
+                        // end of string is also end of quote.
+                        // ignore q, go back to normal handling
+                        None => continue,
+                        // end of quote confirmed.
+                        // ignore q, go back to normal handling
+                        Some(c) if [' ', '\t', '\n'].contains(&c) => {
+                            quote = None;
+                            continue;
+                        }
+                        // this is not the end of the quote.
+                        // treat q as just a normal character, go back to normal handling
+                        _ => {
+                            result.push(q);
+                            continue;
+                        }
+                    }
                 }
                 Some('\\') => {
                     self.bump();
@@ -106,12 +132,7 @@ impl<'a> Quoted<'a> {
                     }
                 }
                 Some(c) => {
-                    if self.cur == quote {
-                        // inside either single or double quotes
-                        quote = None;
-                    } else {
-                        result.push(c);
-                    }
+                    result.push(c);
                 }
             }
             self.bump();
@@ -306,33 +327,54 @@ mod tests {
         use super::super::{unquote_value, Error};
 
         #[test]
-        fn keeps_quotes_inside_words() {
+        fn removes_outer_quotes() {
+            let input = "\"foo\"";
+
+            assert_eq!(unquote_value(input), Ok("foo".into()),);
+        }
+
+        #[test]
+        fn keeps_quotes_starting_inside_words() {
             let input = "foo=\'bar\' \"bar=baz\"";
 
             assert_eq!(unquote_value(input), Ok("foo=\'bar\' bar=baz".into()),);
         }
 
         #[test]
-        fn keeps_spaces_inside_quotes() {
-            let input = "foo \"bar\tbaz\"";
+        fn keeps_quotes_ending_inside_words() {
+            let input = "\"foo bar\"baz\"";
 
-            assert_eq!(unquote_value(input), Ok("foo bar\tbaz".into()),);
+            assert_eq!(unquote_value(input), Ok("foo bar\"baz".into()),);
+        }
+
+        #[test]
+        fn keeps_unbalanced_quotes() {
+            let input = "foo bar\"baz\'";
+
+            assert_eq!(unquote_value(input), Ok("foo bar\"baz\'".into()),);
+        }
+
+        #[test]
+        fn keeps_spaces_inside_quotes() {
+            let input = "foo \"bar \tbaz\"";
+
+            assert_eq!(unquote_value(input), Ok("foo bar \tbaz".into()),);
         }
 
         #[test]
         fn keeps_nested_quotes() {
-            let input = "\'bar \tbar=\"baz\"\'";
+            let input = "\'\"foo\"bar \tbar=\"baz\"\'";
 
-            assert_eq!(unquote_value(input), Ok("bar \tbar=\"baz\"".into()),);
+            assert_eq!(unquote_value(input), Ok("\"foo\"bar \tbar=\"baz\"".into()),);
         }
 
         #[test]
         fn unescapes_single_character_sequences() {
-            let input = "\\a\\b\\f\\n\\r\\t\\v\\\\\\\"\\\'\\s";
+            let input = "\\a \\b \\f \\n \\r \\t \\v \\\\ \\\" \\\' \\s";
 
             assert_eq!(
                 unquote_value(input),
-                Ok("\u{7}\u{8}\u{c}\n\r\t\u{b}\\\"\' ".into()),
+                Ok("\u{7} \u{8} \u{c} \n \r \t \u{b} \\ \" \'  ".into()),
             );
         }
 
