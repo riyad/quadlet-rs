@@ -59,6 +59,8 @@ pub(crate) fn from_build_unit(
     service.merge_from(build);
     service.path = unit_info.get_service_file_name().into();
 
+    handle_unit_dependencies(&mut service, units_info_map)?;
+
     handle_default_dependencies(&mut service, is_user);
 
     // Need the containers filesystem mounted to start podman
@@ -220,6 +222,8 @@ pub(crate) fn from_container_unit(
 
         service.path = unit_info.get_service_file_name().into();
     }
+
+    handle_unit_dependencies(&mut service, units_info_map)?;
 
     handle_default_dependencies(&mut service, is_user);
 
@@ -643,6 +647,8 @@ pub(crate) fn from_image_unit(
     service.merge_from(image);
     service.path = unit_info.get_service_file_name().into();
 
+    handle_unit_dependencies(&mut service, units_info_map)?;
+
     handle_default_dependencies(&mut service, is_user);
 
     if !image.path().as_os_str().is_empty() {
@@ -715,8 +721,10 @@ pub(crate) fn from_image_unit(
         image_name
     };
 
-    // Store the name of the created resource
-    unit_info.resource_name = podman_image_name.to_string();
+    if let Some(unit_info) = units_info_map.get_mut_source_unit_info(image) {
+        // Store the name of the created resource
+        unit_info.resource_name = podman_image_name.to_string();
+    };
 
     Ok(service)
 }
@@ -734,6 +742,8 @@ pub(crate) fn from_kube_unit(
     let mut service = SystemdUnitFile::new();
     service.merge_from(kube);
     service.path = unit_info.get_service_file_name().into();
+
+    handle_unit_dependencies(&mut service, units_info_map)?;
 
     handle_default_dependencies(&mut service, is_user);
 
@@ -908,6 +918,8 @@ pub(crate) fn from_network_unit(
     service.merge_from(network);
     service.path = unit_info.get_service_file_name().into();
 
+    handle_unit_dependencies(&mut service, units_info_map)?;
+
     handle_default_dependencies(&mut service, is_user);
 
     if !network.path().as_os_str().is_empty() {
@@ -1026,8 +1038,10 @@ pub(crate) fn from_network_unit(
 
     handle_one_shot_service_section(&mut service, true);
 
-    // Store the name of the created resource
-    unit_info.resource_name = podman_network_name;
+    if let Some(unit_info) = units_info_map.get_mut_source_unit_info(network) {
+        // Store the name of the created resource
+        unit_info.resource_name = podman_network_name;
+    }
 
     Ok(service)
 }
@@ -1044,6 +1058,8 @@ pub(crate) fn from_pod_unit(
     let mut service = SystemdUnitFile::new();
     service.merge_from(pod);
     service.path = unit_info.get_service_file_name().into();
+
+    handle_unit_dependencies(&mut service, units_info_map)?;
 
     handle_default_dependencies(&mut service, is_user);
 
@@ -1170,7 +1186,7 @@ pub(crate) fn from_pod_unit(
     podman_start_pre.add("--infra-name");
     podman_start_pre.add(format!("{podman_pod_name}-infra"));
     podman_start_pre.add("--name");
-    podman_start_pre.add(podman_pod_name);
+    podman_start_pre.add(&podman_pod_name);
 
     handle_podman_args(pod, POD_SECTION, &mut podman_start_pre);
     service.add_raw(
@@ -1183,6 +1199,11 @@ pub(crate) fn from_pod_unit(
     service.add(SERVICE_SECTION, "Type", "forking");
     service.add(SERVICE_SECTION, "Restart", "on-failure");
     service.add(SERVICE_SECTION, "PIDFile", "%t/%N.pid");
+
+    if let Some(unit_info) = units_info_map.get_mut_source_unit_info(pod) {
+        // Store the name of the created resource
+        unit_info.resource_name = podman_pod_name
+    };
 
     Ok(service)
 }
@@ -1205,6 +1226,8 @@ pub(crate) fn from_volume_unit(
     let mut service = SystemdUnitFile::new();
     service.merge_from(volume);
     service.path = unit_info.get_service_file_name().into();
+
+    handle_unit_dependencies(&mut service, units_info_map)?;
 
     handle_default_dependencies(&mut service, is_user);
 
@@ -1236,7 +1259,9 @@ pub(crate) fn from_volume_unit(
         podman_volume_name.to_string()
     };
     // Store the name of the created resource
-    unit_info.resource_name = podman_volume_name.clone();
+    units_info_map
+        .get_mut_source_unit_info(volume)
+        .map(|unit_info| unit_info.resource_name = podman_volume_name.clone());
 
     // Need the containers filesystem mounted to start podman
     service.add(UNIT_SECTION, "RequiresMountsFor", "%t/containers");
@@ -1704,6 +1729,47 @@ fn handle_set_working_directory(
     }
 
     Ok(context.to_string())
+}
+
+fn handle_unit_dependencies(
+    service_unit_file: &mut SystemdUnitFile,
+    units_info_map: &UnitsInfoMap,
+) -> Result<(), ConversionError> {
+    for unit_dependency_key in UNIT_DEPENDENCY_KEYS {
+        let deps = service_unit_file.lookup_all_strv(UNIT_SECTION, unit_dependency_key);
+        if deps.len() == 0 {
+            continue;
+        }
+        let mut translated_deps = Vec::with_capacity(deps.len());
+        let mut translated = false;
+        for dep in deps {
+            let dep_path = PathBuf::from(&dep);
+            let translated_dep = if SUPPORTED_EXTENSIONS.contains(&dep_path.unit_type()) {
+                let unit_info = units_info_map
+                    .0
+                    .get(dep_path.as_os_str())
+                    .ok_or(ConversionError::InvalidUnitDependency(dep))?;
+                translated = true;
+                PathBuf::from(unit_info.get_service_file_name())
+                    .to_str()
+                    .to_string()
+            } else {
+                dep
+            };
+            translated_deps.push(translated_dep);
+        }
+        if !translated {
+            continue;
+        }
+        service_unit_file.remove_entries(UNIT_SECTION, unit_dependency_key);
+        service_unit_file.add(
+            UNIT_SECTION,
+            unit_dependency_key,
+            translated_deps.join(" ").as_str(),
+        );
+    }
+
+    Ok(())
 }
 
 fn handle_storage_source(

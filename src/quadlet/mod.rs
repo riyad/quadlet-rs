@@ -43,6 +43,8 @@ pub(crate) enum ConversionError {
     ImageNotFound(String),
     #[error("internal error while processing {0} {1:?}")]
     InternalQuadletError(String, OsString),
+    #[error("unable to translate dependency for {0:?}")]
+    InvalidUnitDependency(String),
     #[error("key Options can't be used without Device")]
     InvalidDeviceOptions,
     #[error("key Type can't be used without Device")]
