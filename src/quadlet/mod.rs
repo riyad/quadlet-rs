@@ -352,7 +352,12 @@ fn get_pod_resource_name(pod: &SystemdUnitFile) -> String {
     // Derive pod name from unit name (with added prefix), or use user-provided name.
     let podman_pod_name = pod.lookup(POD_SECTION, "PodName").unwrap_or_default();
     if podman_pod_name.is_empty() {
-        String::from("systemd-%N")
+        quad_replace_extension(pod.path(), "", "systemd-", "")
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string()
     } else {
         podman_pod_name.to_string()
     }
