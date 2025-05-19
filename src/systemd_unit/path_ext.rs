@@ -48,9 +48,9 @@ impl PathExt for Path {
 
         // if first component has length of 2, starts with %, but is not %%
         if self.components().next().unwrap().as_os_str().len() == 2 {
-            if self.as_os_str().as_bytes().starts_with("%%".as_bytes()) {
+            if self.as_os_str().as_bytes().starts_with(b"%%") {
                 return false;
-            } else if self.as_os_str().as_bytes().starts_with("%".as_bytes()) {
+            } else if self.as_os_str().as_bytes().starts_with(b"%") {
                 return true;
             }
         }
@@ -67,7 +67,7 @@ impl PathExt for Path {
         self.extension()
             .expect("should have an extension")
             .to_str()
-            .expect("path is not a valid UTF-8 string")
+            .expect("extension is not a valid UTF-8 string")
     }
 }
 
