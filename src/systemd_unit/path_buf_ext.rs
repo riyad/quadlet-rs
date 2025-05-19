@@ -1,5 +1,5 @@
 use std::env;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use super::path_ext::PathExt;
 use crate::systemd_unit::SystemdUnitFile;
@@ -28,7 +28,7 @@ impl PathBufExt<PathBuf> for PathBuf {
     }
 
     fn absolute_from_unit(&self, unit_file: &SystemdUnitFile) -> Self {
-        let current_dir = env::current_dir().expect("current dir");
+        let current_dir = env::current_dir().expect("current directory");
         let unit_file_dir = unit_file.path().parent().unwrap_or(current_dir.as_path());
 
         self.absolute_from(unit_file_dir)
@@ -36,25 +36,26 @@ impl PathBufExt<PathBuf> for PathBuf {
 
     /// This function normalizes relative the paths by dropping multiple slashes,
     /// removing "." elements and making ".." drop the parent element as long
-    /// as there is not (otherwise the .. is just removed).
+    /// as there is one (otherwise the ".." are kept). All without accessing the filesystem.
     /// Symlinks are not handled in any way.
-    /// TODO: we could use std::path::absolute() here, but it's nightly-only ATM
-    /// see https://doc.rust-lang.org/std/path/fn.absolute.html
+    /// NOTE: this is not the same as `std::path::absolute()` or `std::fs::canonicalize()`.
+    /// We don't force the path to be absolute. We don't access the filesystem. Symlinks are not resolved.
     fn cleaned(&self) -> PathBuf {
         // normalized path could be shorter, but never longer
         let mut normalized = PathBuf::with_capacity(self.as_os_str().len());
 
         for element in self.components() {
-            if element.as_os_str().is_empty() || element.as_os_str() == "." {
-                continue;
-            } else if element.as_os_str() == ".." {
-                if normalized.components().count() > 0 {
-                    normalized.pop();
-                } else {
-                    normalized.push(element);
+            match element {
+                Component::Normal(s) if s.is_empty() => continue,
+                Component::CurDir => continue,
+                Component::ParentDir => {
+                    if normalized.components().count() > 0 {
+                        normalized.pop();
+                    } else {
+                        normalized.push(element);
+                    }
                 }
-            } else {
-                normalized.push(element);
+                _ => normalized.push(element),
             }
         }
 
