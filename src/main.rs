@@ -244,7 +244,6 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
     // For user generators these can live in /etc/containers/systemd/users, /etc/containers/systemd/users/$UID, and $XDG_CONFIG_HOME/containers/systemd
     let source_paths = UnitSearchDirs::from_env_or_system()
         .rootless(cfg.is_user)
-        .recursive(true)
         .build();
 
     let mut units: Vec<QuadletSourceUnitFile> = source_paths

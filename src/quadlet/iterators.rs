@@ -74,7 +74,6 @@ impl UnitSearchDirs {
                     .map(PathBuf::from)
                     .collect()
             }),
-            recursive: false,
             rootless: false,
         }
     }
@@ -88,7 +87,6 @@ impl UnitSearchDirs {
 
         UnitSearchDirsBuilder {
             dirs: None,
-            recursive: false,
             rootless: false,
         }
     }
@@ -96,7 +94,6 @@ impl UnitSearchDirs {
     pub(crate) fn new(dirs: Vec<PathBuf>) -> UnitSearchDirsBuilder {
         UnitSearchDirsBuilder {
             dirs: Some(dirs),
-            recursive: false,
             rootless: false,
         }
     }
@@ -110,7 +107,6 @@ impl UnitSearchDirs {
 
 pub(crate) struct UnitSearchDirsBuilder {
     dirs: Option<Vec<PathBuf>>,
-    recursive: bool,
     rootless: bool,
 }
 
@@ -203,11 +199,6 @@ impl UnitSearchDirsBuilder {
         dirs.push(PathBuf::from(UNIT_DIR_ADMIN).join("users"));
 
         dirs
-    }
-
-    pub(crate) fn recursive(mut self, recursive: bool) -> Self {
-        self.recursive = recursive;
-        self
     }
 
     pub(crate) fn rootless(mut self, rootless: bool) -> Self {
@@ -383,11 +374,7 @@ mod tests {
                 }
 
                 assert_eq!(
-                    UnitSearchDirs::from_env()
-                        .rootless(false)
-                        .recursive(false)
-                        .build()
-                        .0,
+                    UnitSearchDirs::from_env().rootless(false).build().0,
                     expected,
                 )
             }
@@ -425,11 +412,7 @@ mod tests {
                 }
 
                 assert_eq!(
-                    UnitSearchDirs::from_env()
-                        .rootless(true)
-                        .recursive(false)
-                        .build()
-                        .0,
+                    UnitSearchDirs::from_env().rootless(true).build().0,
                     expected
                 )
             }
