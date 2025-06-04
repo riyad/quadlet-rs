@@ -199,13 +199,14 @@ pub static SUPPORTED_KUBE_KEYS: [&str; 19] = [
     "Yaml",
 ];
 
-pub static SUPPORTED_NETWORK_KEYS: [&str; 17] = [
+pub static SUPPORTED_NETWORK_KEYS: [&str; 18] = [
     "ContainersConfModule",
     "DisableDNS",
     "DNS",
     "Driver",
     "Gateway",
     "GlobalArgs",
+    "InterfaceName",
     "Internal",
     "IPAMDriver",
     "IPRange",

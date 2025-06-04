@@ -899,7 +899,11 @@ pub(crate) fn from_network_unit<'q>(
     ];
     lookup_and_add_bool(network, NETWORK_SECTION, &bool_keys, &mut podman);
 
-    let string_keys = [("Driver", "--driver"), ("IPAMDriver", "--ipam-driver")];
+    let string_keys = [
+        ("Driver", "--driver"),
+        ("InterfaceName", "--interface-name"),
+        ("IPAMDriver", "--ipam-driver"),
+    ];
     lookup_and_add_string(network, NETWORK_SECTION, &string_keys, &mut podman);
 
     lookup_and_add_all_strings(network, NETWORK_SECTION, &[("DNS", "--dns")], &mut podman);
