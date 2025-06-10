@@ -1,6 +1,6 @@
 use std::str::Chars;
 
-const WHITESPACE: [char; 4] = [' ', '\t', '\n', '\r'];
+static WHITESPACE: [char; 4] = [' ', '\t', '\n', '\r'];
 
 /// Splits a string at whitespace and removes quotes while preserving whitespace *inside* quotes.
 /// It will *keep* escape sequences as they are (i.e. treat them as normal characters).

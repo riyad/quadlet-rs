@@ -2,7 +2,7 @@ use super::*;
 
 use std::str::Chars;
 
-const LINE_CONTINUATION_REPLACEMENT: &str = " ";
+static LINE_CONTINUATION_REPLACEMENT: &str = " ";
 
 type ParseResult<T> = Result<T, ParseError>;
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
