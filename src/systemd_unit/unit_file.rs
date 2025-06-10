@@ -13,7 +13,7 @@ use walkdir::WalkDir;
 
 use super::path_buf_ext::PathBufExt;
 use super::path_ext::PathExt;
-use super::unit::SystemdUnit;
+use super::unit_data::SystemdUnitData;
 use super::INSTALL_SECTION;
 
 #[derive(Debug, thiserror::Error)]
@@ -27,29 +27,29 @@ pub enum IoError {
 #[derive(Clone, Debug, PartialEq)]
 pub struct SystemdUnitFile {
     pub(crate) path: PathBuf,
-    unit: SystemdUnit,
+    data: SystemdUnitData,
 }
 
 impl Default for SystemdUnitFile {
     fn default() -> Self {
         Self {
             path: Default::default(),
-            unit: Default::default(),
+            data: Default::default(),
         }
     }
 }
 
 impl Deref for SystemdUnitFile {
-    type Target = SystemdUnit;
+    type Target = SystemdUnitData;
 
     fn deref(&self) -> &Self::Target {
-        &self.unit
+        &self.data
     }
 }
 
 impl DerefMut for SystemdUnitFile {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.unit
+        &mut self.data
     }
 }
 
@@ -170,7 +170,7 @@ impl SystemdUnitFile {
 
         Ok(SystemdUnitFile {
             path: path.into(),
-            unit: SystemdUnit::load_from_str(buf.as_str())?,
+            data: SystemdUnitData::load_from_str(buf.as_str())?,
         })
     }
 
@@ -263,7 +263,7 @@ impl SystemdUnitFile {
     pub fn new() -> Self {
         SystemdUnitFile {
             path: PathBuf::new(),
-            unit: SystemdUnit::new(),
+            data: SystemdUnitData::new(),
         }
     }
 
@@ -323,7 +323,7 @@ mod tests {
             let unit_file = SystemdUnitFile::default();
 
             assert_eq!(unit_file.path(), &PathBuf::from(""));
-            assert_eq!(unit_file.unit, SystemdUnit::new());
+            assert_eq!(unit_file.data, SystemdUnitData::new());
         }
     }
 

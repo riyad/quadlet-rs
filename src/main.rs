@@ -538,8 +538,10 @@ mod tests {
 
         #[test]
         fn recognizes_user_scope_from_arg_0_path() {
-            let args: Vec<String> =
-                vec!["./user-generators/quadlet-rs-generator".into(), "./output_dir".into()];
+            let args: Vec<String> = vec![
+                "./user-generators/quadlet-rs-generator".into(),
+                "./output_dir".into(),
+            ];
 
             assert_eq!(
                 parse_args(args).ok().unwrap(),

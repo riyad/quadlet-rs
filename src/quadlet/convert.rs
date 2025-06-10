@@ -1321,7 +1321,7 @@ fn handle_exec_reload(
     Ok(())
 }
 
-fn handle_health(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {
+fn handle_health(unit_file: &SystemdUnitData, section: &str, podman: &mut PodmanCommand) {
     let key_arg_map: [[&str; 2]; 11] = [
         ["HealthCmd", "cmd"],
         ["HealthInterval", "interval"],
@@ -1376,14 +1376,14 @@ fn handle_image_source<'a>(
     return Ok(quadlet_image_name);
 }
 
-fn handle_log_driver(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {
+fn handle_log_driver(unit_file: &SystemdUnitData, section: &str, podman: &mut PodmanCommand) {
     if let Some(log_driver) = unit_file.lookup_last(section, "LogDriver") {
         podman.add("--log-driver");
         podman.add(log_driver);
     }
 }
 
-fn handle_log_opt(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {
+fn handle_log_opt(unit_file: &SystemdUnitData, section: &str, podman: &mut PodmanCommand) {
     podman.extend(
         unit_file
             .lookup_all_strv(section, "LogOpt")
@@ -1394,9 +1394,9 @@ fn handle_log_opt(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCom
 }
 
 fn handle_networks(
-    quadlet_unit_file: &SystemdUnit,
+    quadlet_unit_file: &SystemdUnitData,
     section: &str,
-    service_unit_file: &mut SystemdUnit,
+    service_unit_file: &mut SystemdUnitData,
     units_info_map: &UnitsInfoMap,
     podman: &mut PodmanCommand,
 ) -> Result<(), ConversionError> {
@@ -1479,12 +1479,12 @@ fn handle_one_shot_service_section(service: &mut SystemdUnitFile, remain_after_e
     }
 }
 
-fn handle_podman_args(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {
+fn handle_podman_args(unit_file: &SystemdUnitData, section: &str, podman: &mut PodmanCommand) {
     podman.extend(unit_file.lookup_all_args(section, "PodmanArgs"));
 }
 
 fn handle_pod(
-    quadlet_unit: &SystemdUnit,
+    quadlet_unit: &SystemdUnitData,
     service_unit_file: &mut SystemdUnitFile,
     section: &str,
     units_info_map: &mut UnitsInfoMap,
@@ -1526,7 +1526,7 @@ fn handle_pod(
     Ok(())
 }
 
-fn handle_publish_ports(unit_file: &SystemdUnit, section: &str, podman: &mut PodmanCommand) {
+fn handle_publish_ports(unit_file: &SystemdUnitData, section: &str, podman: &mut PodmanCommand) {
     lookup_and_add_all_strings(unit_file, section, &[("PublishPort", "--publish")], podman);
 }
 
@@ -1707,7 +1707,7 @@ fn handle_storage_source(
 }
 
 fn handle_user(
-    unit_file: &SystemdUnit,
+    unit_file: &SystemdUnitData,
     section: &str,
     podman: &mut PodmanCommand,
 ) -> Result<(), ConversionError> {
@@ -1735,7 +1735,7 @@ fn handle_user(
 }
 
 fn handle_user_mappings(
-    unit_file: &SystemdUnit,
+    unit_file: &SystemdUnitData,
     section: &str,
     podman: &mut PodmanCommand,
     support_manual: bool,
@@ -1794,7 +1794,7 @@ fn handle_user_mappings(
 }
 
 fn handle_user_remap(
-    unit_file: &SystemdUnit,
+    unit_file: &SystemdUnitData,
     section: &str,
     podman: &mut PodmanCommand,
     support_manual: bool,
@@ -2068,7 +2068,7 @@ fn is_port_range(port: &str) -> bool {
 }
 
 fn lookup_and_add_all_key_vals(
-    unit: &SystemdUnit,
+    unit: &SystemdUnitData,
     section: &str,
     keys: &[(&str, &str)],
     podman: &mut PodmanCommand,
@@ -2080,7 +2080,7 @@ fn lookup_and_add_all_key_vals(
 }
 
 fn lookup_and_add_all_strings(
-    unit: &SystemdUnit,
+    unit: &SystemdUnitData,
     section: &str,
     keys: &[(&str, &str)],
     podman: &mut PodmanCommand,
@@ -2101,7 +2101,7 @@ fn lookup_and_add_all_strings(
 }
 
 fn lookup_and_add_bool(
-    unit: &SystemdUnit,
+    unit: &SystemdUnitData,
     section: &str,
     keys: &[(&str, &str)],
     podman: &mut PodmanCommand,
@@ -2114,7 +2114,7 @@ fn lookup_and_add_bool(
 }
 
 fn lookup_and_add_string(
-    unit: &SystemdUnit,
+    unit: &SystemdUnitData,
     section: &str,
     keys: &[(&str, &str)],
     podman: &mut PodmanCommand,

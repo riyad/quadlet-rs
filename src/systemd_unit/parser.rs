@@ -56,7 +56,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub(crate) fn parse(&mut self) -> ParseResult<SystemdUnit> {
+    pub(crate) fn parse(&mut self) -> ParseResult<SystemdUnitData> {
         self.parse_unit()
     }
 
@@ -172,8 +172,8 @@ impl<'a> Parser<'a> {
     }
 
     // UNIT           = [COMMENT | SECTION]*
-    fn parse_unit(&mut self) -> ParseResult<SystemdUnit> {
-        let mut unit = SystemdUnit::new();
+    fn parse_unit(&mut self) -> ParseResult<SystemdUnitData> {
+        let mut unit = SystemdUnitData::new();
 
         while let Some(c) = self.cur {
             match c {
@@ -188,11 +188,8 @@ impl<'a> Parser<'a> {
                         .entry(section.clone())
                         .or_insert(Entries::default());
                     for (key, value) in entries {
-                        unit.add_raw(
-                            section.as_str(),
-                            key,
-                            value.as_str()
-                        ).map_err(|e| self.error(e.to_string()))?;
+                        unit.add_raw(section.as_str(), key, value.as_str())
+                            .map_err(|e| self.error(e.to_string()))?;
                     }
                 }
                 _ if c.is_ascii_whitespace() => self.bump(),
@@ -240,7 +237,7 @@ impl<'a> Parser<'a> {
                     // for leniency we ignore spaces between the '\' and the '\n' of a line continuation
                     ' ' => {
                         line_continuation_ignored_spaces += 1;
-                        backslash = true;  // pretend this is still the case :/
+                        backslash = true; // pretend this is still the case :/
                     }
                     // line continuation -> add replacement to value and continue normally
                     '\n' => {
@@ -628,7 +625,7 @@ mod tests {
         fn test_only_comments_should_create_empty_unit() {
             let input = "# foo\n; bar";
             let mut parser = Parser::new(input);
-            assert_eq!(parser.parse_unit().ok(), Some(SystemdUnit::new()),);
+            assert_eq!(parser.parse_unit().ok(), Some(SystemdUnitData::new()),);
         }
 
         #[test]
@@ -798,10 +795,7 @@ mod tests {
             let mut parser = Parser::new(input);
             let old_line = parser.line;
             let old_col = parser.column;
-            assert_eq!(
-                parser.parse_value(),
-                Ok("foo bar".into()),
-            );
+            assert_eq!(parser.parse_value(), Ok("foo bar".into()),);
             assert_eq!(parser.line, old_line + 2);
             assert_eq!(parser.column, old_col + 2);
         }
