@@ -66,31 +66,6 @@ impl UnitSearchDirs {
         &self.0
     }
 
-    pub(crate) fn from_env() -> UnitSearchDirsBuilder {
-        UnitSearchDirsBuilder {
-            // Allow overdiding source dir, this is mainly for the CI tests
-            dirs: env::var("QUADLET_UNIT_DIRS").ok().map(|unit_dirs_env| {
-                env::split_paths(&unit_dirs_env)
-                    .map(PathBuf::from)
-                    .collect()
-            }),
-            rootless: false,
-        }
-    }
-
-    pub(crate) fn from_env_or_system() -> UnitSearchDirsBuilder {
-        if let Some(quadlet_unit_dirs) = env::var("QUADLET_UNIT_DIRS").ok() {
-            if !quadlet_unit_dirs.is_empty() {
-                return Self::from_env();
-            }
-        }
-
-        UnitSearchDirsBuilder {
-            dirs: None,
-            rootless: false,
-        }
-    }
-
     pub(crate) fn new(dirs: Vec<PathBuf>) -> UnitSearchDirsBuilder {
         UnitSearchDirsBuilder {
             dirs: Some(dirs),
@@ -152,6 +127,31 @@ impl UnitSearchDirsBuilder {
         }
 
         UnitSearchDirs(self.get_root_dirs(&user_level_filter))
+    }
+
+    pub(crate) fn from_env() -> UnitSearchDirsBuilder {
+        UnitSearchDirsBuilder {
+            // Allow overdiding source dir, this is mainly for the CI tests
+            dirs: env::var("QUADLET_UNIT_DIRS").ok().map(|unit_dirs_env| {
+                env::split_paths(&unit_dirs_env)
+                    .map(PathBuf::from)
+                    .collect()
+            }),
+            rootless: false,
+        }
+    }
+
+    pub(crate) fn from_env_or_system() -> UnitSearchDirsBuilder {
+        if let Some(quadlet_unit_dirs) = env::var("QUADLET_UNIT_DIRS").ok() {
+            if !quadlet_unit_dirs.is_empty() {
+                return Self::from_env();
+            }
+        }
+
+        UnitSearchDirsBuilder {
+            dirs: None,
+            rootless: false,
+        }
     }
 
     fn get_root_dirs(&self, user_level_filter: &FilterFn) -> Vec<PathBuf> {
@@ -345,8 +345,45 @@ impl<'a> Iterator for UnitSearchDirsIterator<'a> {
 mod tests {
     use super::*;
 
-    mod unit_search_dirs {
+    mod unit_search_dirs_builder {
         use super::*;
+
+        mod build {
+            use super::*;
+            use std::os;
+
+            #[test]
+            fn specify_dirs() {
+                let temp_dir = tempfile::tempdir().expect("cannot create temp dir");
+
+                let dirs = vec![temp_dir.path().into()];
+
+                let expected = [temp_dir.path()];
+
+                assert_eq!(UnitSearchDirs::new(dirs).build().0, expected);
+            }
+
+            #[test]
+            fn should_follow_symlinks() {
+                // setup
+                let temp_dir = tempfile::tempdir().expect("cannot create temp dir");
+                let actual_dir = &temp_dir.path().join("actual");
+                let inner_dir = &actual_dir.as_path().join("inner");
+                let symlink = &temp_dir.path().join("symlink");
+                fs::create_dir(actual_dir).expect("cannot create actual dir");
+                fs::create_dir(inner_dir).expect("cannot create inner dir");
+                os::unix::fs::symlink(actual_dir, symlink).expect("cannot create symlink");
+
+                let dirs = vec![symlink.into()];
+
+                let expected = [actual_dir.as_path(), inner_dir.as_path()];
+
+                assert_eq!(UnitSearchDirs::new(dirs).build().0, expected);
+
+                // cleanup
+                fs::remove_dir_all(temp_dir.path()).expect("cannot remove temp dir");
+            }
+        }
 
         mod from_env {
             use super::*;
@@ -374,7 +411,7 @@ mod tests {
                 }
 
                 assert_eq!(
-                    UnitSearchDirs::from_env().rootless(false).build().0,
+                    UnitSearchDirsBuilder::from_env().rootless(false).build().0,
                     expected,
                 )
             }
@@ -412,7 +449,7 @@ mod tests {
                 }
 
                 assert_eq!(
-                    UnitSearchDirs::from_env().rootless(true).build().0,
+                    UnitSearchDirsBuilder::from_env().rootless(true).build().0,
                     expected
                 )
             }
@@ -429,7 +466,7 @@ mod tests {
 
                 let expected = [temp_dir.path()];
 
-                assert_eq!(UnitSearchDirs::from_env().build().0, expected);
+                assert_eq!(UnitSearchDirsBuilder::from_env().build().0, expected);
 
                 // restore global state
                 match _quadlet_unit_dirs {
@@ -460,7 +497,7 @@ mod tests {
 
                 let expected = [actual_dir.as_path(), inner_dir.as_path()];
 
-                assert_eq!(UnitSearchDirs::from_env().build().0, expected);
+                assert_eq!(UnitSearchDirsBuilder::from_env().build().0, expected);
 
                 // cleanup
                 fs::remove_dir_all(temp_dir.path()).expect("cannot remove temp dir");
@@ -472,43 +509,6 @@ mod tests {
                     // SAFETY: test ist run serially with other tests
                     Err(_) => unsafe { env::remove_var("QUADLET_UNIT_DIRS") },
                 }
-            }
-        }
-
-        mod new {
-            use super::*;
-            use std::os;
-
-            #[test]
-            fn specify_dirs() {
-                let temp_dir = tempfile::tempdir().expect("cannot create temp dir");
-
-                let dirs = vec![temp_dir.path().into()];
-
-                let expected = [temp_dir.path()];
-
-                assert_eq!(UnitSearchDirs::new(dirs).build().0, expected);
-            }
-
-            #[test]
-            fn should_follow_symlinks() {
-                // setup
-                let temp_dir = tempfile::tempdir().expect("cannot create temp dir");
-                let actual_dir = &temp_dir.path().join("actual");
-                let inner_dir = &actual_dir.as_path().join("inner");
-                let symlink = &temp_dir.path().join("symlink");
-                fs::create_dir(actual_dir).expect("cannot create actual dir");
-                fs::create_dir(inner_dir).expect("cannot create inner dir");
-                os::unix::fs::symlink(actual_dir, symlink).expect("cannot create symlink");
-
-                let dirs = vec![symlink.into()];
-
-                let expected = [actual_dir.as_path(), inner_dir.as_path()];
-
-                assert_eq!(UnitSearchDirs::new(dirs).build().0, expected);
-
-                // cleanup
-                fs::remove_dir_all(temp_dir.path()).expect("cannot remove temp dir");
             }
         }
     }
