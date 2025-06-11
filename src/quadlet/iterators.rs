@@ -8,6 +8,7 @@ use log::{debug, info};
 use walkdir::WalkDir;
 
 use super::constants::*;
+use super::systemd_unit::UnitSearchPaths;
 use super::RuntimeError;
 
 pub static QUADLET_UNIT_DIRS_ENV: &str = "QUADLET_UNIT_DIRS";
@@ -60,27 +61,7 @@ impl Iterator for UnitFiles {
     }
 }
 
-pub(crate) struct UnitSearchDirs(Vec<PathBuf>);
-
-impl UnitSearchDirs {
-    pub(crate) fn dirs(&self) -> &Vec<PathBuf> {
-        &self.0
-    }
-
-    pub(crate) fn new(dirs: Vec<PathBuf>) -> UnitSearchDirsBuilder {
-        UnitSearchDirsBuilder {
-            dirs: Some(dirs),
-            rootless: false,
-        }
-    }
-
-    pub(crate) fn iter(&self) -> UnitSearchDirsIterator {
-        UnitSearchDirsIterator {
-            inner: self.0.iter(),
-        }
-    }
-}
-
+#[derive(Default)]
 pub(crate) struct UnitSearchDirsBuilder {
     dirs: Option<Vec<PathBuf>>,
     rootless: bool,
@@ -89,7 +70,7 @@ pub(crate) struct UnitSearchDirsBuilder {
 type FilterFn = dyn Fn(&walkdir::DirEntry, bool) -> bool;
 
 impl UnitSearchDirsBuilder {
-    pub(crate) fn build(mut self) -> UnitSearchDirs {
+    pub(crate) fn build(mut self) -> UnitSearchPaths {
         if let Some(dirs) = self.dirs.take() {
             self.build_from_dirs(dirs)
         } else {
@@ -97,8 +78,8 @@ impl UnitSearchDirsBuilder {
         }
     }
 
-    pub(crate) fn build_from_dirs(self, dirs: Vec<PathBuf>) -> UnitSearchDirs {
-        UnitSearchDirs(
+    pub(crate) fn build_from_dirs(self, dirs: Vec<PathBuf>) -> UnitSearchPaths {
+        UnitSearchPaths::new(
             dirs.into_iter()
                 .filter(|p| {
                     if p.is_absolute() {
@@ -113,7 +94,7 @@ impl UnitSearchDirsBuilder {
         )
     }
 
-    pub(crate) fn build_from_system(self) -> UnitSearchDirs {
+    pub(crate) fn build_from_system(self) -> UnitSearchPaths {
         let resolved_unit_dir_admin_user = Self::resolve_unit_dir_admin_user();
         let user_level_filter = get_user_level_filter_func(resolved_unit_dir_admin_user.clone());
 
@@ -124,10 +105,12 @@ impl UnitSearchDirsBuilder {
                 system_user_dir_level,
             );
 
-            return UnitSearchDirs(self.get_rootless_dirs(&non_numeric_filter, &user_level_filter));
+            return UnitSearchPaths::new(
+                self.get_rootless_dirs(&non_numeric_filter, &user_level_filter),
+            );
         }
 
-        UnitSearchDirs(self.get_root_dirs(&user_level_filter))
+        UnitSearchPaths::new(self.get_root_dirs(&user_level_filter))
     }
 
     pub(crate) fn from_env() -> UnitSearchDirsBuilder {
@@ -200,6 +183,13 @@ impl UnitSearchDirsBuilder {
         dirs.push(PathBuf::from(UNIT_DIR_ADMIN).join("users"));
 
         dirs
+    }
+
+    fn new(dirs: Vec<PathBuf>) -> UnitSearchDirsBuilder {
+        UnitSearchDirsBuilder {
+            dirs: Some(dirs),
+            rootless: false,
+        }
     }
 
     pub(crate) fn rootless(mut self, rootless: bool) -> Self {
@@ -351,7 +341,7 @@ mod tests {
 
                 let expected = [temp_dir.path()];
 
-                assert_eq!(UnitSearchDirs::new(dirs).build().0, expected);
+                assert_eq!(UnitSearchDirsBuilder::new(dirs).build().dirs(), &expected);
             }
 
             #[test]
@@ -369,7 +359,7 @@ mod tests {
 
                 let expected = [actual_dir.as_path(), inner_dir.as_path()];
 
-                assert_eq!(UnitSearchDirs::new(dirs).build().0, expected);
+                assert_eq!(UnitSearchDirsBuilder::new(dirs).build().dirs(), &expected);
 
                 // cleanup
                 fs::remove_dir_all(temp_dir.path()).expect("cannot remove temp dir");
@@ -402,8 +392,11 @@ mod tests {
                 }
 
                 assert_eq!(
-                    UnitSearchDirsBuilder::from_env().rootless(false).build().0,
-                    expected,
+                    UnitSearchDirsBuilder::from_env()
+                        .rootless(false)
+                        .build()
+                        .dirs(),
+                    &expected,
                 )
             }
 
@@ -440,8 +433,11 @@ mod tests {
                 }
 
                 assert_eq!(
-                    UnitSearchDirsBuilder::from_env().rootless(true).build().0,
-                    expected
+                    UnitSearchDirsBuilder::from_env()
+                        .rootless(true)
+                        .build()
+                        .dirs(),
+                    &expected
                 )
             }
 
@@ -457,7 +453,7 @@ mod tests {
 
                 let expected = [temp_dir.path()];
 
-                assert_eq!(UnitSearchDirsBuilder::from_env().build().0, expected);
+                assert_eq!(UnitSearchDirsBuilder::from_env().build().dirs(), &expected);
 
                 // restore global state
                 match _quadlet_unit_dirs {
@@ -488,7 +484,7 @@ mod tests {
 
                 let expected = [actual_dir.as_path(), inner_dir.as_path()];
 
-                assert_eq!(UnitSearchDirsBuilder::from_env().build().0, expected);
+                assert_eq!(UnitSearchDirsBuilder::from_env().build().dirs(), &expected);
 
                 // cleanup
                 fs::remove_dir_all(temp_dir.path()).expect("cannot remove temp dir");
