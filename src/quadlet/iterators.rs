@@ -242,10 +242,12 @@ impl UnitSearchDirsBuilder {
 
         for entry in WalkDir::new(&path)
             .into_iter()
-            .filter_entry(|e| e.path().is_dir())
+            // only iterate over directories
+            // skip drop-in directories
+            .filter_entry(|e| e.path().is_dir() && !e.file_name().as_bytes().ends_with(b".d"))
         {
             match entry {
-                Err(e) => debug!("Error occurred walking sub directories {path:?}: {e}"),
+                Err(e) => debug!("Error occurred walking sub directories of {path:?}: {e}"),
                 Ok(entry) => {
                     if let Some(filter_fn) = &filter_fn {
                         if filter_fn(&entry, self.rootless) {
