@@ -86,7 +86,7 @@ pub(crate) struct UnitSearchDirsBuilder {
     rootless: bool,
 }
 
-type FilterFn = Box<dyn Fn(&walkdir::DirEntry, bool) -> bool>;
+type FilterFn = dyn Fn(&walkdir::DirEntry, bool) -> bool;
 
 impl UnitSearchDirsBuilder {
     pub(crate) fn build(mut self) -> UnitSearchDirs {
@@ -228,11 +228,7 @@ impl UnitSearchDirsBuilder {
         }
     }
 
-    fn subdirs_for_search_dir(
-        &self,
-        path: PathBuf,
-        filter_fn: Option<&Box<dyn Fn(&walkdir::DirEntry, bool) -> bool>>,
-    ) -> Vec<PathBuf> {
+    fn subdirs_for_search_dir(&self, path: PathBuf, filter_fn: Option<&FilterFn>) -> Vec<PathBuf> {
         let path = if path.is_symlink() {
             match path.read_link() {
                 Ok(path) => path,
@@ -276,17 +272,14 @@ impl UnitSearchDirsBuilder {
     }
 }
 
-fn get_non_numeric_filter_func<'a>(
+fn get_non_numeric_filter_func(
     resolved_unit_dir_admin_user: PathBuf,
     system_user_dir_level: usize,
-) -> Box<dyn Fn(&walkdir::DirEntry, bool) -> bool + 'a> {
+) -> Box<dyn Fn(&walkdir::DirEntry, bool) -> bool> {
     return Box::new(move |entry, _rootless| -> bool {
         // when running in rootless, only recrusive walk directories that are non numeric
         // ignore sub dirs under the user directory that may correspond to a user id
-        if entry
-            .path()
-            .starts_with(resolved_unit_dir_admin_user.clone())
-        {
+        if entry.path().starts_with(&resolved_unit_dir_admin_user) {
             if entry.path().components().count() > system_user_dir_level {
                 if !entry
                     .path()
@@ -309,16 +302,13 @@ fn get_non_numeric_filter_func<'a>(
     });
 }
 
-fn get_user_level_filter_func<'a>(
+fn get_user_level_filter_func(
     resolved_unit_dir_admin_user: PathBuf,
-) -> Box<dyn Fn(&walkdir::DirEntry, bool) -> bool + 'a> {
+) -> Box<dyn Fn(&walkdir::DirEntry, bool) -> bool> {
     return Box::new(move |entry, rootless| -> bool {
         // if quadlet generator is run rootless, do not recurse other user sub dirs
         // if quadlet generator is run as root, ignore users sub dirs
-        if entry
-            .path()
-            .starts_with(resolved_unit_dir_admin_user.clone())
-        {
+        if entry.path().starts_with(&resolved_unit_dir_admin_user) {
             if rootless {
                 return true;
             }
