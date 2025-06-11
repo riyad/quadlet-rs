@@ -8,8 +8,9 @@ use log::{debug, info};
 use walkdir::WalkDir;
 
 use super::constants::*;
-
 use super::RuntimeError;
+
+pub static QUADLET_UNIT_DIRS_ENV: &str = "QUADLET_UNIT_DIRS";
 
 pub(crate) struct UnitFiles {
     inner: Box<dyn Iterator<Item = Result<fs::DirEntry, RuntimeError>>>,
@@ -132,7 +133,7 @@ impl UnitSearchDirsBuilder {
     pub(crate) fn from_env() -> UnitSearchDirsBuilder {
         UnitSearchDirsBuilder {
             // Allow overdiding source dir, this is mainly for the CI tests
-            dirs: env::var("QUADLET_UNIT_DIRS").ok().map(|unit_dirs_env| {
+            dirs: env::var(QUADLET_UNIT_DIRS_ENV).ok().map(|unit_dirs_env| {
                 env::split_paths(&unit_dirs_env)
                     .map(PathBuf::from)
                     .collect()
@@ -142,7 +143,7 @@ impl UnitSearchDirsBuilder {
     }
 
     pub(crate) fn from_env_or_system() -> UnitSearchDirsBuilder {
-        if let Some(quadlet_unit_dirs) = env::var("QUADLET_UNIT_DIRS").ok() {
+        if let Some(quadlet_unit_dirs) = env::var(QUADLET_UNIT_DIRS_ENV).ok() {
             if !quadlet_unit_dirs.is_empty() {
                 return Self::from_env();
             }
@@ -458,11 +459,11 @@ mod tests {
             #[serial_test::serial]
             fn use_dirs_from_env_var() {
                 // remember global state
-                let _quadlet_unit_dirs = env::var("QUADLET_UNIT_DIRS");
+                let _quadlet_unit_dirs = env::var(QUADLET_UNIT_DIRS_ENV);
 
                 let temp_dir = tempfile::tempdir().expect("cannot create temp dir");
                 // SAFETY: test ist run serially with other tests
-                unsafe { env::set_var("QUADLET_UNIT_DIRS", temp_dir.path()) };
+                unsafe { env::set_var(QUADLET_UNIT_DIRS_ENV, temp_dir.path()) };
 
                 let expected = [temp_dir.path()];
 
@@ -471,9 +472,9 @@ mod tests {
                 // restore global state
                 match _quadlet_unit_dirs {
                     // SAFETY: test ist run serially with other tests
-                    Ok(val) => unsafe { env::set_var("QUADLET_UNIT_DIRS", val) },
+                    Ok(val) => unsafe { env::set_var(QUADLET_UNIT_DIRS_ENV, val) },
                     // SAFETY: test ist run serially with other tests
-                    Err(_) => unsafe { env::remove_var("QUADLET_UNIT_DIRS") },
+                    Err(_) => unsafe { env::remove_var(QUADLET_UNIT_DIRS_ENV) },
                 }
             }
 
@@ -481,7 +482,7 @@ mod tests {
             #[serial_test::serial]
             fn should_follow_symlinks() {
                 // remember global state
-                let _quadlet_unit_dirs = env::var("QUADLET_UNIT_DIRS");
+                let _quadlet_unit_dirs = env::var(QUADLET_UNIT_DIRS_ENV);
 
                 // setup
                 let temp_dir = tempfile::tempdir().expect("cannot create temp dir");
@@ -493,7 +494,7 @@ mod tests {
                 os::unix::fs::symlink(actual_dir, symlink).expect("cannot create symlink");
 
                 // SAFETY: test ist run serially with other tests
-                unsafe { env::set_var("QUADLET_UNIT_DIRS", symlink) };
+                unsafe { env::set_var(QUADLET_UNIT_DIRS_ENV, symlink) };
 
                 let expected = [actual_dir.as_path(), inner_dir.as_path()];
 
@@ -505,9 +506,9 @@ mod tests {
                 // restore global state
                 match _quadlet_unit_dirs {
                     // SAFETY: test ist run serially with other tests
-                    Ok(val) => unsafe { env::set_var("QUADLET_UNIT_DIRS", val) },
+                    Ok(val) => unsafe { env::set_var(QUADLET_UNIT_DIRS_ENV, val) },
                     // SAFETY: test ist run serially with other tests
-                    Err(_) => unsafe { env::remove_var("QUADLET_UNIT_DIRS") },
+                    Err(_) => unsafe { env::remove_var(QUADLET_UNIT_DIRS_ENV) },
                 }
             }
         }
