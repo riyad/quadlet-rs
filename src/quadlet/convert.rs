@@ -1191,30 +1191,30 @@ pub(crate) fn from_volume_unit<'q>(
             }
         }
 
-        let mut dev_valid = false;
-
-        if let Some(dev) = volume.lookup_last(VOLUME_SECTION, "Device") {
-            if !dev.is_empty() {
-                podman.add("--opt");
-                podman.add(format!("device={dev}"));
-                dev_valid = true;
-            }
+        let device = volume.lookup(VOLUME_SECTION, "Device").unwrap_or_default();
+        if !device.is_empty() {
+            podman.add("--opt");
+            podman.add(format!("device={device}"));
         }
+        let device_valid = !device.is_empty();
 
-        if let Some(dev_type) = volume.lookup_last(VOLUME_SECTION, "Type") {
+        if let Some(dev_type) = volume.lookup(VOLUME_SECTION, "Type") {
             if !dev_type.is_empty() {
-                if dev_valid {
+                if device_valid {
                     podman.add("--opt");
                     podman.add(format!("type={dev_type}"));
+                    if dev_type == "bind" {
+                        service.add(UNIT_SECTION, "RequiresMountsFor", &device);
+                    }
                 } else {
                     return Err(ConversionError::InvalidDeviceType);
                 }
             }
         }
 
-        if let Some(mount_opts) = volume.lookup_last(VOLUME_SECTION, "Options") {
+        if let Some(mount_opts) = volume.lookup(VOLUME_SECTION, "Options") {
             if !mount_opts.is_empty() {
-                if dev_valid {
+                if device_valid {
                     opts.push(mount_opts.into());
                 } else {
                     return Err(ConversionError::InvalidDeviceOptions);
