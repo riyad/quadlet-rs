@@ -1037,8 +1037,13 @@ pub(crate) fn from_pod_unit<'q>(
     podman_start_pre.add("pod");
     podman_start_pre.add("create");
     podman_start_pre.add("--infra-conmon-pidfile=%t/%N.pid");
-    podman_start_pre.add("--exit-policy=stop");
     podman_start_pre.add("--replace");
+
+    if let Some(exit_policy) = pod.lookup(POD_SECTION, "ExitPolicy") {
+        podman_start_pre.add(format!("--exit-policy={exit_policy}"));
+    } else {
+        podman_start_pre.add("--exit-policy=stop");
+    }
 
     handle_user_mappings(pod, POD_SECTION, &mut podman_start_pre, true)?;
 
