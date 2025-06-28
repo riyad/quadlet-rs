@@ -1,8 +1,13 @@
 use ordered_multimap::list_ordered_multimap::ListOrderedMultimap;
 use std::collections::HashMap;
 use std::io;
+use std::str::FromStr;
 
-use super::{parser, Entries, EntryValue, SectionKey};
+use super::parser::ParseError;
+use super::parser::Parser;
+use super::Entries;
+use super::EntryValue;
+use super::SectionKey;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SystemdUnitData {
@@ -65,8 +70,8 @@ impl SystemdUnitData {
     }
 
     /// Load from a string
-    pub fn load_from_str(data: &str) -> Result<Self, super::Error> {
-        let mut parser = parser::Parser::new(data);
+    pub fn from_str(data: &str) -> Result<Self, ParseError> {
+        let mut parser = Parser::new(data);
         let unit = parser.parse()?;
 
         Ok(unit)
@@ -334,6 +339,14 @@ impl Default for SystemdUnitData {
     }
 }
 
+impl FromStr for SystemdUnitData {
+    type Err = ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_str(s)
+    }
+}
+
 impl ToString for SystemdUnitData {
     fn to_string(&self) -> String {
         let mut res = String::new();
@@ -381,7 +394,7 @@ mod tests {
                 let input = "[Section A]
 KeyOne=value 1";
 
-                let mut unit = SystemdUnitData::load_from_str(input).unwrap();
+                let mut unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 1);
 
                 unit.add("Section A", "NewKey", "new value");
@@ -398,7 +411,7 @@ KeyOne=value 1";
                 let input = "[Section A]
 KeyOne=value 1";
 
-                let mut unit = SystemdUnitData::load_from_str(input).unwrap();
+                let mut unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 1);
 
                 unit.add("New Section", "NewKey", "new value");
@@ -426,7 +439,7 @@ KeyThree=value 3
 KeyTwo=value 2
 KeyOne=value 2.1";
 
-                let mut unit = SystemdUnitData::load_from_str(input).unwrap();
+                let mut unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 2);
 
                 unit.add("Section A", "KeyOne", "new value");
@@ -461,172 +474,7 @@ KeyOne=value 2.1";
             }
         }
 
-        mod has_key {
-            use super::*;
-
-            #[test]
-            fn false_for_unknown_key() {
-                let input = "[Section A]
-KeyOne=value 1";
-
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
-
-                assert!(!unit.has_key("Section A", "KeyTwo"));
-                assert!(!unit.has_key("Section B", "KeyFour"));
-            }
-
-            #[test]
-            fn false_for_unknown_section() {
-                let input = "[Section A]
-KeyOne=value 1";
-
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
-
-                assert!(!unit.has_key("Section B", "KeyOne"));
-            }
-
-            #[test]
-            fn true_for_key_in_section() {
-                let input = "[Section A]
-KeyOne=value 1
-
-[Section B]
-KeyTwo=value 2
-
-[Section A]
-KeyThree=value 1";
-
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
-
-                assert!(unit.has_key("Section A", "KeyOne"));
-                assert!(unit.has_key("Section B", "KeyTwo"));
-                assert!(unit.has_key("Section A", "KeyThree"));
-            }
-
-            #[test]
-            fn false_for_key_in_wrong_section() {
-                let input = "[Section A]
-KeyOne=value 1
-
-[Section B]
-KeyTwo=value 2
-
-[Section A]
-KeyThree=value 1";
-
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
-
-                assert!(!unit.has_key("Section A", "KeyTwo"));
-                assert!(!unit.has_key("Section B", "KeyOne"));
-                assert!(!unit.has_key("Section B", "KeyThree"));
-            }
-        }
-
-        mod has_section {
-            use super::*;
-
-            #[test]
-            fn true_for_non_empty_section() {
-                let input = "[Section A]
-KeyOne=value 1";
-
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
-
-                assert!(unit.has_section("Section A"));
-            }
-
-            #[test]
-            fn true_for_empty_section() {
-                let input = "[Section A]
-KeyOne=value 1
-[Section B]";
-
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
-
-                assert!(unit.has_section("Section B"));
-            }
-
-            #[test]
-            fn false_for_unknown_section() {
-                let input = "[Section A]
-KeyOne=value 1
-[Section B]";
-
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
-
-                assert!(!unit.has_section("foo"));
-            }
-        }
-
-        mod len {
-            use super::*;
-
-            #[test]
-            fn with_empty_file() {
-                let input = "";
-
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
-
-                assert_eq!(unit.len(), 0);
-            }
-
-            #[test]
-            fn with_non_empty_sections() {
-                let input = "[Section A]
-KeyOne=value 1
-[section B]
-KeyTwo=value 2";
-
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
-
-                assert_eq!(unit.len(), 2);
-            }
-
-            #[test]
-            fn with_empty_section() {
-                let input = "[Section A]
-KeyOne=value 1
-[Section B]";
-
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
-
-                assert_eq!(unit.len(), 2);
-            }
-
-            #[test]
-            fn repeated_empty_sections_are_not_counted() {
-                let input = "[Section A]
-KeyOne=value 1
-[Section A]
-[Section B]
-[Section A]
-[Section C]
-[Section B]";
-
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
-
-                assert_eq!(unit.len(), 3);
-            }
-
-            #[test]
-            fn same_section_following_itself_is_only_counted_once() {
-                let input = "[Section A]
-KeyOne=valueA1
-[Section A]
-[Section B]
-KeyOne=valueB
-[Section B]
-KeyOne=valueB2
-[Section A]
-KeyOne=valueA3";
-
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
-
-                assert_eq!(unit.len(), 2);
-            }
-        }
-
-        mod load_from_str {
+        mod from_str {
             use crate::systemd_unit::Error;
 
             use super::*;
@@ -639,7 +487,7 @@ KeyOne=valueA3";
 ;[Section B]
 ;KeyTwo=value 2";
 
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
+                let unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 0);
             }
 
@@ -648,16 +496,16 @@ KeyOne=valueA3";
             fn test_key_without_section_should_fail() {
                 let input = "KeyOne=value 1";
 
-                let result = SystemdUnitData::load_from_str(input);
+                let result = SystemdUnitData::from_str(input);
 
                 assert!(result.is_err());
                 assert_eq!(
                     result,
-                    Err(Error::Unit(parser::ParseError {
+                    Err(ParseError {
                         line: 0,
                         col: 1,
                         msg: "Expected comment or section".into()
-                    })),
+                    }),
                 )
             }
 
@@ -666,7 +514,7 @@ KeyOne=valueA3";
                 let input = "[Section A]
 KeyOne  =value 1";
 
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
+                let unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 1);
 
                 let mut iter = unit.section_entries("Section A");
@@ -678,9 +526,9 @@ KeyOne  =value 1";
             #[test]
             fn trims_whitespace_before_key() {
                 let input = "[Section A]
-\tKeyOne=value 1";
+        \tKeyOne=value 1";
 
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
+                let unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 1);
 
                 let mut iter = unit.section_entries("Section A");
@@ -695,7 +543,7 @@ KeyOne  =value 1";
 KeyOne =    value 1
 KeyTwo\t=\tvalue 2\t";
 
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
+                let unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 1);
 
                 let mut iter = unit.section_entries("Section A");
@@ -709,7 +557,7 @@ KeyTwo\t=\tvalue 2\t";
                 let input = "[Section A]
 KeyThree  =  \"  value 3\t\"";
 
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
+                let unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 1);
 
                 let mut iter = unit.section_entries("Section A");
@@ -723,7 +571,7 @@ KeyThree  =  \"  value 3\t\"";
                 let input = "[Section A]
 Setting=\"something\" \"some thing\" \'…\'";
 
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
+                let unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 1);
 
                 let mut iter = unit.section_entries("Section A");
@@ -739,7 +587,7 @@ Setting=\"something\" \"some thing\" \'…\'";
                 let input = "[Section A]
 Setting=foo=\"bar baz\"";
 
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
+                let unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 1);
 
                 let mut iter = unit.section_entries("Section A");
@@ -758,14 +606,14 @@ Setting=foo=\"bar baz\"";
 unescape=\\_";
 
                     assert_eq!(
-                        SystemdUnitData::load_from_str(input).err(),
-                        Some(Error::Unit(parser::ParseError {
+                        SystemdUnitData::from_str(input).err(),
+                        Some(ParseError {
                             line: 1,
                             col: 11,
                             msg:
                                 "failed unquoting value: expecting escape sequence, but found '_'."
                                     .into()
-                        }))
+                        })
                     );
                 }
 
@@ -774,7 +622,7 @@ unescape=\\_";
                     let input = "[Section A]
 unescape=\\a\\b\\f\\n\\r\\t\\v\\\\\\\"\\\'\\s";
 
-                    let unit = SystemdUnitData::load_from_str(input).unwrap();
+                    let unit = SystemdUnitData::from_str(input).unwrap();
                     assert_eq!(unit.len(), 1);
 
                     let mut iter = unit.section_entries("Section A");
@@ -790,7 +638,7 @@ unescape=\\a\\b\\f\\n\\r\\t\\v\\\\\\\"\\\'\\s";
                     let input = "[Section A]
 unescape=\\xaa \\u1234 \\U0010cdef \\123";
 
-                    let unit = SystemdUnitData::load_from_str(input).unwrap();
+                    let unit = SystemdUnitData::from_str(input).unwrap();
                     assert_eq!(unit.len(), 1);
 
                     let mut iter = unit.section_entries("Section A");
@@ -807,9 +655,9 @@ unescape=\\xaa \\u1234 \\U0010cdef \\123";
 unescape=\\x00";
 
                     assert_eq!(
-                        SystemdUnitData::load_from_str(input).err(),
-                        Some(Error::Unit(parser::ParseError{ line: 1, col: 13, msg: "failed unquoting value: \\0 character not allowed in escape sequence".into()}))
-                    );
+                                SystemdUnitData::from_str(input).err(),
+                                Some(ParseError{ line: 1, col: 13, msg: "failed unquoting value: \\0 character not allowed in escape sequence".into()})
+                            );
                 }
 
                 #[test]
@@ -818,9 +666,9 @@ unescape=\\x00";
 unescape=\\u123x";
 
                     assert_eq!(
-                        SystemdUnitData::load_from_str(input).err(),
-                        Some(Error::Unit(parser::ParseError{ line: 1, col: 15, msg: "failed unquoting value: expected 4 hex values after \"\\x\", but got \"\\x123x\"".into()}))
-                    );
+                                SystemdUnitData::from_str(input).err(),
+                                Some(ParseError{ line: 1, col: 15, msg: "failed unquoting value: expected 4 hex values after \"\\x\", but got \"\\x123x\"".into()})
+                            );
                 }
 
                 #[test]
@@ -829,9 +677,9 @@ unescape=\\u123x";
 unescape=\\678";
 
                     assert_eq!(
-                        SystemdUnitData::load_from_str(input).err(),
-                        Some(Error::Unit(parser::ParseError{ line: 1, col: 13, msg: "failed unquoting value: expected 3 octal values after \"\\\", but got \"\\678\"".into()}))
-                    );
+                                SystemdUnitData::from_str(input).err(),
+                                Some(ParseError{ line: 1, col: 13, msg: "failed unquoting value: expected 3 octal values after \"\\\", but got \"\\678\"".into()})
+                            );
                 }
 
                 #[test]
@@ -840,14 +688,14 @@ unescape=\\678";
 unescape=\\äöü";
 
                     assert_eq!(
-                        SystemdUnitData::load_from_str(input).err(),
-                        Some(Error::Unit(parser::ParseError {
+                        SystemdUnitData::from_str(input).err(),
+                        Some(ParseError {
                             line: 1,
                             col: 13,
                             msg:
                                 "failed unquoting value: expecting escape sequence, but found 'ä'."
                                     .into()
-                        }))
+                        })
                     );
                 }
 
@@ -857,9 +705,9 @@ unescape=\\äöü";
 unescape=\\u12";
 
                     assert_eq!(
-                        SystemdUnitData::load_from_str(input).err(),
-                        Some(Error::Unit(parser::ParseError{ line: 1, col: 13, msg: "failed unquoting value: expecting unicode escape sequence, but found EOF.".into()}))
-                    );
+                                SystemdUnitData::from_str(input).err(),
+                                Some(ParseError{ line: 1, col: 13, msg: "failed unquoting value: expecting unicode escape sequence, but found EOF.".into()})
+                            );
                 }
             }
 
@@ -882,7 +730,7 @@ KeyThree=value 3\\
 ; this line is ignored too
       value 3 continued";
 
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
+                let unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 3);
 
                 let mut iter = unit.section_entries("Section A");
@@ -918,7 +766,7 @@ PodmanArgs=\"--foo\" \\
 PodmanArgs=--also
 Exec=/some/path \"an arg\" \"a;b\\nc\\td'e\" a;b\\nc\\td 'a\"b'";
 
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
+                let unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 1);
 
                 let mut iter = unit.section_entries("Container");
@@ -936,6 +784,171 @@ Exec=/some/path \"an arg\" \"a;b\\nc\\td'e\" a;b\\nc\\td 'a\"b'";
             }
         }
 
+        mod has_key {
+            use super::*;
+
+            #[test]
+            fn false_for_unknown_key() {
+                let input = "[Section A]
+KeyOne=value 1";
+
+                let unit = SystemdUnitData::from_str(input).unwrap();
+
+                assert!(!unit.has_key("Section A", "KeyTwo"));
+                assert!(!unit.has_key("Section B", "KeyFour"));
+            }
+
+            #[test]
+            fn false_for_unknown_section() {
+                let input = "[Section A]
+KeyOne=value 1";
+
+                let unit = SystemdUnitData::from_str(input).unwrap();
+
+                assert!(!unit.has_key("Section B", "KeyOne"));
+            }
+
+            #[test]
+            fn true_for_key_in_section() {
+                let input = "[Section A]
+KeyOne=value 1
+
+[Section B]
+KeyTwo=value 2
+
+[Section A]
+KeyThree=value 1";
+
+                let unit = SystemdUnitData::from_str(input).unwrap();
+
+                assert!(unit.has_key("Section A", "KeyOne"));
+                assert!(unit.has_key("Section B", "KeyTwo"));
+                assert!(unit.has_key("Section A", "KeyThree"));
+            }
+
+            #[test]
+            fn false_for_key_in_wrong_section() {
+                let input = "[Section A]
+KeyOne=value 1
+
+[Section B]
+KeyTwo=value 2
+
+[Section A]
+KeyThree=value 1";
+
+                let unit = SystemdUnitData::from_str(input).unwrap();
+
+                assert!(!unit.has_key("Section A", "KeyTwo"));
+                assert!(!unit.has_key("Section B", "KeyOne"));
+                assert!(!unit.has_key("Section B", "KeyThree"));
+            }
+        }
+
+        mod has_section {
+            use super::*;
+
+            #[test]
+            fn true_for_non_empty_section() {
+                let input = "[Section A]
+KeyOne=value 1";
+
+                let unit = SystemdUnitData::from_str(input).unwrap();
+
+                assert!(unit.has_section("Section A"));
+            }
+
+            #[test]
+            fn true_for_empty_section() {
+                let input = "[Section A]
+KeyOne=value 1
+[Section B]";
+
+                let unit = SystemdUnitData::from_str(input).unwrap();
+
+                assert!(unit.has_section("Section B"));
+            }
+
+            #[test]
+            fn false_for_unknown_section() {
+                let input = "[Section A]
+KeyOne=value 1
+[Section B]";
+
+                let unit = SystemdUnitData::from_str(input).unwrap();
+
+                assert!(!unit.has_section("foo"));
+            }
+        }
+
+        mod len {
+            use super::*;
+
+            #[test]
+            fn with_empty_file() {
+                let input = "";
+
+                let unit = SystemdUnitData::from_str(input).unwrap();
+
+                assert_eq!(unit.len(), 0);
+            }
+
+            #[test]
+            fn with_non_empty_sections() {
+                let input = "[Section A]
+KeyOne=value 1
+[section B]
+KeyTwo=value 2";
+
+                let unit = SystemdUnitData::from_str(input).unwrap();
+
+                assert_eq!(unit.len(), 2);
+            }
+
+            #[test]
+            fn with_empty_section() {
+                let input = "[Section A]
+KeyOne=value 1
+[Section B]";
+
+                let unit = SystemdUnitData::from_str(input).unwrap();
+
+                assert_eq!(unit.len(), 2);
+            }
+
+            #[test]
+            fn repeated_empty_sections_are_not_counted() {
+                let input = "[Section A]
+KeyOne=value 1
+[Section A]
+[Section B]
+[Section A]
+[Section C]
+[Section B]";
+
+                let unit = SystemdUnitData::from_str(input).unwrap();
+
+                assert_eq!(unit.len(), 3);
+            }
+
+            #[test]
+            fn same_section_following_itself_is_only_counted_once() {
+                let input = "[Section A]
+KeyOne=valueA1
+[Section A]
+[Section B]
+KeyOne=valueB
+[Section B]
+KeyOne=valueB2
+[Section A]
+KeyOne=valueA3";
+
+                let unit = SystemdUnitData::from_str(input).unwrap();
+
+                assert_eq!(unit.len(), 2);
+            }
+        }
+
         mod lookup_all {
             use super::*;
 
@@ -950,7 +963,7 @@ Key1=valB1
 Key1=valA2.1
 Key2=valA2";
 
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
+                let unit = SystemdUnitData::from_str(input).unwrap();
 
                 let values: Vec<_> = unit.lookup_all("secA", "Key1");
                 assert_eq!(values, vec!["valA1.1", "valA1.2", "valA2.1"],);
@@ -970,7 +983,7 @@ Key1=
 Key1=valA2.2
 Key1=valA2.3";
 
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
+                let unit = SystemdUnitData::from_str(input).unwrap();
 
                 let values: Vec<_> = unit.lookup_all("secA", "Key1");
                 assert_eq!(values, vec!["valA2.2", "valA2.3"],);
@@ -1027,7 +1040,7 @@ Key1=val1
 Key2=val2
 Key1=val1.2";
 
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
+                let unit = SystemdUnitData::from_str(input).unwrap();
 
                 assert_eq!(unit.lookup_last("secA", "Key1"), Some("val1.2".into()),);
             }
@@ -1042,7 +1055,7 @@ Key1=valB1
 [secA]
 Key2=valA2";
 
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
+                let unit = SystemdUnitData::from_str(input).unwrap();
 
                 assert_eq!(unit.lookup_last("secA", "Key1"), Some("valA1.2".into()),);
             }
@@ -1060,8 +1073,8 @@ KeyTwo=value 2";
 KeyOne=value 1
 KeyTwo=value 2";
 
-                let mut unit_to = SystemdUnitData::load_from_str(input_to).unwrap();
-                let unit_from = SystemdUnitData::load_from_str(input_from).unwrap();
+                let mut unit_to = SystemdUnitData::from_str(input_to).unwrap();
+                let unit_from = SystemdUnitData::from_str(input_from).unwrap();
 
                 let unchanged_section = "Section A";
                 let added_section = "New Section";
@@ -1100,8 +1113,8 @@ KeyTwo=value 2
 KeyOne=value a1.from
 KeyThree=value a3.from";
 
-                let mut unit_to = SystemdUnitData::load_from_str(input_to).unwrap();
-                let unit_from = SystemdUnitData::load_from_str(input_from).unwrap();
+                let mut unit_to = SystemdUnitData::from_str(input_to).unwrap();
+                let unit_from = SystemdUnitData::from_str(input_from).unwrap();
 
                 let extended_section = "Section A";
                 let unchanged_section = "Section B";
@@ -1142,7 +1155,7 @@ KeyThree=value a3.from";
                 let input = "[Section A]
 KeyOne=value 1";
 
-                let mut unit = SystemdUnitData::load_from_str(input).unwrap();
+                let mut unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 1);
 
                 unit.prepend("Section A", "NewKey", "new value");
@@ -1159,7 +1172,7 @@ KeyOne=value 1";
                 let input = "[Section A]
 KeyOne=value 1";
 
-                let mut unit = SystemdUnitData::load_from_str(input).unwrap();
+                let mut unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 1);
 
                 unit.prepend("New Section", "NewKey", "new value");
@@ -1187,7 +1200,7 @@ KeyThree=value 3
 KeyTwo=value 2
 KeyOne=value 2.1";
 
-                let mut unit = SystemdUnitData::load_from_str(input).unwrap();
+                let mut unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 2);
 
                 unit.prepend("Section A", "KeyOne", "new value");
@@ -1216,7 +1229,7 @@ KeyOne=value 2
 [Section B]
 KeyOne=value 3";
 
-                let mut unit = SystemdUnitData::load_from_str(input).unwrap();
+                let mut unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 2);
 
                 unit.remove_entries("Section A", "KeyOne");
@@ -1247,7 +1260,7 @@ KeyOne=value 3
 [Section A]
 KeyOne=value 4";
 
-                let mut unit = SystemdUnitData::load_from_str(input).unwrap();
+                let mut unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 2);
 
                 unit.remove_section("Section A");
@@ -1267,7 +1280,7 @@ KeyOne=value 4";
 KeyOne=value 1
 KeyTwo=value 2";
 
-                let mut unit = SystemdUnitData::load_from_str(input).unwrap();
+                let mut unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 1);
 
                 let from_section = "Section A";
@@ -1294,7 +1307,7 @@ KeyOne=value 1
 [Section A]
 KeyTwo=value 2";
 
-                let mut unit = SystemdUnitData::load_from_str(input).unwrap();
+                let mut unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 2);
 
                 let from_section = "Section A";
@@ -1319,7 +1332,7 @@ KeyTwo=value 2";
 KeyOne=value 1
 KeyTwo=value 2";
 
-                let mut unit = SystemdUnitData::load_from_str(input).unwrap();
+                let mut unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 1);
 
                 let from_section = "foo";
@@ -1350,7 +1363,7 @@ KeyTwo=value 2
 [Section A]
 KeyThree=value 3";
 
-                let mut unit = SystemdUnitData::load_from_str(input).unwrap();
+                let mut unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 2);
 
                 let from_section = "Section A";
@@ -1380,7 +1393,7 @@ KeyThree=value 3";
 KeyOne=value 1
 KeyTwo=value 2";
 
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
+                let unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 1);
 
                 let mut iter = unit.section_entries("Section A");
@@ -1401,7 +1414,7 @@ Key=value
 [Section A]
 KeyOne=value 1.2";
 
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
+                let unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 2);
 
                 let mut iter = unit.section_entries("Section A");
@@ -1420,7 +1433,7 @@ KeyOne=value 1.2";
                 let input = "[Section A]
 KeyOne=value 1";
 
-                let mut unit = SystemdUnitData::load_from_str(input).unwrap();
+                let mut unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 1);
 
                 unit.set("Section B", "KeyTwo", "value 2");
@@ -1442,7 +1455,7 @@ KeyOne=value 1";
                 let input = "[Section A]
 KeyOne=value 1";
 
-                let mut unit = SystemdUnitData::load_from_str(input).unwrap();
+                let mut unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 1);
 
                 unit.set("Section A", "KeyTwo", "value 2");
@@ -1459,7 +1472,7 @@ KeyOne=value 1";
                 let input = "[Section A]
 KeyOne=value 1";
 
-                let mut unit = SystemdUnitData::load_from_str(input).unwrap();
+                let mut unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 1);
 
                 unit.set("Section A", "KeyOne", "new value");
@@ -1477,7 +1490,7 @@ KeyOne=value 1
 KeyOne=value 2
 KeyOne=value 3";
 
-                let mut unit = SystemdUnitData::load_from_str(input).unwrap();
+                let mut unit = SystemdUnitData::from_str(input).unwrap();
                 assert_eq!(unit.len(), 1);
 
                 unit.set("Section A", "KeyOne", "new value");
@@ -1499,7 +1512,7 @@ KeyOne=value 3";
                 let input = "[Service]
 ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
 
-                let unit = SystemdUnitData::load_from_str(input).unwrap();
+                let unit = SystemdUnitData::from_str(input).unwrap();
 
                 let exec_start =
                     unit.lookup_last_value(crate::systemd_unit::SERVICE_SECTION, "ExecStart");
@@ -1530,7 +1543,7 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
                 let input = "[Service]
 ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
 
-                let mut unit = SystemdUnitData::load_from_str(input).unwrap();
+                let mut unit = SystemdUnitData::from_str(input).unwrap();
 
                 let exec_start =
                     unit.lookup_last_value(crate::systemd_unit::SERVICE_SECTION, "ExecStart");

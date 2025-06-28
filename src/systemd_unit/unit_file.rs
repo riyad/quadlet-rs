@@ -181,7 +181,7 @@ impl SystemdUnitFile {
 
         Ok(SystemdUnitFile {
             path: path.into(),
-            data: SystemdUnitData::load_from_str(buf.as_str())?,
+            data: SystemdUnitData::from_str(buf.as_str()).map_err(super::Error::Unit)?,
         })
     }
 
