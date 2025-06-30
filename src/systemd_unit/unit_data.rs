@@ -88,7 +88,11 @@ impl SystemdUnitData {
     }
 
     /// Look up 'Environment' style key-value keys
-    pub(crate) fn lookup_all_key_val(&self, section: &str, key: &str) -> HashMap<String, String> {
+    pub(crate) fn lookup_all_key_val(
+        &self,
+        section: &str,
+        key: &str,
+    ) -> HashMap<String, Option<String>> {
         let all_key_vals = self.lookup_all_values(section, key);
 
         let mut res = HashMap::with_capacity(all_key_vals.len());
@@ -96,7 +100,9 @@ impl SystemdUnitData {
         for key_vals in all_key_vals {
             for assigns in key_vals.split_words() {
                 if let Some((key, value)) = assigns.split_once('=') {
-                    res.insert(key.to_string(), value.to_string());
+                    res.insert(key.to_string(), Some(value.to_string()));
+                } else {
+                    res.insert(assigns, None);
                 }
             }
         }
