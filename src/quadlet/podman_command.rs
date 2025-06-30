@@ -27,10 +27,14 @@ impl PodmanCommand {
         }
     }
 
-    pub(crate) fn add_keys(&mut self, prefix: &str, env: &HashMap<String, String>) {
+    pub(crate) fn add_keys(&mut self, prefix: &str, env: &HashMap<String, Option<String>>) {
         for (key, value) in env {
             self.add(prefix);
-            self.add(format!("{key}={value}"));
+            if let Some(value) = value {
+                self.add(format!("{key}={value}"));
+            } else {
+                self.add(key);
+            }
         }
     }
 

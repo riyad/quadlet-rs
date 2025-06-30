@@ -517,8 +517,8 @@ pub(crate) fn from_container_unit<'q>(
 
     if let Some(update) = container.lookup(CONTAINER_SECTION, "AutoUpdate") {
         if !update.is_empty() {
-            let mut labels: HashMap<String, String> = HashMap::new();
-            labels.insert(AUTO_UPDATE_LABEL.to_string(), update.to_string());
+            let mut labels = HashMap::new();
+            labels.insert(AUTO_UPDATE_LABEL.to_string(), Some(update.to_string()));
             podman.add_keys("--label", &labels);
         }
     }
