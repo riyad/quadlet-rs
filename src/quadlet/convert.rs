@@ -1093,7 +1093,9 @@ pub(crate) fn from_pod_unit<'q>(
         podman_start_pre.to_escaped_string().as_str(),
     )?;
 
+    // Set PODMAN_SYSTEMD_UNIT so that podman auto-update can restart the service.
     service.add(SERVICE_SECTION, "Environment", "PODMAN_SYSTEMD_UNIT=%n");
+
     service.add(SERVICE_SECTION, "Type", "forking");
     service.add(SERVICE_SECTION, "Restart", "on-failure");
     service.add(SERVICE_SECTION, "PIDFile", "%t/%N.pid");
