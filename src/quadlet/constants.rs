@@ -253,6 +253,8 @@ pub static SUPPORTED_POD_KEYS: [&str; 28] = [
 
 pub static SUPPORTED_QUADLET_KEYS: [&str; 1] = ["DefaultDependencies"];
 
+pub static UNSUPPORTED_SERVICE_KEYS: [&str; 3] = ["DynamicUser", "Group", "User"];
+
 pub static SUPPORTED_SERVICE_KEYS: [&str; 1] = ["WorkingDirectory"];
 
 pub static SUPPORTED_VOLUME_KEYS: [&str; 14] = [

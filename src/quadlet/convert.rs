@@ -1958,6 +1958,8 @@ fn init_service_unit_file<'q>(
     check_for_unknown_keys(quadlet_file, section, &supported_keys)?;
     check_for_unknown_keys(quadlet_file, QUADLET_SECTION, &SUPPORTED_QUADLET_KEYS)?;
 
+    warn_if_unsupported_service_keys(quadlet_file);
+
     let mut service_file = SystemdUnitFile::new();
     service_file.merge_from(quadlet_file);
 
@@ -2192,6 +2194,19 @@ fn resolve_container_mount_params(
             .expect("connot convert Mount params back into CSV"),
     )
     .expect("connot convert Mount params back into CSV"));
+}
+
+// Warns if the unit has any properties defined in the Service group that are known to cause issues.
+// We want to warn instead of erroring to avoid breaking any existing users' units,
+// or to allow users to use these properties if they know what they are doing.
+// We implement this here instead of in quadlet.initServiceUnitFile to avoid
+// having to refactor a large amount of code in the generator just for a warning.
+fn warn_if_unsupported_service_keys(quadlet_file: &SystemdUnitFile) {
+    for key in UNSUPPORTED_SERVICE_KEYS {
+        if quadlet_file.lookup(SERVICE_SECTION, key).is_some() {
+            warn!("using key {key} in the Service group is not supported - use at your own risk")
+        }
+    }
 }
 
 #[cfg(test)]
