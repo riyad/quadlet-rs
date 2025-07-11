@@ -157,7 +157,7 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 89] = [
     "WorkingDir",
 ];
 
-pub static SUPPORTED_IMAGE_KEYS: [&str; 17] = [
+pub static SUPPORTED_IMAGE_KEYS: [&str; 18] = [
     "AllTags",
     "Arch",
     "AuthFile",
@@ -169,6 +169,7 @@ pub static SUPPORTED_IMAGE_KEYS: [&str; 17] = [
     "Image",
     "ImageTag",
     "PodmanArgs",
+    "Policy",
     "Retry",
     "RetryDelay",
     "OS",

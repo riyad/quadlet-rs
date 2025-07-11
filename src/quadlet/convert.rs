@@ -646,6 +646,7 @@ pub(crate) fn from_image_unit<'q>(
         ("Creds", "--creds"),
         ("DecryptionKey", "--decryption-key"),
         ("OS", "--os"),
+        ("Policy", "--policy"),
         ("Variant", "--variant"),
         ("Retry", "--retry"),
         ("RetryDelay", "--retry-delay"),
