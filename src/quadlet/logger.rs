@@ -26,17 +26,15 @@ impl KmsgLogger {
         };
 
         // see https://www.freedesktop.org/software/systemd/man/devel/systemd.generator.html#Examples
-        if let Some(systed_log_level) = env::var("SYSTEMD_LOG_LEVEL").ok() {
-            if systed_log_level == "debug" {
+        if let Ok(systed_log_level) = env::var("SYSTEMD_LOG_LEVEL")
+            && systed_log_level == "debug" {
                 kmsg_logger.debug_enabled = true;
             }
-        }
         // see https://mastodon.social/@pid_eins/113548790734704600
-        if let Some(debug_invocation_env) = env::var("DEBUG_INVOCATION").ok() {
-            if !debug_invocation_env.is_empty() {
+        if let Ok(debug_invocation_env) = env::var("DEBUG_INVOCATION")
+            && !debug_invocation_env.is_empty() {
                 kmsg_logger.debug_enabled = true;
             }
-        }
 
         kmsg_logger
     }
@@ -96,12 +94,11 @@ impl KmsgLogger {
             };
         }
 
-        if let Some(file) = kmsg_file.as_mut() {
-            if file.write_all(msg.as_bytes()).is_err() {
+        if let Some(file) = kmsg_file.as_mut()
+            && file.write_all(msg.as_bytes()).is_err() {
                 *kmsg_file = None;
                 return false;
             }
-        }
 
         true
     }

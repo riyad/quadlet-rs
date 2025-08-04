@@ -35,10 +35,10 @@ impl CliOptions {
     fn from_systemd_env() -> Self {
         Self {
             dry_run: false,
-            is_user: env::var("SYSTEMD_SCOPE").map_or(false, |scope| scope == "user"),
+            is_user: env::var("SYSTEMD_SCOPE").is_ok_and(|scope| scope == "user"),
             no_kmsg: false,
             output_path: PathBuf::new(),
-            verbose: env::var("SYSTEMD_LOG_LEVEL").map_or(false, |log_level| log_level == "debug"),
+            verbose: env::var("SYSTEMD_LOG_LEVEL").is_ok_and(|log_level| log_level == "debug"),
             version: false,
         }
     }
@@ -99,7 +99,7 @@ fn validate_args(mut kmsg_logger: KmsgLogger) -> Result<CliOptions, RuntimeError
         Ok(cfg) => {
             // short circuit
             if cfg.version {
-                println!("quadlet-rs {}", QUADLET_VERSION);
+                println!("quadlet-rs {QUADLET_VERSION}");
                 process::exit(0);
             }
 
@@ -118,7 +118,7 @@ fn validate_args(mut kmsg_logger: KmsgLogger) -> Result<CliOptions, RuntimeError
         Err(RuntimeError::CliMissingOutputDirectory(cfg)) => {
             // short circuit
             if cfg.version {
-                println!("quadlet-rs {}", QUADLET_VERSION);
+                println!("quadlet-rs {QUADLET_VERSION}");
                 process::exit(0)
             }
 
@@ -253,8 +253,8 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
             Ok(u) => match QuadletSourceUnitFile::from_unit_file(u) {
                 Ok(u) => Ok(u),
                 Err(e) => Err(RuntimeError::Conversion(
-                    format!("initializing Quadlet source unit"),
-                    e.into(),
+                    "initializing Quadlet source unit".to_string(),
+                    e,
                 )),
             },
             Err(e) => Err(e),
@@ -287,15 +287,14 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
             });
     }
 
-    if !cfg.dry_run {
-        if let Err(e) = fs::create_dir_all(&cfg.output_path) {
+    if !cfg.dry_run
+        && let Err(e) = fs::create_dir_all(&cfg.output_path) {
             prev_errors.push(RuntimeError::Io(
                 format!("Can't create dir {:?}", cfg.output_path),
                 e,
             ));
             return prev_errors;
         }
-    }
 
     // Key: Extension
     // Value: Processing order for resource naming dependencies

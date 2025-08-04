@@ -1,3 +1,4 @@
+use core::fmt;
 use ordered_multimap::list_ordered_multimap::ListOrderedMultimap;
 use std::collections::HashMap;
 use std::io;
@@ -9,7 +10,7 @@ use super::Entries;
 use super::EntryValue;
 use super::SectionKey;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct SystemdUnitData {
     pub(crate) sections: ListOrderedMultimap<SectionKey, Entries>,
 }
@@ -56,7 +57,7 @@ impl SystemdUnitData {
     pub(crate) fn has_key(&self, section: &str, key: &str) -> bool {
         self.sections
             .get(section)
-            .map_or(false, |e| e.data.contains_key(key))
+            .is_some_and(|e| e.data.contains_key(key))
     }
 
     /// Retrun `true` if there's an (non-empty) instance of section `name`
@@ -180,7 +181,7 @@ impl SystemdUnitData {
             .unwrap_or_default()
             .data
             .get_all(key)
-            .last()
+            .next_back()
     }
 
     pub(crate) fn new() -> Self {
@@ -210,7 +211,7 @@ impl SystemdUnitData {
     fn prepend_entry_value(&mut self, section: String, key: String, value: EntryValue) {
         let old_values: Vec<_> = self.sections.remove_all(&section).collect();
 
-        self.add_entry_value(section.clone(), key.into(), value);
+        self.add_entry_value(section.clone(), key, value);
 
         for entries in old_values {
             for (ek, ev) in entries.data {
@@ -320,7 +321,7 @@ impl SystemdUnitData {
     /// Write to a writer
     pub(crate) fn write_to<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
         for (section, entries) in &self.sections {
-            writeln!(writer, "[{}]", section)?;
+            writeln!(writer, "[{section}]")?;
             for (k, v) in &entries.data {
                 writeln!(writer, "{}={}", k, v.raw())?;
             }
@@ -328,14 +329,6 @@ impl SystemdUnitData {
         }
 
         Ok(())
-    }
-}
-
-impl Default for SystemdUnitData {
-    fn default() -> Self {
-        Self {
-            sections: Default::default(),
-        }
     }
 }
 
@@ -347,24 +340,16 @@ impl FromStr for SystemdUnitData {
     }
 }
 
-impl ToString for SystemdUnitData {
-    fn to_string(&self) -> String {
-        let mut res = String::new();
-
+impl fmt::Display for SystemdUnitData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (section, entries) in &self.sections {
-            res.push('[');
-            res.push_str(section);
-            res.push_str("]\n");
+            writeln!(f, "[{section}]")?;
             for (k, v) in &entries.data {
-                res.push_str(k);
-                res.push('=');
-                res.push_str(v.raw());
-                res.push('\n');
+                writeln!(f, "{}={}", k, v.raw())?
             }
-            res.push('\n');
+            writeln!(f)?
         }
-
-        res
+        Ok(())
     }
 }
 

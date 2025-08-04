@@ -79,7 +79,7 @@ impl<'a> SplitStrv<'a> {
     }
 }
 
-impl<'a> Default for SplitStrv<'_> {
+impl Default for SplitStrv<'_> {
     fn default() -> Self {
         Self::new("")
     }
@@ -292,13 +292,13 @@ impl<'a> SplitWord<'a> {
     }
 }
 
-impl<'a> Default for SplitWord<'_> {
+impl Default for SplitWord<'_> {
     fn default() -> Self {
         Self::new("")
     }
 }
 
-impl<'a> Iterator for SplitWord<'_> {
+impl Iterator for SplitWord<'_> {
     type Item = String;
 
     fn next(&mut self) -> Option<Self::Item> {

@@ -71,7 +71,7 @@ impl UnitSearchPaths {
         Self(dirs)
     }
 
-    pub fn iter(&self) -> UnitSearchPathsIterator {
+    pub fn iter(&self) -> UnitSearchPathsIterator<'_> {
         UnitSearchPathsIterator {
             inner: self.0.iter(),
         }
@@ -88,15 +88,13 @@ impl UnitSearchPathsBuilder {
             self.dirs
                 .into_iter()
                 .filter(|p| {
-                    if p.is_absolute() {
-                        true
-                    } else {
-                        #[cfg(feature = "log")]
+                    #[cfg(feature = "log")]
+                    if !p.is_absolute() {
                         info!("{p:?} is not a valid file path");
-                        false
                     }
+                    p.is_absolute()
                 })
-                .flat_map(|p| Self::subdirs_for_search_dir(p))
+                .flat_map(Self::subdirs_for_search_dir)
                 .collect(),
         )
     }
@@ -106,21 +104,16 @@ impl UnitSearchPathsBuilder {
             // Allow overdiding source dir, this is mainly for the CI tests
             dirs: env::var(env_var_name)
                 .ok()
-                .map(|unit_dirs_env| {
-                    env::split_paths(&unit_dirs_env)
-                        .map(PathBuf::from)
-                        .collect()
-                })
+                .map(|unit_dirs_env| env::split_paths(&unit_dirs_env).collect())
                 .unwrap_or_default(),
         }
     }
 
     pub fn from_env_or_system(env_var_name: &str) -> Self {
-        if let Some(quadlet_unit_dirs) = env::var(env_var_name).ok() {
-            if !quadlet_unit_dirs.is_empty() {
+        if let Ok(quadlet_unit_dirs) = env::var(env_var_name)
+            && !quadlet_unit_dirs.is_empty() {
                 return Self::from_env(env_var_name);
             }
-        }
 
         Self {
             dirs: Self::get_system_unit_paths().dirs().to_owned(),
@@ -136,7 +129,7 @@ impl UnitSearchPathsBuilder {
         UnitSearchPaths(
             output
                 .stdout
-                .split(|b| *b == '\n' as u8)
+                .split(|b| *b == b'\n')
                 .map(|slice| PathBuf::from(OsStr::from_bytes(slice)))
                 .collect(),
         )
@@ -151,7 +144,7 @@ impl UnitSearchPathsBuilder {
         UnitSearchPaths(
             output
                 .stdout
-                .split(|b| *b == '\n' as u8)
+                .split(|b| *b == b'\n')
                 .map(|slice| PathBuf::from(OsStr::from_bytes(slice)))
                 .collect(),
         )
@@ -188,6 +181,7 @@ impl UnitSearchPathsBuilder {
 
         for entry in fs::read_dir(&path).expect("cannot access search directory") {
             match entry {
+                #[allow(unused_variables)]
                 Err(e) => {
                     #[cfg(feature = "log")]
                     debug!("Error occurred walking sub directories of {path:?}: {e}")
@@ -360,7 +354,7 @@ mod tests {
 
                 let expected: Vec<PathBuf> = output
                     .stdout
-                    .split(|b| *b == '\n' as u8)
+                    .split(|b| *b == b'\n')
                     .map(|slice| PathBuf::from(OsStr::from_bytes(slice)))
                     .collect();
 
@@ -385,7 +379,7 @@ mod tests {
 
                 let expected: Vec<PathBuf> = output
                     .stdout
-                    .split(|b| *b == '\n' as u8)
+                    .split(|b| *b == b'\n')
                     .map(|slice| PathBuf::from(OsStr::from_bytes(slice)))
                     .collect();
 

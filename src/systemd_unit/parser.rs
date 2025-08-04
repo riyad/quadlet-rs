@@ -98,8 +98,7 @@ impl<'a> Parser<'a> {
 
         if !key.chars().all(|c| c.is_alphanumeric() || c == '-') {
             return Err(self.error(format!(
-                "Invalid key {:?}. Allowed characters are A-Za-z0-9-",
-                key
+                "Invalid key {key:?}. Allowed characters are A-Za-z0-9-",
             )));
         }
 

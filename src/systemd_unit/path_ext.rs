@@ -32,7 +32,7 @@ impl PathExt for Path {
             if template_instance.is_empty() {
                 (Some(template_base), None)
             } else {
-                (Some(template_base), Some(template_instance.into()))
+                (Some(template_base), Some(template_instance))
             }
         } else {
             (None, None)

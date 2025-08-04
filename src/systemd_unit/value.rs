@@ -1,6 +1,7 @@
 use super::quoted::{escape_value, unescape_value};
 use super::split::{SplitStrv, SplitWord};
 use super::Error;
+use core::fmt;
 use ordered_multimap::ListOrderedMultimap;
 use std::str::FromStr;
 use std::sync::OnceLock;
@@ -13,7 +14,7 @@ pub(crate) struct Entries {
 impl Default for &Entries {
     fn default() -> Self {
         static EMPTY: OnceLock<Entries> = OnceLock::new();
-        EMPTY.get_or_init(|| Entries::default())
+        EMPTY.get_or_init(Entries::default)
     }
 }
 
@@ -37,11 +38,11 @@ impl EntryValue {
         &self.0
     }
 
-    pub fn split_strv(&self) -> SplitStrv {
+    pub fn split_strv(&self) -> SplitStrv<'_> {
         SplitStrv::new(self.0.as_str())
     }
 
-    pub fn split_words(&self) -> SplitWord {
+    pub fn split_words(&self) -> SplitWord<'_> {
         SplitWord::new(self.0.as_str())
     }
 
@@ -96,9 +97,9 @@ impl FromStr for EntryValue {
     }
 }
 
-impl ToString for EntryValue {
-    fn to_string(&self) -> String {
-        self.unquote()
+impl fmt::Display for EntryValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.unquote())
     }
 }
 

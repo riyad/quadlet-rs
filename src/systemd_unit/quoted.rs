@@ -24,6 +24,7 @@ pub fn escape_value(value: &str) -> String {
             continue;
         }
 
+        #[allow(clippy::single_char_add_str)]
         match c {
             '\x07' => escaped.push_str("\\a"),
             '\x08' => escaped.push_str("\\b"),

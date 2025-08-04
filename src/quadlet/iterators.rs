@@ -31,7 +31,7 @@ impl UnitFiles {
                 Ok(file) => file,
                 Err(e) => {
                     return Some(Err(RuntimeError::Io(
-                        format!("Can't read directory entry"),
+                        "Can't read directory entry".to_string(),
                         e,
                     )))
                 }
@@ -116,21 +116,18 @@ impl UnitSearchDirsBuilder {
     pub(crate) fn from_env() -> UnitSearchDirsBuilder {
         UnitSearchDirsBuilder {
             // Allow overdiding source dir, this is mainly for the CI tests
-            dirs: env::var(QUADLET_UNIT_DIRS_ENV).ok().map(|unit_dirs_env| {
-                env::split_paths(&unit_dirs_env)
-                    .map(PathBuf::from)
-                    .collect()
-            }),
+            dirs: env::var(QUADLET_UNIT_DIRS_ENV)
+                .ok()
+                .map(|unit_dirs_env| env::split_paths(&unit_dirs_env).collect()),
             rootless: false,
         }
     }
 
     pub(crate) fn from_env_or_system() -> UnitSearchDirsBuilder {
-        if let Some(quadlet_unit_dirs) = env::var(QUADLET_UNIT_DIRS_ENV).ok() {
-            if !quadlet_unit_dirs.is_empty() {
+        if let Ok(quadlet_unit_dirs) = env::var(QUADLET_UNIT_DIRS_ENV)
+            && !quadlet_unit_dirs.is_empty() {
                 return Self::from_env();
             }
-        }
 
         UnitSearchDirsBuilder {
             dirs: None,
@@ -268,36 +265,35 @@ fn get_non_numeric_filter_func(
     resolved_unit_dir_admin_user: PathBuf,
     system_user_dir_level: usize,
 ) -> Box<dyn Fn(&walkdir::DirEntry, bool) -> bool> {
-    return Box::new(move |entry, _rootless| -> bool {
+    Box::new(move |entry, _rootless| -> bool {
         // when running in rootless, only recrusive walk directories that are non numeric
         // ignore sub dirs under the user directory that may correspond to a user id
         if entry.path().starts_with(&resolved_unit_dir_admin_user) {
-            if entry.path().components().count() > system_user_dir_level {
-                if !entry
+            if entry.path().components().count() > system_user_dir_level
+                && !entry
                     .path()
                     .components()
-                    .last()
+                    .next_back()
                     .expect("path should have enough components")
                     .as_os_str()
                     .as_bytes()
                     .iter()
                     .all(|b| b.is_ascii_digit())
-                {
-                    return true;
-                }
+            {
+                return true;
             }
         } else {
             return true;
         }
 
         false
-    });
+    })
 }
 
 fn get_user_level_filter_func(
     resolved_unit_dir_admin_user: PathBuf,
 ) -> Box<dyn Fn(&walkdir::DirEntry, bool) -> bool> {
-    return Box::new(move |entry, rootless| -> bool {
+    Box::new(move |entry, rootless| -> bool {
         // if quadlet generator is run rootless, do not recurse other user sub dirs
         // if quadlet generator is run as root, ignore users sub dirs
         if entry.path().starts_with(&resolved_unit_dir_admin_user) {
@@ -309,7 +305,7 @@ fn get_user_level_filter_func(
         }
 
         false
-    });
+    })
 }
 
 pub(crate) struct UnitSearchDirsIterator<'a> {

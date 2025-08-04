@@ -24,19 +24,10 @@ pub enum IoError {
     Unit(#[from] super::Error),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct SystemdUnitFile {
     pub(crate) path: PathBuf,
     data: SystemdUnitData,
-}
-
-impl Default for SystemdUnitFile {
-    fn default() -> Self {
-        Self {
-            path: Default::default(),
-            data: Default::default(),
-        }
-    }
 }
 
 impl Deref for SystemdUnitFile {
@@ -74,8 +65,8 @@ impl SystemdUnitFile {
         // For non-instantiated template service we only support installs if a
         // DefaultInstance is given. Otherwise we ignore the Install group, but
         // it is still useful when instantiating the unit via a symlink.
-        if let Some(template_base) = template_base {
-            if template_instance.is_none() {
+        if let Some(template_base) = template_base
+            && template_instance.is_none() {
                 if let Some(default_instance) = self.lookup(INSTALL_SECTION, "DefaultInstance") {
                     service_name = OsString::from(format!(
                         "{template_base}@{default_instance}.{}",
@@ -85,7 +76,6 @@ impl SystemdUnitFile {
                     service_name = OsString::default();
                 }
             }
-        }
 
         if !service_name.is_empty() {
             symlinks.append(
@@ -163,21 +153,15 @@ impl SystemdUnitFile {
     }
 
     pub fn is_template_instance_unit(&self) -> bool {
-        match self.path().file_name_template_parts() {
-            (Some(_), Some(_)) => true,
-            _ => false,
-        }
+        matches!(self.path().file_name_template_parts(), (Some(_), Some(_)))
     }
 
     pub fn is_template_unit(&self) -> bool {
-        match self.path().file_name_template_parts() {
-            (Some(_), None) => true,
-            _ => false,
-        }
+        matches!(self.path().file_name_template_parts(), (Some(_), None))
     }
 
     pub fn load_from_path(path: &Path) -> Result<Self, IoError> {
-        let buf = fs::read_to_string(&path)?;
+        let buf = fs::read_to_string(path)?;
 
         Ok(SystemdUnitFile {
             path: path.into(),
