@@ -57,7 +57,7 @@ fn find_mount_type(input: &str) -> Result<(String, Vec<String>), ConversionError
     }
 
     if !found {
-        return Err(ConversionError::InvalidMountFormat(input.into()));
+        mount_type = "volume".to_string();
     }
 
     Ok((mount_type, tokens))
