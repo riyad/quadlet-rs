@@ -57,7 +57,7 @@ pub(crate) enum ConversionError {
     InvalidMountCsv(#[from] csv::Error),
     #[error("incorrect mount format {0:?}: should be Mount=type=<bind|glob|tmpfs|volume>,[src=<host-dir|volume-name>,]target=<ctr-dir>[,options]")]
     InvalidMountFormat(String),
-    #[error("source parameter does not include a value")]
+    #[error("source cannot be empty")]
     InvalidMountSource,
     #[error("extra options are not supported when joining another container's network")]
     InvalidNetworkOptions,

@@ -1676,11 +1676,14 @@ fn handle_unit_dependencies(
 fn handle_storage_source(
     quadlet_unit_file: &SystemdUnitFile,
     service_unit_file: &mut SystemdUnitFile,
-    source: &str,
+    source: Option<&str>,
     units_info_map: &UnitsInfoMap,
     check_image: bool,
 ) -> Result<String, ConversionError> {
-    let mut source = source.to_owned();
+    let mut source = match source {
+        Some(source) => source.to_owned(),
+        None => return Err(ConversionError::InvalidMountSource),
+    };
 
     if source.starts_with('.') {
         source = PathBuf::from(source)
@@ -1932,7 +1935,7 @@ fn handle_volumes(
             source = handle_storage_source(
                 quadlet_unit_file,
                 service_unit_file,
-                &source,
+                Some(&source),
                 units_info_map,
                 false,
             )?;
@@ -2171,24 +2174,31 @@ fn resolve_container_mount_params(
 
     let mut csv_writer = csv::Writer::from_writer(vec![]);
     csv_writer.write_field(format!("type={mount_type}"))?;
+
+    let mut original_source = None;
     for token in tokens.iter() {
         if token.starts_with("source=") || token.starts_with("src=") {
             if let Some((_k, v)) = token.split_once('=') {
-                let resolved_source = handle_storage_source(
-                    container_unit_file,
-                    service_unit_file,
-                    v,
-                    units_info_map,
-                    true,
-                )?;
-                csv_writer.write_field(format!("source={resolved_source}"))?;
+                original_source = Some(v);
             } else {
                 return Err(ConversionError::InvalidMountSource);
             }
         } else {
+            // we're only interested in the mount source
+            // everything else is piped through as is
             csv_writer.write_field(token)?;
         }
     }
+
+    let resolved_source = handle_storage_source(
+        container_unit_file,
+        service_unit_file,
+        original_source,
+        units_info_map,
+        true,
+    )?;
+    csv_writer.write_field(format!("source={resolved_source}"))?;
+
     csv_writer.write_record(None::<&[u8]>)?;
 
     return Ok(String::from_utf8(
