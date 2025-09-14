@@ -1,0 +1,564 @@
+diff --color -uriN tests/cases.origin/a.network.reuse.container tests/cases/a.network.reuse.container
+--- tests/cases.origin/a.network.reuse.container	2025-09-14 22:45:12.548780223 +0200
++++ tests/cases/a.network.reuse.container	2025-09-14 22:46:06.930814440 +0200
+@@ -1,3 +1,5 @@
++## depends-on basic.container
++
+ ## assert-podman-args "--network" "container:systemd-basic"
+ ## assert-key-is "Unit" "Requires" "basic.service"
+ ## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic.service"
+diff --color -uriN tests/cases.origin/a.network.reuse.name.container tests/cases/a.network.reuse.name.container
+--- tests/cases.origin/a.network.reuse.name.container	2025-09-14 22:45:12.549780241 +0200
++++ tests/cases/a.network.reuse.name.container	2025-09-14 22:46:06.930814440 +0200
+@@ -1,3 +1,5 @@
++## depends-on name.container
++
+ ## assert-podman-args "--network" "container:foobar"
+ ## assert-key-is "Unit" "Requires" "name.service"
+ ## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "name.service"
+diff --color -uriN tests/cases.origin/autoupdate.kube tests/cases/autoupdate.kube
+--- tests/cases.origin/autoupdate.kube	2025-09-14 22:45:12.549780241 +0200
++++ tests/cases/autoupdate.kube	2025-09-14 22:46:06.930814440 +0200
+@@ -1,5 +1,5 @@
+ ## assert-podman-args "--annotation" "io.containers.autoupdate=registry"
+-## assert-podman-args "--annotation" "io.containers.autoupdate/foobarx=local"
++## assert-podman-args "--annotation" "io.containers.autoupdate/foobar=local"
+ 
+ [Kube]
+ Yaml=deployment.yml
+diff --color -uriN tests/cases.origin/basepodman.container tests/cases/basepodman.container
+--- tests/cases.origin/basepodman.container	2025-09-14 22:45:12.549780241 +0200
++++ tests/cases/basepodman.container	2025-09-14 22:46:06.930814440 +0200
+@@ -1,4 +1,4 @@
+-## assert-podman-final-args run --name systemd-%N --replace --rm --cgroups=split --sdnotify=conmon  -d localhost/imagename
++## assert-podman-final-args run --name systemd-%N --replace --rm --cgroups split --sdnotify=conmon  -d localhost/imagename
+ 
+ [Container]
+ Image=localhost/imagename
+diff --color -uriN tests/cases.origin/basic.container tests/cases/basic.container
+--- tests/cases.origin/basic.container	2025-09-14 22:45:12.549780241 +0200
++++ tests/cases/basic.container	2025-09-14 22:46:06.930814440 +0200
+@@ -3,7 +3,7 @@
+ ## assert-podman-args "--rm"
+ ## assert-podman-args "--replace"
+ ## assert-podman-args "-d"
+-## assert-podman-args "--cgroups=split"
++## assert-podman-args "--cgroups" "split"
+ ## assert-podman-args "--sdnotify=conmon"
+ ## assert-key-is "Unit" "RequiresMountsFor" "%t/containers"
+ ## assert-key-is "Service" "KillMode" "mixed"
+diff --color -uriN tests/cases.origin/basic.pod tests/cases/basic.pod
+--- tests/cases.origin/basic.pod	2025-09-14 22:45:12.549780241 +0200
++++ tests/cases/basic.pod	2025-09-14 22:46:37.854402424 +0200
+@@ -1,7 +1,7 @@
+ ## assert-key-is Unit RequiresMountsFor "%t/containers"
+ ## assert-key-is Service Type forking
+ ## assert-key-is Service SyslogIdentifier "%N"
+-## assert-key-is-regex Service ExecStartPre ".*/podman pod create --infra-conmon-pidfile=%t/%N.pid --replace --exit-policy stop --infra-name systemd-basic-infra --name systemd-basic"
++## assert-key-is-regex Service ExecStartPre ".*/podman pod create --infra-conmon-pidfile=%t/%N.pid --replace --exit-policy=stop --infra-name systemd-basic-infra --name systemd-basic"
+ ## assert-key-is-regex Service ExecStart ".*/podman pod start systemd-basic"
+ ## assert-key-is-regex Service ExecStop ".*/podman pod stop --ignore --time=10 systemd-basic"
+ ## assert-key-is-regex Service ExecStopPost ".*/podman pod rm --ignore --force systemd-basic"
+diff --color -uriN tests/cases.origin/build.multiple-tags.container tests/cases/build.multiple-tags.container
+--- tests/cases.origin/build.multiple-tags.container	2025-09-14 22:45:12.549780241 +0200
++++ tests/cases/build.multiple-tags.container	2025-09-14 22:45:57.179629014 +0200
+@@ -1,3 +1,4 @@
++## depends-on multiple-tags.build
+ ## assert-podman-final-args localhost/imagename:v1
+ 
+ [Container]
+diff --color -uriN tests/cases.origin/build-not-found.quadlet.volume tests/cases/build-not-found.quadlet.volume
+--- tests/cases.origin/build-not-found.quadlet.volume	2025-09-14 22:45:12.549780241 +0200
++++ tests/cases/build-not-found.quadlet.volume	2025-09-14 22:45:57.179629014 +0200
+@@ -1,5 +1,5 @@
+ ## assert-failed
+-## assert-stderr-contains "requested Quadlet image not-found.build was not found"
++## assert-stderr-contains "requested Quadlet image \"not-found.build\" was not found"
+ 
+ [Volume]
+ Driver=image
+diff --color -uriN tests/cases.origin/build.quadlet.servicename.volume tests/cases/build.quadlet.servicename.volume
+--- tests/cases.origin/build.quadlet.servicename.volume	2025-09-14 22:45:12.549780241 +0200
++++ tests/cases/build.quadlet.servicename.volume	2025-09-14 22:45:57.179629014 +0200
+@@ -1,3 +1,4 @@
++## depends-on service-name.build
+ ## assert-podman-args --driver image
+ ## assert-podman-args --opt image=localhost/imagename
+ ## assert-key-is "Unit" "Requires" "basic.service"
+diff --color -uriN tests/cases.origin/build.quadlet.volume tests/cases/build.quadlet.volume
+--- tests/cases.origin/build.quadlet.volume	2025-09-14 22:45:12.549780241 +0200
++++ tests/cases/build.quadlet.volume	2025-09-14 22:45:57.179629014 +0200
+@@ -1,3 +1,4 @@
++## depends-on basic.build
+ ## assert-podman-args --driver image
+ ## assert-podman-args --opt image=localhost/imagename
+ ## assert-key-is "Unit" "Requires" "basic-build.service"
+diff --color -uriN tests/cases.origin/containersconfmodule.build tests/cases/containersconfmodule.build
+--- tests/cases.origin/containersconfmodule.build	2025-09-14 22:45:12.549780241 +0200
++++ tests/cases/containersconfmodule.build	2025-09-14 22:45:57.179629014 +0200
+@@ -1,5 +1,5 @@
+-## assert-podman-global-args "build" "--module=/etc/container/1.conf"
+-## assert-podman-global-args "build" "--module=/etc/container/2.conf"
++## assert-podman-global-args "build" "--module" "/etc/container/1.conf"
++## assert-podman-global-args "build" "--module" "/etc/container/2.conf"
+ 
+ [Build]
+ ImageTag=image:latest
+diff --color -uriN tests/cases.origin/containersconfmodule.container tests/cases/containersconfmodule.container
+--- tests/cases.origin/containersconfmodule.container	2025-09-14 22:45:12.549780241 +0200
++++ tests/cases/containersconfmodule.container	2025-09-14 22:45:57.179629014 +0200
+@@ -1,5 +1,5 @@
+-## assert-podman-global-args "run" "--module=/etc/container/1.conf"
+-## assert-podman-global-args "run" "--module=/etc/container/2.conf"
++## assert-podman-global-args "run" "--module" "/etc/container/1.conf"
++## assert-podman-global-args "run" "--module" "/etc/container/2.conf"
+ 
+ [Container]
+ Image=image
+diff --color -uriN tests/cases.origin/containersconfmodule.image tests/cases/containersconfmodule.image
+--- tests/cases.origin/containersconfmodule.image	2025-09-14 22:45:12.549780241 +0200
++++ tests/cases/containersconfmodule.image	2025-09-14 22:45:57.179629014 +0200
+@@ -1,5 +1,5 @@
+-## assert-podman-global-args "image" "--module=/etc/container/1.conf"
+-## assert-podman-global-args "image" "--module=/etc/container/2.conf"
++## assert-podman-global-args "image" "--module" "/etc/container/1.conf"
++## assert-podman-global-args "image" "--module" "/etc/container/2.conf"
+ 
+ [Image]
+ Image=image:latest
+diff --color -uriN tests/cases.origin/containersconfmodule.kube tests/cases/containersconfmodule.kube
+--- tests/cases.origin/containersconfmodule.kube	2025-09-14 22:45:12.549780241 +0200
++++ tests/cases/containersconfmodule.kube	2025-09-14 22:45:57.179629014 +0200
+@@ -1,5 +1,5 @@
+-## assert-podman-global-args "kube" "--module=/etc/container/1.conf"
+-## assert-podman-global-args "kube" "--module=/etc/container/2.conf"
++## assert-podman-global-args "kube" "--module" "/etc/container/1.conf"
++## assert-podman-global-args "kube" "--module" "/etc/container/2.conf"
+ 
+ [Kube]
+ Yaml=file.yml
+diff --color -uriN tests/cases.origin/containersconfmodule.network tests/cases/containersconfmodule.network
+--- tests/cases.origin/containersconfmodule.network	2025-09-14 22:45:12.549780241 +0200
++++ tests/cases/containersconfmodule.network	2025-09-14 22:45:57.179629014 +0200
+@@ -1,5 +1,5 @@
+-## assert-podman-global-args "network" "--module=/etc/container/1.conf"
+-## assert-podman-global-args "network" "--module=/etc/container/2.conf"
++## assert-podman-global-args "network" "--module" "/etc/container/1.conf"
++## assert-podman-global-args "network" "--module" "/etc/container/2.conf"
+ 
+ [Network]
+ ContainersConfModule=/etc/container/1.conf
+diff --color -uriN tests/cases.origin/containersconfmodule.volume tests/cases/containersconfmodule.volume
+--- tests/cases.origin/containersconfmodule.volume	2025-09-14 22:45:12.549780241 +0200
++++ tests/cases/containersconfmodule.volume	2025-09-14 22:45:57.180629033 +0200
+@@ -1,5 +1,5 @@
+-## assert-podman-global-args "volume" "--module=/etc/container/1.conf"
+-## assert-podman-global-args "volume" "--module=/etc/container/2.conf"
++## assert-podman-global-args "volume" "--module" "/etc/container/1.conf"
++## assert-podman-global-args "volume" "--module" "/etc/container/2.conf"
+ 
+ [Volume]
+ ContainersConfModule=/etc/container/1.conf
+diff --color -uriN tests/cases.origin/dependent.build tests/cases/dependent.build
+--- tests/cases.origin/dependent.build	2025-09-14 22:45:12.549780241 +0200
++++ tests/cases/dependent.build	2025-09-14 22:45:57.180629033 +0200
+@@ -1,3 +1,4 @@
++## depends-on basic.build basic.container basic.image basic.kube basic.network basic.pod basic.volume
+ ## assert-key-is "Unit" "Requires" "basic-build.service basic.service basic-image.service basic.service basic-network.service basic-pod.service basic-volume.service"
+ ## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic-build.service basic.service basic-image.service basic.service basic-network.service basic-pod.service basic-volume.service"
+ 
+diff --color -uriN tests/cases.origin/dependent.container tests/cases/dependent.container
+--- tests/cases.origin/dependent.container	2025-09-14 22:45:12.549780241 +0200
++++ tests/cases/dependent.container	2025-09-14 22:45:57.180629033 +0200
+@@ -1,3 +1,4 @@
++## depends-on basic.build basic.container basic.image basic.kube basic.network basic.pod basic.volume
+ ## assert-key-is "Unit" "Requires" "basic-build.service basic.service basic-image.service basic.service basic-network.service basic-pod.service basic-volume.service"
+ ## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic-build.service basic.service basic-image.service basic.service basic-network.service basic-pod.service basic-volume.service"
+ ## assert-key-is "Unit" "PropagatesStopTo" "basic.service"
+diff --color -uriN tests/cases.origin/dependent.error.container tests/cases/dependent.error.container
+--- tests/cases.origin/dependent.error.container	2025-09-14 22:45:12.549780241 +0200
++++ tests/cases/dependent.error.container	2025-09-14 22:45:57.180629033 +0200
+@@ -1,5 +1,5 @@
+ ## assert-failed
+-## assert-stderr-contains "unable to translate dependency for basic.container"
++## assert-stderr-contains "unable to translate dependency for \"basic.container\""
+ 
+ [Unit]
+ After=basic.container
+diff --color -uriN tests/cases.origin/dependent.image tests/cases/dependent.image
+--- tests/cases.origin/dependent.image	2025-09-14 22:45:12.549780241 +0200
++++ tests/cases/dependent.image	2025-09-14 22:45:57.180629033 +0200
+@@ -1,3 +1,4 @@
++## depends-on basic.build basic.container basic.image basic.kube basic.network basic.pod basic.volume
+ ## assert-key-is "Unit" "Requires" "basic-build.service basic.service basic-image.service basic.service basic-network.service basic-pod.service basic-volume.service"
+ ## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic-build.service basic.service basic-image.service basic.service basic-network.service basic-pod.service basic-volume.service"
+ 
+diff --color -uriN tests/cases.origin/dependent.kube tests/cases/dependent.kube
+--- tests/cases.origin/dependent.kube	2025-09-14 22:45:12.549780241 +0200
++++ tests/cases/dependent.kube	2025-09-14 22:45:57.180629033 +0200
+@@ -1,3 +1,4 @@
++## depends-on basic.build basic.container basic.image basic.kube basic.network basic.pod basic.volume
+ ## assert-key-is "Unit" "Requires" "basic-build.service basic.service basic-image.service basic.service basic-network.service basic-pod.service basic-volume.service"
+ ## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic-build.service basic.service basic-image.service basic.service basic-network.service basic-pod.service basic-volume.service"
+ 
+diff --color -uriN tests/cases.origin/dependent.network tests/cases/dependent.network
+--- tests/cases.origin/dependent.network	2025-09-14 22:45:12.549780241 +0200
++++ tests/cases/dependent.network	2025-09-14 22:45:57.180629033 +0200
+@@ -1,3 +1,4 @@
++## depends-on basic.build basic.container basic.image basic.kube basic.network basic.pod basic.volume
+ ## assert-key-is "Unit" "Requires" "basic-build.service basic.service basic-image.service basic.service basic-network.service basic-pod.service basic-volume.service"
+ ## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic-build.service basic.service basic-image.service basic.service basic-network.service basic-pod.service basic-volume.service"
+ 
+diff --color -uriN tests/cases.origin/dependent.pod tests/cases/dependent.pod
+--- tests/cases.origin/dependent.pod	2025-09-14 22:45:12.550780261 +0200
++++ tests/cases/dependent.pod	2025-09-14 22:45:57.180629033 +0200
+@@ -1,3 +1,4 @@
++## depends-on basic.build basic.container basic.image basic.kube basic.network basic.pod basic.volume
+ ## assert-key-is "Unit" "Requires" "basic-build.service basic.service basic-image.service basic.service basic-network.service basic-pod.service basic-volume.service"
+ ## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic-build.service basic.service basic-image.service basic.service basic-network.service basic-pod.service basic-volume.service"
+ 
+diff --color -uriN tests/cases.origin/dependent.volume tests/cases/dependent.volume
+--- tests/cases.origin/dependent.volume	2025-09-14 22:45:12.550780261 +0200
++++ tests/cases/dependent.volume	2025-09-14 22:45:57.180629033 +0200
+@@ -1,3 +1,4 @@
++## depends-on basic.build basic.container basic.image basic.kube basic.network basic.pod basic.volume
+ ## assert-key-is "Unit" "Requires" "basic-build.service basic.service basic-image.service basic.service basic-network.service basic-pod.service basic-volume.service"
+ ## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic-build.service basic.service basic-image.service basic.service basic-network.service basic-pod.service basic-volume.service"
+ 
+diff --color -uriN tests/cases.origin/exec-unsupported-escape.container tests/cases/exec-unsupported-escape.container
+--- tests/cases.origin/exec-unsupported-escape.container	2025-09-14 22:45:12.551780280 +0200
++++ tests/cases/exec-unsupported-escape.container	1970-01-01 01:00:00.000000000 +0100
+@@ -1,5 +0,0 @@
+-## assert-podman-final-args localhost/imagename
+-
+-[Container]
+-Image=localhost/imagename
+-Exec='test\.com'
+diff --color -uriN tests/cases.origin/gateway.no-subnet.network tests/cases/gateway.no-subnet.network
+--- tests/cases.origin/gateway.no-subnet.network	2025-09-14 22:45:12.551780280 +0200
++++ tests/cases/gateway.no-subnet.network	2025-09-14 22:45:57.180629033 +0200
+@@ -1,5 +1,5 @@
+ ## assert-failed
+-## assert-stderr-contains "cannot set gateway or range without subnet"
++## assert-stderr-contains "cannot set Gateway or IPRange without Subnet"
+ 
+ [Network]
+ Gateway=192.168.1.1
+diff --color -uriN tests/cases.origin/health.container tests/cases/health.container
+--- tests/cases.origin/health.container	2025-09-14 22:45:12.551780280 +0200
++++ tests/cases/health.container	2025-09-14 22:45:57.180629033 +0200
+@@ -12,7 +12,7 @@
+ HealthStartPeriod=2m3s
+ ## assert-podman-args "--health-timeout" "20s"
+ HealthTimeout=20s
+-## assert-podman-args "--health-startup-cmd" "'[\"hello\", world]'"
++## assert-podman-args "--health-startup-cmd" "[\"hello\", world]"
+ HealthStartupCmd='["hello", world]'
+ ## assert-podman-args "--health-startup-interval" "5m"
+ HealthStartupInterval=5m
+diff --color -uriN tests/cases.origin/image-not-found.quadlet.volume tests/cases/image-not-found.quadlet.volume
+--- tests/cases.origin/image-not-found.quadlet.volume	2025-09-14 22:45:12.552780298 +0200
++++ tests/cases/image-not-found.quadlet.volume	2025-09-14 22:45:57.180629033 +0200
+@@ -1,5 +1,5 @@
+ ## assert-failed
+-## assert-stderr-contains "requested Quadlet image not-found.image was not found"
++## assert-stderr-contains "requested Quadlet image \"not-found.image\" was not found"
+ 
+ [Volume]
+ Driver=image
+diff --color -uriN tests/cases.origin/image.quadlet.servicename.volume tests/cases/image.quadlet.servicename.volume
+--- tests/cases.origin/image.quadlet.servicename.volume	2025-09-14 22:45:12.552780298 +0200
++++ tests/cases/image.quadlet.servicename.volume	2025-09-14 22:45:57.180629033 +0200
+@@ -1,3 +1,4 @@
++## depends-on service-name.image
+ ## assert-podman-args --driver image
+ ## assert-podman-args --opt image=localhost/imagename
+ ## assert-key-is "Unit" "Requires" "basic.service"
+diff --color -uriN tests/cases.origin/image.quadlet.volume tests/cases/image.quadlet.volume
+--- tests/cases.origin/image.quadlet.volume	2025-09-14 22:45:12.552780298 +0200
++++ tests/cases/image.quadlet.volume	2025-09-14 22:45:57.180629033 +0200
+@@ -1,3 +1,4 @@
++## depends-on basic.image
+ ## assert-podman-args --driver image
+ ## assert-podman-args --opt image=localhost/imagename
+ ## assert-key-is "Unit" "Requires" "basic-image.service"
+diff --color -uriN tests/cases.origin/label-unsupported-escape.container tests/cases/label-unsupported-escape.container
+--- tests/cases.origin/label-unsupported-escape.container	2025-09-14 22:45:12.552780298 +0200
++++ tests/cases/label-unsupported-escape.container	1970-01-01 01:00:00.000000000 +0100
+@@ -1,5 +0,0 @@
+-## assert-podman-final-args localhost/imagename
+-
+-[Container]
+-Image=localhost/imagename
+-Label=regex=^foo(\?.*)?$
+diff --color -uriN tests/cases.origin/mount.container tests/cases/mount.container
+--- tests/cases.origin/mount.container	2025-09-14 22:45:12.553780318 +0200
++++ tests/cases/mount.container	2025-09-14 22:45:57.180629033 +0200
+@@ -1,3 +1,6 @@
++## depends-on basic.volume
++## depends-on basic.image
++
+ [Container]
+ Image=localhost/imagename
+ ## assert-podman-args-key-val "--mount" "," "type=bind,source=/path/on/host,destination=/path/in/container"
+diff --color -uriN tests/cases.origin/mount.servicename.container tests/cases/mount.servicename.container
+--- tests/cases.origin/mount.servicename.container	2025-09-14 22:45:12.553780318 +0200
++++ tests/cases/mount.servicename.container	2025-09-14 22:45:57.180629033 +0200
+@@ -1,3 +1,5 @@
++## depends-on service-name.volume
++
+ [Container]
+ Image=localhost/imagename
+ ## assert-podman-args-key-val "--mount" "," "type=volume,source=test-volume,destination=/path/in/container,ro=true"
+diff --color -uriN tests/cases.origin/network.quadlet.build tests/cases/network.quadlet.build
+--- tests/cases.origin/network.quadlet.build	2025-09-14 22:45:12.553780318 +0200
++++ tests/cases/network.quadlet.build	2025-09-14 22:45:57.180629033 +0200
+@@ -1,3 +1,4 @@
++## depends-on basic.network
+ ## assert-podman-args "--network" "systemd-basic"
+ ## assert-key-is "Unit" "Requires" "basic-network.service"
+ ## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic-network.service"
+diff --color -uriN tests/cases.origin/network.quadlet.container tests/cases/network.quadlet.container
+--- tests/cases.origin/network.quadlet.container	2025-09-14 22:45:12.553780318 +0200
++++ tests/cases/network.quadlet.container	2025-09-14 22:45:57.180629033 +0200
+@@ -1,3 +1,4 @@
++## depends-on basic.network
+ ## assert-podman-args "--network" "systemd-basic"
+ ## assert-key-is "Unit" "Requires" "basic-network.service"
+ ## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic-network.service"
+diff --color -uriN tests/cases.origin/network.quadlet.kube tests/cases/network.quadlet.kube
+--- tests/cases.origin/network.quadlet.kube	2025-09-14 22:45:12.553780318 +0200
++++ tests/cases/network.quadlet.kube	2025-09-14 22:45:57.181629052 +0200
+@@ -1,3 +1,4 @@
++## depends-on basic.network
+ ## assert-podman-args "--network" "systemd-basic"
+ ## assert-key-is "Unit" "Requires" "basic-network.service"
+ ## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic-network.service"
+diff --color -uriN tests/cases.origin/network.quadlet.pod tests/cases/network.quadlet.pod
+--- tests/cases.origin/network.quadlet.pod	2025-09-14 22:45:12.553780318 +0200
++++ tests/cases/network.quadlet.pod	2025-09-14 22:45:57.181629052 +0200
+@@ -1,3 +1,4 @@
++## depends-on basic.network
+ ## assert-podman-pre-args "--network" "systemd-basic"
+ ## assert-key-is "Unit" "Requires" "basic-network.service"
+ ## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic-network.service"
+diff --color -uriN tests/cases.origin/network.quadlet.servicename.build tests/cases/network.quadlet.servicename.build
+--- tests/cases.origin/network.quadlet.servicename.build	2025-09-14 22:45:12.553780318 +0200
++++ tests/cases/network.quadlet.servicename.build	2025-09-14 22:45:57.181629052 +0200
+@@ -1,3 +1,4 @@
++## depends-on service-name.network
+ ## assert-podman-args "--network" "test-network"
+ ## assert-key-is "Unit" "Requires" "basic.service"
+ ## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic.service"
+diff --color -uriN tests/cases.origin/network.quadlet.servicename.container tests/cases/network.quadlet.servicename.container
+--- tests/cases.origin/network.quadlet.servicename.container	2025-09-14 22:45:12.553780318 +0200
++++ tests/cases/network.quadlet.servicename.container	2025-09-14 22:45:57.181629052 +0200
+@@ -1,3 +1,4 @@
++## depends-on service-name.network
+ ## assert-podman-args "--network" "test-network"
+ ## assert-key-is "Unit" "Requires" "basic.service"
+ ## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic.service"
+diff --color -uriN tests/cases.origin/network.quadlet.servicename.kube tests/cases/network.quadlet.servicename.kube
+--- tests/cases.origin/network.quadlet.servicename.kube	2025-09-14 22:45:12.553780318 +0200
++++ tests/cases/network.quadlet.servicename.kube	2025-09-14 22:45:57.181629052 +0200
+@@ -1,3 +1,4 @@
++## depends-on service-name.network
+ ## assert-podman-args "--network" "test-network"
+ ## assert-key-is "Unit" "Requires" "basic.service"
+ ## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic.service"
+diff --color -uriN tests/cases.origin/network.reuse.container tests/cases/network.reuse.container
+--- tests/cases.origin/network.reuse.container	2025-09-14 22:45:12.553780318 +0200
++++ tests/cases/network.reuse.container	2025-09-14 22:45:57.181629052 +0200
+@@ -1,3 +1,5 @@
++## depends-on basic.container
++
+ ## assert-podman-args "--network" "container:systemd-basic"
+ ## assert-key-is "Unit" "Requires" "basic.service"
+ ## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic.service"
+diff --color -uriN tests/cases.origin/network.reuse.name.container tests/cases/network.reuse.name.container
+--- tests/cases.origin/network.reuse.name.container	2025-09-14 22:45:12.553780318 +0200
++++ tests/cases/network.reuse.name.container	2025-09-14 22:45:57.181629052 +0200
+@@ -1,3 +1,5 @@
++## depends-on name.container
++
+ ## assert-podman-args "--network" "container:foobar"
+ ## assert-key-is "Unit" "Requires" "name.service"
+ ## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "name.service"
+diff --color -uriN tests/cases.origin/network.servicename.quadlet.pod tests/cases/network.servicename.quadlet.pod
+--- tests/cases.origin/network.servicename.quadlet.pod	2025-09-14 22:45:12.553780318 +0200
++++ tests/cases/network.servicename.quadlet.pod	2025-09-14 22:45:57.181629052 +0200
+@@ -1,3 +1,4 @@
++## depends-on service-name.network
+ ## assert-podman-pre-args "--network" "test-network"
+ ## assert-key-is "Unit" "Requires" "basic.service"
+ ## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic.service"
+diff --color -uriN tests/cases.origin/pod.non-quadlet.container tests/cases/pod.non-quadlet.container
+--- tests/cases.origin/pod.non-quadlet.container	2025-09-14 22:45:12.554780337 +0200
++++ tests/cases/pod.non-quadlet.container	2025-09-14 22:45:57.181629052 +0200
+@@ -1,5 +1,5 @@
+ ## assert-failed
+-## assert-stderr-contains "pod test-pod is not Quadlet based"
++## assert-stderr-contains "pod \"test-pod\" is not Quadlet based"
+ 
+ [Container]
+ Image=localhost/imagename
+diff --color -uriN tests/cases.origin/pod.not-found.container tests/cases/pod.not-found.container
+--- tests/cases.origin/pod.not-found.container	2025-09-14 22:45:12.554780337 +0200
++++ tests/cases/pod.not-found.container	2025-09-14 22:45:57.181629052 +0200
+@@ -1,5 +1,5 @@
+ ## assert-failed
+-## assert-stderr-contains "quadlet pod unit not-found.pod does not exist"
++## assert-stderr-contains "Quadlet pod unit \"not-found.pod\" does not exist"
+ 
+ [Container]
+ Image=localhost/imagename
+diff --color -uriN tests/cases.origin/range.no-subnet.network tests/cases/range.no-subnet.network
+--- tests/cases.origin/range.no-subnet.network	2025-09-14 22:45:12.554780337 +0200
++++ tests/cases/range.no-subnet.network	2025-09-14 22:45:57.181629052 +0200
+@@ -1,5 +1,5 @@
+ ## assert-failed
+-## assert-stderr-contains "cannot set gateway or range without subnet"
++## assert-stderr-contains "cannot set Gateway or IPRange without Subnet"
+ 
+ [Network]
+ IPRange=192.168.1.0/32
+diff --color -uriN tests/cases.origin/reloadboth.container tests/cases/reloadboth.container
+--- tests/cases.origin/reloadboth.container	2025-09-14 22:45:12.554780337 +0200
++++ tests/cases/reloadboth.container	2025-09-14 22:45:57.181629052 +0200
+@@ -1,5 +1,5 @@
+ ## assert-failed
+-## assert-stderr-contains "ReloadCmd and ReloadSignal are mutually exclusive but both are set"
++## assert-stderr-contains "ReloadCmd and ReloadSignal are mutually exclusive, but both are set"
+ 
+ [Container]
+ Image=localhost/imagename
+diff --color -uriN tests/cases.origin/reloadcmd-unsupported-escape.container tests/cases/reloadcmd-unsupported-escape.container
+--- tests/cases.origin/reloadcmd-unsupported-escape.container	2025-09-14 22:45:12.554780337 +0200
++++ tests/cases/reloadcmd-unsupported-escape.container	1970-01-01 01:00:00.000000000 +0100
+@@ -1,5 +0,0 @@
+-## assert-podman-final-args localhost/imagename
+-
+-[Container]
+-Image=localhost/imagename
+-ReloadCmd='test\.sh'
+diff --color -uriN tests/cases.origin/startwithpod_no.container tests/cases/startwithpod_no.container
+--- tests/cases.origin/startwithpod_no.container	2025-09-14 22:45:12.555780355 +0200
++++ tests/cases/startwithpod_no.container	2025-09-14 22:45:57.181629052 +0200
+@@ -1,3 +1,5 @@
++## depends-on startwithpod.pod
++
+ # assert-key-contains "Unit" "After" "startwithpod-pod.service"
+ # assert-key-contains "Unit" "BindsTo" "startwithpod-pod.service"
+ 
+diff --color -uriN tests/cases.origin/startwithpod.pod tests/cases/startwithpod.pod
+--- tests/cases.origin/startwithpod.pod	2025-09-14 22:45:12.555780355 +0200
++++ tests/cases/startwithpod.pod	2025-09-14 22:45:57.181629052 +0200
+@@ -1,7 +1,10 @@
++## depends-on startwithpod_no.container
++## depends-on startwithpod_yes.container
++
+ ## assert-key-contains "Unit" "Wants" "startwithpod_yes.service"
+ ## assert-key-contains "Unit" "Before" "startwithpod_yes.service"
+ 
+-## assert-key-not-contains "Unit" "Wants" "startwithpod_no.service"
+-## assert-key-not-contains "Unit" "Before" "startwithpod_no.service"
++## !assert-key-contains "Unit" "Wants" "startwithpod_no.service"
++## !assert-key-contains "Unit" "Before" "startwithpod_no.service"
+ 
+ [Pod]
+diff --color -uriN tests/cases.origin/startwithpod_yes.container tests/cases/startwithpod_yes.container
+--- tests/cases.origin/startwithpod_yes.container	2025-09-14 22:45:12.555780355 +0200
++++ tests/cases/startwithpod_yes.container	2025-09-14 22:45:57.181629052 +0200
+@@ -1,3 +1,5 @@
++## depends-on startwithpod.pod
++
+ # assert-key-contains "Unit" "After" "startwithpod-pod.service"
+ # assert-key-contains "Unit" "BindsTo" "startwithpod-pod.service"
+ 
+diff --color -uriN tests/cases.origin/test_subdir/mysleep.container tests/cases/test_subdir/mysleep.container
+--- tests/cases.origin/test_subdir/mysleep.container	2025-09-14 22:45:12.556780375 +0200
++++ tests/cases/test_subdir/mysleep.container	2025-09-14 22:45:57.181629052 +0200
+@@ -1,3 +1,6 @@
++## assert-symlink default.target.wants/mysleep.service ../mysleep.service
++## assert-symlink multi-user.target.wants/mysleep.service ../mysleep.service
++
+ [Unit]
+ Description=The sleep container
+ After=local-fs.target
+diff --color -uriN tests/cases.origin/test_subdir/sub_one/mysleep_1.container tests/cases/test_subdir/sub_one/mysleep_1.container
+--- tests/cases.origin/test_subdir/sub_one/mysleep_1.container	2025-09-14 22:45:12.556780375 +0200
++++ tests/cases/test_subdir/sub_one/mysleep_1.container	2025-09-14 22:45:57.182629071 +0200
+@@ -1,3 +1,6 @@
++## assert-symlink default.target.wants/mysleep_1.service ../mysleep_1.service
++## assert-symlink multi-user.target.wants/mysleep_1.service ../mysleep_1.service
++
+ [Unit]
+ Description=The sleep container
+ After=local-fs.target
+diff --color -uriN tests/cases.origin/test_subdir/sub_two/mysleep_2.container tests/cases/test_subdir/sub_two/mysleep_2.container
+--- tests/cases.origin/test_subdir/sub_two/mysleep_2.container	2025-09-14 22:45:12.556780375 +0200
++++ tests/cases/test_subdir/sub_two/mysleep_2.container	2025-09-14 22:45:57.182629071 +0200
+@@ -1,3 +1,6 @@
++## assert-symlink default.target.wants/mysleep_2.service ../mysleep_2.service
++## assert-symlink multi-user.target.wants/mysleep_2.service ../mysleep_2.service
++
+ [Unit]
+ Description=The sleep container
+ After=local-fs.target
+diff --color -uriN tests/cases.origin/volume.build tests/cases/volume.build
+--- tests/cases.origin/volume.build	2025-09-14 22:45:12.556780375 +0200
++++ tests/cases/volume.build	2025-09-14 22:45:57.182629071 +0200
+@@ -1,3 +1,4 @@
++## depends-on basic.volume
+ ## assert-podman-args -v /host/dir:/container/volume
+ ## assert-podman-args -v /host/dir2:/container/volume2:Z
+ ## assert-podman-args-regex -v .*/podman-e2e-.*/subtest-.*/quadlet/host/dir3:/container/volume3
+diff --color -uriN tests/cases.origin/volume.container tests/cases/volume.container
+--- tests/cases.origin/volume.container	2025-09-14 22:45:12.556780375 +0200
++++ tests/cases/volume.container	2025-09-14 22:45:57.182629071 +0200
+@@ -1,3 +1,4 @@
++## depends-on basic.volume
+ ## assert-podman-args -v /host/dir:/container/volume
+ ## assert-podman-args -v /host/dir2:/container/volume2:Z
+ ## assert-podman-args-regex -v .*/podman-e2e-.*/subtest-.*/quadlet/host/dir3:/container/volume3
+diff --color -uriN tests/cases.origin/volume.pod tests/cases/volume.pod
+--- tests/cases.origin/volume.pod	2025-09-14 22:45:12.556780375 +0200
++++ tests/cases/volume.pod	2025-09-14 22:45:57.182629071 +0200
+@@ -1,3 +1,4 @@
++## depends-on basic.volume
+ ## assert-podman-pre-args -v /host/dir:/container/volume
+ ## assert-podman-pre-args -v /host/dir2:/container/volume2:Z
+ ## assert-podman-pre-args-regex -v .*/podman-e2e-.*/subtest-.*/quadlet/host/dir3:/container/volume3
+diff --color -uriN tests/cases.origin/volume.quadlet.build tests/cases/volume.quadlet.build
+--- tests/cases.origin/volume.quadlet.build	2025-09-14 22:45:12.556780375 +0200
++++ tests/cases/volume.quadlet.build	2025-09-14 22:45:57.182629071 +0200
+@@ -1,3 +1,4 @@
++## depends-on basic.volume
+ ## assert-podman-args "-v" "systemd-basic:/volume/basic"
+ ## assert-key-is "Unit" "Requires" "basic-volume.service"
+ ## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic-volume.service"
+diff --color -uriN tests/cases.origin/volume.quadlet.servicename.build tests/cases/volume.quadlet.servicename.build
+--- tests/cases.origin/volume.quadlet.servicename.build	2025-09-14 22:45:12.556780375 +0200
++++ tests/cases/volume.quadlet.servicename.build	2025-09-14 22:45:57.182629071 +0200
+@@ -1,3 +1,4 @@
++## depends-on service-name.volume
+ ## assert-podman-args "-v" "test-volume:/volume/basic"
+ ## assert-key-is "Unit" "Requires" "basic.service"
+ ## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic.service"
+diff --color -uriN tests/cases.origin/volume.servicename.container tests/cases/volume.servicename.container
+--- tests/cases.origin/volume.servicename.container	2025-09-14 22:45:12.556780375 +0200
++++ tests/cases/volume.servicename.container	2025-09-14 22:45:57.182629071 +0200
+@@ -1,3 +1,5 @@
++## depends-on service-name.volume
++
+ [Container]
+ Image=localhost/imagename
+ ## assert-key-is "Unit" "Requires" "basic.service"
+diff --color -uriN tests/cases.origin/volume.servicename.pod tests/cases/volume.servicename.pod
+--- tests/cases.origin/volume.servicename.pod	2025-09-14 22:45:12.556780375 +0200
++++ tests/cases/volume.servicename.pod	2025-09-14 22:45:57.182629071 +0200
+@@ -1,3 +1,4 @@
++## depends-on service-name.volume
+ ## assert-podman-pre-args -v test-volume:/container/quadlet
+ ## assert-key-is "Unit" "Requires" "basic.service"
+ ## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic.service"
