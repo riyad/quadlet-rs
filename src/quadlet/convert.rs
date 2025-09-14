@@ -357,9 +357,10 @@ pub(crate) fn from_container_unit<'q>(
     lookup_and_add_all_strings(container, CONTAINER_SECTION, &all_string_keys, &mut podman);
 
     let bool_keys = [
-        ("RunInit", "--init"),
         ("EnvironmentHost", "--env-host"),
+        ("HttpProxy", "--http-proxy"),
         ("ReadOnlyTmpfs", "--read-only-tmpfs"),
+        ("RunInit", "--init"),
     ];
     lookup_and_add_bool(container, CONTAINER_SECTION, &bool_keys, &mut podman);
 
