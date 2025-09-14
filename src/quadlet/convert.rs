@@ -184,7 +184,10 @@ pub(crate) fn from_build_unit<'q>(
     // Context or WorkingDirectory has to be last argument
     if !context.is_empty() {
         podman.add(context);
-    } else if !PathBuf::from(file_path).is_absolute() && !is_url(file_path) {
+    } else if !PathBuf::from(file_path).starts_with_systemd_specifier()
+        && !PathBuf::from(file_path).is_absolute()
+        && !is_url(file_path)
+    {
         // Special handling for relative filePaths
         if working_directory.is_empty() {
             return Err(ConversionError::InvalidRelativeFile);
