@@ -1295,6 +1295,7 @@ fn handle_default_dependencies(service: &mut SystemdUnitFile, is_user: bool) {
     }
 }
 
+// this function handles the ExecReload key
 fn handle_exec_reload(
     quadlet: &SystemdUnitFile,
     service: &mut SystemdUnitFile,
@@ -1315,6 +1316,11 @@ fn handle_exec_reload(
             "ReloadCmd".into(),
             "ReloadSignal".into(),
         ));
+    }
+
+    // bail if both keys are empty
+    if reload_cmd.is_empty() && reload_signal.is_empty() {
+        return Ok(());
     }
 
     let mut podman_reload = get_base_podman_command(quadlet, quadlet_section);
