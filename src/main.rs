@@ -19,7 +19,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process;
 
-const QUADLET_VERSION: &str = "0.2.0-dev";
+static QUADLET_VERSION: &str = "0.3.0-dev";
 
 #[derive(Debug, Default, PartialEq)]
 pub(crate) struct CliOptions {
