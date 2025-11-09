@@ -36,10 +36,11 @@ pub static SUPPORTED_EXTENSIONS: [&str; 7] = [
     "volume",
 ];
 
-pub static SUPPORTED_BUILD_KEYS: [&str; 26] = [
+pub static SUPPORTED_BUILD_KEYS: [&str; 27] = [
     "Annotation",
     "Arch",
     "AuthFile",
+    "BuildArg",
     "ContainersConfModule",
     "DNS",
     "DNSOption",

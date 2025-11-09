@@ -119,6 +119,7 @@ pub(crate) fn from_build_unit<'q>(
 
     let all_key_val_keys = [
         ("Annotation", "--annotation"),
+        ("BuildArg", "--build-arg"),
         ("Environment", "--env"),
         ("Label", "--label"),
     ];
