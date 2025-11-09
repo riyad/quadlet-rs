@@ -2319,7 +2319,7 @@ fn resolve_container_mount_params(
     )?;
     csv_writer.write_field(format!("source={resolved_source}"))?;
 
-    csv_writer.write_record(None::<&[u8]>)?;
+    // NOTE: we explicitly don't call `csv_writer.write_record()` in order to prevent '\n' to be added to the line
 
     return Ok(String::from_utf8(
         csv_writer
