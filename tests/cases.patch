@@ -292,15 +292,30 @@ diff --color -uriN tests/cases.origin/label-unsupported-escape.container tests/c
 -Image=localhost/imagename
 -Label=regex=^foo(\?.*)?$
 diff --color -uriN tests/cases.origin/mount.container tests/cases/mount.container
---- tests/cases.origin/mount.container	2025-11-09 21:08:13.715908719 +0100
-+++ tests/cases/mount.container	2025-11-09 21:19:40.809371362 +0100
-@@ -1,3 +1,6 @@
+--- tests/cases.origin/mount.container	2025-11-09 22:11:57.687572008 +0100
++++ tests/cases/mount.container	2025-11-09 22:53:00.910799504 +0100
+@@ -1,9 +1,12 @@
 +## depends-on basic.volume
 +## depends-on basic.image
 +
  [Container]
  Image=localhost/imagename
+ ## assert-has-key Unit RequiresMountsFor "/path/on/host"
  ## assert-podman-args-key-val "--mount" "," "type=bind,source=/path/on/host,destination=/path/in/container"
+ Mount=type=bind,source=/path/on/host,destination=/path/in/container
+-## assert-has-key Unit RequiresMountsFor "\"/path/on/host\\x20with\\x20spaces\""
++## assert-has-key Unit RequiresMountsFor "\"/path/on/host with spaces\""
+ ## assert-podman-args-key-val "--mount" "," "type=bind,source=/path/on/host with spaces,dst=/path"
+ Mount="type=bind,src=/path/on/host with spaces,dst=/path"
+ ## assert-podman-args-key-val "--mount" "," "type=bind,source=/path/on/host,dst=/path/in/container,relabel=shared"
+@@ -32,5 +35,5 @@
+ Mount=type=bind,src=/tmp,\"dst=/path,1\"
+ ## assert-podman-args-key-val-regex "--mount" "," "type=bind,source=.*/podman-e2e-.*/subtest-.*/quadlet/src,destination=/dst/,idmap=uids=12-34-1;gids=56-78-1"
+ Mount=type=bind,source=./src/,destination=/dst/,idmap=uids=12-34-1;gids=56-78-1
+-## assert-key-is "Unit" "Requires" "basic-volume.service" "basic-image.service" "basic-artifact.service"
+-## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic-volume.service" "basic-image.service" "basic-artifact.service"
++## assert-key-is "Unit" "Requires" "basic-volume.service" "basic-image.service"
++## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic-volume.service" "basic-image.service"
 diff --color -uriN tests/cases.origin/mount.servicename.container tests/cases/mount.servicename.container
 --- tests/cases.origin/mount.servicename.container	2025-11-09 21:08:13.715908719 +0100
 +++ tests/cases/mount.servicename.container	2025-11-09 21:11:24.252876449 +0100

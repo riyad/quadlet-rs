@@ -1225,7 +1225,7 @@ pub(crate) fn from_volume_unit<'q>(
                     podman.add("--opt");
                     podman.add(format!("type={dev_type}"));
                     if dev_type == "bind" {
-                        service.add(UNIT_SECTION, "RequiresMountsFor", &device);
+                        service.add_raw(UNIT_SECTION, "RequiresMountsFor", quote_word(device.as_str()).as_str())?;
                     }
                 } else {
                     return Err(ConversionError::InvalidDeviceType);
@@ -1716,7 +1716,7 @@ fn handle_storage_source(
 
     if source.starts_with('/') {
         // Absolute path
-        service_unit_file.add(UNIT_SECTION, "RequiresMountsFor", &source);
+        service_unit_file.add_raw(UNIT_SECTION, "RequiresMountsFor", quote_word(source.as_str()).as_str())?;
     } else if source.ends_with(".volume") || (check_image && source.ends_with(".image")) {
         let source_unit_info = units_info_map
             .0
