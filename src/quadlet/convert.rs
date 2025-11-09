@@ -1018,7 +1018,13 @@ pub(crate) fn from_pod_unit<'q>(
     podman_stop.add("pod");
     podman_stop.add("stop");
     podman_stop.add("--ignore");
-    podman_stop.add("--time=10");
+
+    let mut stop_timeout = String::from("10");
+    if let Some(timeout) = pod_source.unit_file.lookup(POD_SECTION, "StopTimeout") {
+        stop_timeout = timeout;
+    }
+    podman_stop.add(format!("--time={stop_timeout}"));
+
     podman_stop.add(podman_pod_name);
     service.add_raw(
         SERVICE_SECTION,
