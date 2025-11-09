@@ -98,6 +98,7 @@ pub(crate) fn from_build_unit<'q>(
     let string_keys = [
         ("Arch", "--arch"),
         ("AuthFile", "--authfile"),
+        ("IgnoreFile","--ignorefile"),
         ("Target", "--target"),
         ("Variant", "--variant"),
         ("Retry", "--retry"),

@@ -36,7 +36,7 @@ pub static SUPPORTED_EXTENSIONS: [&str; 7] = [
     "volume",
 ];
 
-pub static SUPPORTED_BUILD_KEYS: [&str; 27] = [
+pub static SUPPORTED_BUILD_KEYS: [&str; 28] = [
     "Annotation",
     "Arch",
     "AuthFile",
@@ -50,6 +50,7 @@ pub static SUPPORTED_BUILD_KEYS: [&str; 27] = [
     "ForceRM",
     "GlobalArgs",
     "GroupAdd",
+    "IgnoreFile",
     "ImageTag",
     "Label",
     "Network",
