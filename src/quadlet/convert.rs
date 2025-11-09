@@ -81,8 +81,8 @@ pub(crate) fn from_artifact_unit<'q>(
 
     // fail fast if resource name is not set
     let artifact_name = artifact
-                .lookup(ARTIFACT_SECTION, "Artifact")
-                .unwrap_or_default();
+        .lookup(ARTIFACT_SECTION, "Artifact")
+        .unwrap_or_default();
     if artifact_name.is_empty() {
         return Err(ConversionError::NoArtifactKeySpecified);
     }
@@ -160,7 +160,7 @@ pub(crate) fn from_build_unit<'q>(
     let string_keys = [
         ("Arch", "--arch"),
         ("AuthFile", "--authfile"),
-        ("IgnoreFile","--ignorefile"),
+        ("IgnoreFile", "--ignorefile"),
         ("Target", "--target"),
         ("Variant", "--variant"),
         ("Retry", "--retry"),
@@ -522,7 +522,9 @@ pub(crate) fn from_container_unit<'q>(
     }
 
     // FIXME: use `if let Some(foo) = ... && !foo.is_empty() {` when updating to Rust 2024
-    let apparmor = container.lookup(CONTAINER_SECTION, "AppArmor").unwrap_or_default();
+    let apparmor = container
+        .lookup(CONTAINER_SECTION, "AppArmor")
+        .unwrap_or_default();
     if !apparmor.is_empty() {
         podman.add("--security-opt");
         podman.add(format!("apparmor={apparmor}"));
@@ -784,7 +786,10 @@ pub(crate) fn from_kube_unit<'q>(
     }
 
     // Convert all yaml paths to absolute paths
-    let yaml_paths: Vec<PathBuf> = yaml_paths.iter().map(|path| PathBuf::from(path).absolute_from_unit(kube)).collect();
+    let yaml_paths: Vec<PathBuf> = yaml_paths
+        .iter()
+        .map(|path| PathBuf::from(path).absolute_from_unit(kube))
+        .collect();
 
     // Only allow mixed or control-group, as nothing else works well
     let kill_mode = kube.lookup_last(KUBE_SECTION, "KillMode");
@@ -885,7 +890,11 @@ pub(crate) fn from_kube_unit<'q>(
     handle_podman_args(kube, KUBE_SECTION, &mut podman_start);
 
     // Add all YAML file paths to the command
-    podman_start.extend(yaml_paths.iter().map(|path| path.to_unwrapped_str().to_string()));
+    podman_start.extend(
+        yaml_paths
+            .iter()
+            .map(|path| path.to_unwrapped_str().to_string()),
+    );
     service.add_raw(
         SERVICE_SECTION,
         "ExecStart",
@@ -902,7 +911,11 @@ pub(crate) fn from_kube_unit<'q>(
         podman_stop.add_bool("--force", kube_down_force)
     }
     // Add all YAML file paths to the stop command
-    podman_stop.extend(yaml_paths.iter().map(|path| path.to_unwrapped_str().to_string()));
+    podman_stop.extend(
+        yaml_paths
+            .iter()
+            .map(|path| path.to_unwrapped_str().to_string()),
+    );
     service.add_raw(
         SERVICE_SECTION,
         "ExecStopPost",
@@ -1294,7 +1307,11 @@ pub(crate) fn from_volume_unit<'q>(
                     podman.add("--opt");
                     podman.add(format!("type={dev_type}"));
                     if dev_type == "bind" {
-                        service.add_raw(UNIT_SECTION, "RequiresMountsFor", quote_word(device.as_str()).as_str())?;
+                        service.add_raw(
+                            UNIT_SECTION,
+                            "RequiresMountsFor",
+                            quote_word(device.as_str()).as_str(),
+                        )?;
                     }
                 } else {
                     return Err(ConversionError::InvalidDeviceType);
@@ -1654,12 +1671,16 @@ fn handle_set_working_directory(
             }
 
             let yaml_paths = quadlet_unit_file.lookup_all_strv(quadlet_section, "Yaml");
-            if yaml_paths.is_empty()  {
+            if yaml_paths.is_empty() {
                 return Err(ConversionError::NoYamlKeySpecified);
             } else if yaml_paths.len() != 1 {
-                return Err(ConversionError::TooManyYamlKeysSpecified)
+                return Err(ConversionError::TooManyYamlKeysSpecified);
             } else {
-                relative_to_file = PathBuf::from(yaml_paths.first().expect("we already made sure there's at least one element"))
+                relative_to_file = PathBuf::from(
+                    yaml_paths
+                        .first()
+                        .expect("we already made sure there's at least one element"),
+                )
             }
         }
         "file" => {
