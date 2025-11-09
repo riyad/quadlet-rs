@@ -459,6 +459,13 @@ pub(crate) fn from_container_unit<'q>(
         podman.add(format!("label=level:{security_label_level}"));
     }
 
+    // FIXME: use `if let Some(foo) = ... && !foo.is_empty() {` when updating to Rust 2024
+    let apparmor = container.lookup(CONTAINER_SECTION, "AppArmor").unwrap_or_default();
+    if !apparmor.is_empty() {
+        podman.add("--security-opt");
+        podman.add(format!("apparmor={apparmor}"));
+    }
+
     for mut device in container.lookup_all_strv(CONTAINER_SECTION, "AddDevice") {
         if device.starts_with('-') {
             // ignore device if it doesn't exist
