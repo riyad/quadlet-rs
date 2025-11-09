@@ -389,6 +389,7 @@ fn convert<'q>(
     is_user: bool,
 ) -> Result<QuadletServiceUnitFile<'q>, ConversionError> {
     match quadlet.quadlet_type {
+        QuadletType::Artifact => convert::from_artifact_unit(quadlet, units_info_map, is_user),
         QuadletType::Build => convert::from_build_unit(quadlet, units_info_map, is_user),
         QuadletType::Container => {
             warn_if_ambiguous_image_name(&quadlet.unit_file, CONTAINER_SECTION);

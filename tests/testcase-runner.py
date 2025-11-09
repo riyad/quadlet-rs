@@ -54,7 +54,10 @@ def to_servicefile_name(file_path: Path):
     base = Path(file_path.name).stem
     ext = Path(file_path.name).suffix
     sections = parse_unitfile(file_path.read_text())
-    if ext == ".build":
+    if ext == ".artifact":
+        base = f"{base}-artifact"
+        base = sections.get('Artifact', {}).get('ServiceName', [base])[-1]
+    elif ext == ".build":
         base = f"{base}-build"
         base = sections.get('Build', {}).get('ServiceName', [base])[-1]
     elif ext == ".container":
@@ -656,7 +659,8 @@ def load_test_suite(run_rootless: bool):
     for (dirpath, _dirnames, filenames) in testcases_dir.walk():
         rel_dirpath = dirpath.relative_to(testcases_dir)
         for name in filenames:
-            if (name.endswith(".build") or
+            if (name.endswith(".artifact") or
+                name.endswith(".build") or
                 name.endswith(".container") or
                 name.endswith(".image") or
                 name.endswith(".kube") or

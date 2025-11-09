@@ -81,6 +81,8 @@ pub(crate) enum ConversionError {
     Io(#[from] io::Error),
     #[error("{0} and {1} are mutually exclusive, but both are set")]
     MutuallyExclusiveKeys(String, String),
+    #[error("no Artifact key specified")]
+    NoArtifactKeySpecified,
     #[error("no ImageTag key specified")]
     NoImageTagKeySpecified,
     #[error("no File key specified")]
@@ -117,6 +119,7 @@ impl From<systemd_unit::IoError> for ConversionError {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[non_exhaustive]
 pub(crate) enum QuadletType {
+    Artifact,
     Build,
     Container,
     Image,
@@ -133,6 +136,7 @@ impl QuadletType {
             .map(|e| e.to_str().unwrap_or_default())
             .unwrap_or_default()
         {
+            "artifact" => Ok(QuadletType::Artifact),
             "build" => Ok(QuadletType::Build),
             "container" => Ok(QuadletType::Container),
             "image" => Ok(QuadletType::Image),
@@ -182,6 +186,9 @@ impl QuadletSourceUnitFile {
                 .to_unwrapped_str()
                 .to_owned(),
             QuadletType::Build => get_build_service_name(&unit_file)
+                .to_unwrapped_str()
+                .to_owned(),
+            QuadletType::Artifact => get_artifact_service_name(&unit_file)
                 .to_unwrapped_str()
                 .to_owned(),
             QuadletType::Pod => get_pod_service_name(&unit_file)
@@ -280,6 +287,10 @@ impl UnitsInfoMap {
     ) -> Option<&mut QuadletSourceUnitFile> {
         self.0.get_mut(quadlet.file_name())
     }
+}
+
+fn get_artifact_service_name(artifact: &SystemdUnitFile) -> PathBuf {
+    get_quadlet_service_name(artifact, BUILD_SECTION, "-artifact")
 }
 
 fn get_build_service_name(build: &SystemdUnitFile) -> PathBuf {

@@ -1,5 +1,6 @@
 ## depends-on basic.volume
 ## depends-on basic.image
+## depends-on basic.artifact
 
 [Container]
 Image=localhost/imagename
@@ -35,5 +36,5 @@ Mount=type=volume,source=vol1,destination=/path/in/container,ro
 Mount=type=bind,src=/tmp,\"dst=/path,1\"
 ## assert-podman-args-key-val-regex "--mount" "," "type=bind,source=.*/podman-e2e-.*/subtest-.*/quadlet/src,destination=/dst/,idmap=uids=12-34-1;gids=56-78-1"
 Mount=type=bind,source=./src/,destination=/dst/,idmap=uids=12-34-1;gids=56-78-1
-## assert-key-is "Unit" "Requires" "basic-volume.service" "basic-image.service"
-## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic-volume.service" "basic-image.service"
+## assert-key-is "Unit" "Requires" "basic-volume.service" "basic-image.service" "basic-artifact.service"
+## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic-volume.service" "basic-image.service" "basic-artifact.service"

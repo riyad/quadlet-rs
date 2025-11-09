@@ -16,6 +16,23 @@ diff --color -uriN tests/cases.origin/a.network.reuse.name.container tests/cases
  ## assert-podman-args "--network" "container:foobar"
  ## assert-key-is "Unit" "Requires" "name.service"
  ## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "name.service"
+diff --color -uriN tests/cases.origin/artifact-mount.container tests/cases/artifact-mount.container
+--- tests/cases.origin/artifact-mount.container	2025-11-09 23:06:59.492711165 +0100
++++ tests/cases/artifact-mount.container	2025-11-09 23:56:22.502124747 +0100
+@@ -1,11 +1,11 @@
+ ## assert-podman-final-args localhost/imagename
+ ## assert-podman-args "--name" "systemd-%N"
+ ## assert-podman-args "--mount"
+-## assert-podman-args "type=artifact,source=quay.io/libpod/testartifact:20250206-single,destination=/artifacts"
++## assert-podman-args "type=artifact,destination=/artifacts,source=quay.io/libpod/testartifact:20250206-single"
+ ## assert-podman-args "--rm"
+ ## assert-podman-args "--replace"
+ ## assert-podman-args "-d"
+-## assert-podman-args "--cgroups=split"
++## assert-podman-args "--cgroups" "split"
+ ## assert-podman-args "--sdnotify=conmon"
+ ## assert-key-is "Unit" "RequiresMountsFor" "%t/containers"
+ ## assert-key-is "Service" "KillMode" "mixed"
 diff --color -uriN tests/cases.origin/autoupdate.kube tests/cases/autoupdate.kube
 --- tests/cases.origin/autoupdate.kube	2025-11-09 21:08:13.689908201 +0100
 +++ tests/cases/autoupdate.kube	2025-11-09 21:11:24.244876282 +0100
@@ -297,6 +314,7 @@ diff --color -uriN tests/cases.origin/mount.container tests/cases/mount.containe
 @@ -1,9 +1,12 @@
 +## depends-on basic.volume
 +## depends-on basic.image
++## depends-on basic.artifact
 +
  [Container]
  Image=localhost/imagename
@@ -308,14 +326,6 @@ diff --color -uriN tests/cases.origin/mount.container tests/cases/mount.containe
  ## assert-podman-args-key-val "--mount" "," "type=bind,source=/path/on/host with spaces,dst=/path"
  Mount="type=bind,src=/path/on/host with spaces,dst=/path"
  ## assert-podman-args-key-val "--mount" "," "type=bind,source=/path/on/host,dst=/path/in/container,relabel=shared"
-@@ -32,5 +35,5 @@
- Mount=type=bind,src=/tmp,\"dst=/path,1\"
- ## assert-podman-args-key-val-regex "--mount" "," "type=bind,source=.*/podman-e2e-.*/subtest-.*/quadlet/src,destination=/dst/,idmap=uids=12-34-1;gids=56-78-1"
- Mount=type=bind,source=./src/,destination=/dst/,idmap=uids=12-34-1;gids=56-78-1
--## assert-key-is "Unit" "Requires" "basic-volume.service" "basic-image.service" "basic-artifact.service"
--## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic-volume.service" "basic-image.service" "basic-artifact.service"
-+## assert-key-is "Unit" "Requires" "basic-volume.service" "basic-image.service"
-+## assert-key-is-regex "Unit" "After" "network-online.target|podman-user-wait-network-online.service" "basic-volume.service" "basic-image.service"
 diff --color -uriN tests/cases.origin/mount.servicename.container tests/cases/mount.servicename.container
 --- tests/cases.origin/mount.servicename.container	2025-11-09 21:08:13.715908719 +0100
 +++ tests/cases/mount.servicename.container	2025-11-09 21:11:24.252876449 +0100

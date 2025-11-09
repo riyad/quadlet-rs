@@ -63,6 +63,68 @@ fn find_mount_type(input: &str) -> Result<(String, Vec<String>), ConversionError
     Ok((mount_type, tokens))
 }
 
+pub(crate) fn from_artifact_unit<'q>(
+    artifact_source: &'q QuadletSourceUnitFile,
+    units_info_map: &mut UnitsInfoMap,
+    is_user: bool,
+) -> Result<QuadletServiceUnitFile<'q>, ConversionError> {
+    let mut quadlet_service = init_service_unit_file(
+        artifact_source,
+        ARTIFACT_SECTION,
+        X_ARTIFACT_SECTION,
+        &SUPPORTED_ARTIFACT_KEYS,
+        units_info_map,
+        is_user,
+    )?;
+    let artifact = &quadlet_service.quadlet.unit_file;
+    let mut service = quadlet_service.service_file;
+
+    // fail fast if resource name is not set
+    let artifact_name = artifact
+                .lookup(ARTIFACT_SECTION, "Artifact")
+                .unwrap_or_default();
+    if artifact_name.is_empty() {
+        return Err(ConversionError::NoArtifactKeySpecified);
+    }
+
+    let mut podman = get_base_podman_command(artifact, ARTIFACT_SECTION);
+    podman.add("artifact");
+    podman.add("pull");
+
+    let string_keys = [
+        ("AuthFile", "--authfile"),
+        ("CertDir", "--cert-dir"),
+        ("Creds", "--creds"),
+        ("DecryptionKey", "--decryption-key"),
+        ("Retry", "--retry"),
+        ("RetryDelay", "--retry-delay"),
+    ];
+    lookup_and_add_string(artifact, ARTIFACT_SECTION, &string_keys, &mut podman);
+
+    let bool_keys = [("Quiet", "--quiet"), ("TLSVerify", "--tls-verify")];
+    lookup_and_add_bool(artifact, ARTIFACT_SECTION, &bool_keys, &mut podman);
+
+    handle_podman_args(artifact, ARTIFACT_SECTION, &mut podman);
+
+    podman.add(&artifact_name);
+
+    service.add_raw(
+        SERVICE_SECTION,
+        "ExecStart",
+        podman.to_escaped_string().as_str(),
+    )?;
+
+    handle_one_shot_service_section(&mut service, true);
+
+    if let Some(unit_info) = units_info_map.get_mut_source_unit_info(artifact) {
+        // Store the name of the created resource
+        unit_info.resource_name = artifact_name;
+    }
+
+    quadlet_service.service_file = service;
+    Ok(quadlet_service)
+}
+
 pub(crate) fn from_build_unit<'q>(
     build_source: &'q QuadletSourceUnitFile,
     units_info_map: &mut UnitsInfoMap,
@@ -1723,8 +1785,15 @@ fn handle_storage_source(
 
     if source.starts_with('/') {
         // Absolute path
-        service_unit_file.add_raw(UNIT_SECTION, "RequiresMountsFor", quote_word(source.as_str()).as_str())?;
-    } else if source.ends_with(".volume") || (check_image && source.ends_with(".image")) {
+        service_unit_file.add_raw(
+            UNIT_SECTION,
+            "RequiresMountsFor",
+            quote_word(source.as_str()).as_str(),
+        )?;
+    } else if source.ends_with(".volume")
+        || (check_image && source.ends_with(".image"))
+        || source.ends_with(".artifact")
+    {
         let source_unit_info = units_info_map
             .0
             .get(&OsString::from(&source))
@@ -2196,7 +2265,8 @@ fn resolve_container_mount_params(
     if !(mount_type == "volume"
         || mount_type == "bind"
         || mount_type == "glob"
-        || mount_type == "image")
+        || mount_type == "image"
+        || mount_type == "artifact")
     {
         return Ok(mount);
     }

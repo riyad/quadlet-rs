@@ -7,6 +7,7 @@ pub static UNIT_DIR_DISTRO: &str = "/usr/share/containers/systemd";
 /// Directory for temporary Quadlet files (sysadmin owned)
 pub static UNIT_DIR_TEMP: &str = "/run/containers/systemd";
 
+pub static ARTIFACT_SECTION: &str   = "Artifact";
 pub static BUILD_SECTION: &str      = "Build";
 pub static CONTAINER_SECTION: &str  = "Container";
 pub static IMAGE_SECTION: &str      = "Image";
@@ -15,6 +16,7 @@ pub static NETWORK_SECTION: &str    = "Network";
 pub static POD_SECTION: &str        = "Pod";
 pub static QUADLET_SECTION: &str    = "Quadlet";
 pub static VOLUME_SECTION: &str     = "Volume";
+pub static X_ARTIFACT_SECTION: &str = "X-Artifact";
 pub static X_BUILD_SECTION: &str    = "X-Build";
 pub static X_CONTAINER_SECTION: &str = "X-Container";
 pub static X_IMAGE_SECTION: &str    = "X-Image";
@@ -26,7 +28,8 @@ pub static X_VOLUME_SECTION: &str   = "X-Volume";
 
 pub static AUTO_UPDATE_LABEL: &str = "io.containers.autoupdate";
 
-pub static SUPPORTED_EXTENSIONS: [&str; 7] = [
+pub static SUPPORTED_EXTENSIONS: [&str; 8] = [
+    "artifact",
     "build",
     "container",
     "image",
@@ -34,6 +37,22 @@ pub static SUPPORTED_EXTENSIONS: [&str; 7] = [
     "network",
     "pod",
     "volume",
+];
+
+pub static SUPPORTED_ARTIFACT_KEYS: [&str; 13] = [
+    "Artifact",
+    "AuthFile",
+    "CertDir",
+    "ContainersConfModule",
+    "Creds",
+    "DecryptionKey",
+    "GlobalArgs",
+    "PodmanArgs",
+    "Quiet",
+    "Retry",
+    "RetryDelay",
+    "ServiceName",
+    "TLSVerify",
 ];
 
 pub static SUPPORTED_BUILD_KEYS: [&str; 28] = [
