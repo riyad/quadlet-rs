@@ -1,4 +1,4 @@
-use super::quoted::{quote_value, unquote_value};
+use super::quoted::{escape_value, unescape_value};
 use super::split::{SplitStrv, SplitWord};
 use super::Error;
 use ordered_multimap::ListOrderedMultimap;
@@ -30,7 +30,7 @@ impl EntryValue {
     }
 
     pub fn new(unquoted: &str) -> Self {
-        Self(quote_value(unquoted))
+        Self(escape_value(unquoted))
     }
 
     pub(crate) fn raw(&self) -> &String {
@@ -56,12 +56,12 @@ impl EntryValue {
 
     pub fn try_from_raw<S: Into<String>>(raw: S) -> Result<Self, Error> {
         let raw = raw.into();
-        let _ = unquote_value(raw.as_str())?;
+        let _ = unescape_value(raw.as_str())?;
         Ok(Self(raw))
     }
 
     pub fn try_unquote(&self) -> Result<String, Error> {
-        unquote_value(self.0.as_str())
+        unescape_value(self.0.as_str())
     }
 
     // pub fn to_string(&self) -> String {

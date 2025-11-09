@@ -11,7 +11,7 @@ mod value;
 pub use self::constants::*;
 pub use self::path_buf_ext::*;
 pub use self::path_ext::*;
-pub use self::quoted::{quote_value, quote_words, unquote_value};
+pub use self::quoted::{escape_value, quote_word, quote_words, unescape_value};
 pub use self::split::{SplitStrv, SplitWord};
 pub use self::unit_data::*;
 pub use self::unit_file::*;

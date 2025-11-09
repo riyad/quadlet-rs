@@ -14,7 +14,7 @@ fn char_needs_escaping(c: char) -> bool {
         || c == '\\'
 }
 
-pub fn quote_value(value: &str) -> String {
+pub fn escape_value(value: &str) -> String {
     let mut escaped: String = String::with_capacity(value.len());
     for c in value.chars() {
         // anything beyond ASCII doesn't need to be escaped (yay Unicode)
@@ -42,6 +42,18 @@ pub fn quote_value(value: &str) -> String {
     escaped
 }
 
+pub fn quote_word<'a, S>(word: S) -> String
+where
+    S: Into<&'a str>,
+{
+    let word = word.into();
+    if word_needs_escaping(word) {
+        format!("\"{}\"", escape_value(word))
+    } else {
+        word.to_string()
+    }
+}
+
 pub fn quote_words<'a, S>(words: impl Iterator<Item = S>) -> String
 where
     S: Into<&'a str>,
@@ -50,7 +62,7 @@ where
         .map(|word| {
             let word = word.into();
             if word_needs_escaping(word) {
-                format!("\"{}\"", quote_value(word))
+                format!("\"{}\"", escape_value(word))
             } else {
                 word.to_string()
             }
@@ -59,14 +71,14 @@ where
         .join(" ")
 }
 
-pub fn unquote_value(raw: &str) -> Result<String, Error> {
+pub fn unescape_value(raw: &str) -> Result<String, Error> {
     let mut parser = Quoted {
         chars: raw.chars(),
         cur: None,
     };
     parser.bump();
 
-    parser.parse_and_unquote()
+    parser.parse_and_unescape()
 }
 
 fn word_needs_escaping(word: &str) -> bool {
@@ -83,7 +95,7 @@ impl<'a> Quoted<'a> {
         self.cur = self.chars.next();
     }
 
-    fn parse_and_unquote(&mut self) -> Result<String, Error> {
+    fn parse_and_unescape(&mut self) -> Result<String, Error> {
         let mut result: String = String::new();
         let mut quote: Option<char> = None;
 
@@ -243,55 +255,55 @@ impl<'a> Quoted<'a> {
 #[cfg(test)]
 mod tests {
     mod quote_value {
-        use super::super::quote_value;
+        use super::super::escape_value;
 
         #[test]
         fn does_not_escape_non_ascii_characters() {
             let input = "äöü";
 
-            assert_eq!(quote_value(input), input)
+            assert_eq!(escape_value(input), input)
         }
 
         #[test]
         fn does_not_escape_printable_ascii_characters() {
             let input = "abc&-:?*~123";
 
-            assert_eq!(quote_value(input), input)
+            assert_eq!(escape_value(input), input)
         }
 
         #[test]
         fn escape_ascii_whitespace() {
             let input = " \t\r\n\u{b}\u{c}";
 
-            assert_eq!(quote_value(input), " \\t\\r\\n\\v\\f".to_string())
+            assert_eq!(escape_value(input), " \\t\\r\\n\\v\\f".to_string())
         }
 
         #[test]
         fn escapes_ascii_control_characters() {
             let input = "\u{7}\u{8}\u{1b}";
 
-            assert_eq!(quote_value(input), "\\a\\b\\x1b".to_string())
+            assert_eq!(escape_value(input), "\\a\\b\\x1b".to_string())
         }
 
         #[test]
         fn escapes_double_quotes() {
             let input = "\"'un'quoted\"";
 
-            assert_eq!(quote_value(input), "\\\"'un'quoted\\\"".to_string())
+            assert_eq!(escape_value(input), "\\\"'un'quoted\\\"".to_string())
         }
 
         #[test]
         fn does_not_escape_single_quotes() {
             let input = "'quoted'";
 
-            assert_eq!(quote_value(input), "'quoted'".to_string())
+            assert_eq!(escape_value(input), "'quoted'".to_string())
         }
 
         #[test]
         fn escapes_backslash() {
             let input = "\\'quoted\\'";
 
-            assert_eq!(quote_value(input), "\\\\'quoted\\\\'".to_string())
+            assert_eq!(escape_value(input), "\\\\'quoted\\\\'".to_string())
         }
     }
 
@@ -324,48 +336,48 @@ mod tests {
     }
 
     mod unquote_value {
-        use super::super::{unquote_value, Error};
+        use super::super::{unescape_value, Error};
 
         #[test]
         fn removes_outer_quotes() {
             let input = "\"foo\"";
 
-            assert_eq!(unquote_value(input), Ok("foo".into()),);
+            assert_eq!(unescape_value(input), Ok("foo".into()),);
         }
 
         #[test]
         fn keeps_quotes_starting_inside_words() {
             let input = "foo=\'bar\' \"bar=baz\"";
 
-            assert_eq!(unquote_value(input), Ok("foo=\'bar\' bar=baz".into()),);
+            assert_eq!(unescape_value(input), Ok("foo=\'bar\' bar=baz".into()),);
         }
 
         #[test]
         fn keeps_quotes_ending_inside_words() {
             let input = "\"foo bar\"baz\"";
 
-            assert_eq!(unquote_value(input), Ok("foo bar\"baz".into()),);
+            assert_eq!(unescape_value(input), Ok("foo bar\"baz".into()),);
         }
 
         #[test]
         fn keeps_unbalanced_quotes() {
             let input = "foo bar\"baz\'";
 
-            assert_eq!(unquote_value(input), Ok("foo bar\"baz\'".into()),);
+            assert_eq!(unescape_value(input), Ok("foo bar\"baz\'".into()),);
         }
 
         #[test]
         fn keeps_spaces_inside_quotes() {
             let input = "foo \"bar \tbaz\"";
 
-            assert_eq!(unquote_value(input), Ok("foo bar \tbaz".into()),);
+            assert_eq!(unescape_value(input), Ok("foo bar \tbaz".into()),);
         }
 
         #[test]
         fn keeps_nested_quotes() {
             let input = "\'\"foo\"bar \tbar=\"baz\"\'";
 
-            assert_eq!(unquote_value(input), Ok("\"foo\"bar \tbar=\"baz\"".into()),);
+            assert_eq!(unescape_value(input), Ok("\"foo\"bar \tbar=\"baz\"".into()),);
         }
 
         #[test]
@@ -373,7 +385,7 @@ mod tests {
             let input = "\\a \\b \\f \\n \\r \\t \\v \\\\ \\\" \\\' \\s";
 
             assert_eq!(
-                unquote_value(input),
+                unescape_value(input),
                 Ok("\u{7} \u{8} \u{c} \n \r \t \u{b} \\ \" \'  ".into()),
             );
         }
@@ -383,7 +395,7 @@ mod tests {
             let input = "\\xaa \\u1234 \\U0010cdef \\123";
 
             assert_eq!(
-                unquote_value(input),
+                unescape_value(input),
                 Ok("\u{aa} \u{1234} \u{10cdef} \u{53}".into()),
             );
         }
@@ -393,7 +405,7 @@ mod tests {
             let input = "\\x00";
 
             assert_eq!(
-                unquote_value(input),
+                unescape_value(input),
                 Err(Error::Unquoting(
                     "\\0 character not allowed in escape sequence".into()
                 )),
@@ -405,7 +417,7 @@ mod tests {
             let input = "\\u123x";
 
             assert_eq!(
-                unquote_value(input),
+                unescape_value(input),
                 Err(Error::Unquoting(
                     "expected 4 hex values after \"\\x\", but got \"\\x123x\"".into()
                 )),
@@ -417,7 +429,7 @@ mod tests {
             let input = "\\678";
 
             assert_eq!(
-                unquote_value(input),
+                unescape_value(input),
                 Err(Error::Unquoting(
                     "expected 3 octal values after \"\\\", but got \"\\678\"".into()
                 )),
@@ -429,7 +441,7 @@ mod tests {
             let input = "\\";
 
             assert_eq!(
-                unquote_value(input),
+                unescape_value(input),
                 Err(Error::Unquoting(
                     "expecting escape sequence, but found EOF.".into()
                 )),
@@ -441,7 +453,7 @@ mod tests {
             let input = "\\u12";
 
             assert_eq!(
-                unquote_value(input),
+                unescape_value(input),
                 Err(Error::Unquoting(
                     "expecting unicode escape sequence, but found EOF.".into()
                 )),
@@ -453,7 +465,7 @@ mod tests {
             let input = "\\_";
 
             assert_eq!(
-                unquote_value(input),
+                unescape_value(input),
                 Err(Error::Unquoting(
                     "expecting escape sequence, but found '_'.".into()
                 )),
