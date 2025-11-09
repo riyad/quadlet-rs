@@ -95,6 +95,8 @@ pub(crate) enum ConversionError {
     PodNotFound(String),
     #[error("requested Quadlet source {0:?} was not found")]
     SourceNotFound(String),
+    #[error("SetWorkingDirectory=yaml is only supported when a single Yaml key is provided")]
+    TooManyYamlKeysSpecified,
     #[error("{0}")]
     UnknownKey(String),
     #[error("unsupported file type {0:?}")]

@@ -709,12 +709,13 @@ pub(crate) fn from_kube_unit<'q>(
     let kube = &quadlet_service.quadlet.unit_file;
     let mut service = quadlet_service.service_file;
 
-    let yaml_path = kube.lookup_last(KUBE_SECTION, "Yaml").unwrap_or_default();
-    if yaml_path.is_empty() {
+    let yaml_paths = kube.lookup_all_strv(KUBE_SECTION, "Yaml");
+    if yaml_paths.is_empty() {
         return Err(ConversionError::NoYamlKeySpecified);
     }
 
-    let yaml_path = PathBuf::from(yaml_path).absolute_from_unit(kube);
+    // Convert all yaml paths to absolute paths
+    let yaml_paths: Vec<PathBuf> = yaml_paths.iter().map(|path| PathBuf::from(path).absolute_from_unit(kube)).collect();
 
     // Only allow mixed or control-group, as nothing else works well
     let kill_mode = kube.lookup_last(KUBE_SECTION, "KillMode");
@@ -814,8 +815,8 @@ pub(crate) fn from_kube_unit<'q>(
 
     handle_podman_args(kube, KUBE_SECTION, &mut podman_start);
 
-    podman_start.add(yaml_path.to_unwrapped_str());
-
+    // Add all YAML file paths to the command
+    podman_start.extend(yaml_paths.iter().map(|path| path.to_unwrapped_str().to_string()));
     service.add_raw(
         SERVICE_SECTION,
         "ExecStart",
@@ -831,8 +832,8 @@ pub(crate) fn from_kube_unit<'q>(
     if let Some(kube_down_force) = kube.lookup_bool(KUBE_SECTION, "KubeDownForce") {
         podman_stop.add_bool("--force", kube_down_force)
     }
-
-    podman_stop.add(yaml_path.to_unwrapped_str());
+    // Add all YAML file paths to the stop command
+    podman_stop.extend(yaml_paths.iter().map(|path| path.to_unwrapped_str().to_string()));
     service.add_raw(
         SERVICE_SECTION,
         "ExecStopPost",
@@ -1583,10 +1584,13 @@ fn handle_set_working_directory(
                 ));
             }
 
-            if let Some(yaml) = quadlet_unit_file.lookup(quadlet_section, "Yaml") {
-                relative_to_file = PathBuf::from(yaml)
-            } else {
+            let yaml_paths = quadlet_unit_file.lookup_all_strv(quadlet_section, "Yaml");
+            if yaml_paths.is_empty()  {
                 return Err(ConversionError::NoYamlKeySpecified);
+            } else if yaml_paths.len() != 1 {
+                return Err(ConversionError::TooManyYamlKeysSpecified)
+            } else {
+                relative_to_file = PathBuf::from(yaml_paths.first().expect("we already made sure there's at least one element"))
             }
         }
         "file" => {
