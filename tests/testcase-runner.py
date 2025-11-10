@@ -54,26 +54,32 @@ def to_servicefile_name(file_path: Path):
     base = Path(file_path.name).stem
     ext = Path(file_path.name).suffix
     sections = parse_unitfile(file_path.read_text())
+    is_template = ''
+
+    if base.endswith('@'):
+        is_template = '@'
+        base = base[:-1]
+
     if ext == ".artifact":
-        base = f"{base}-artifact"
+        base = f"{base}-artifact{is_template}"
         base = sections.get('Artifact', {}).get('ServiceName', [base])[-1]
     elif ext == ".build":
-        base = f"{base}-build"
+        base = f"{base}-build{is_template}"
         base = sections.get('Build', {}).get('ServiceName', [base])[-1]
     elif ext == ".container":
-        base = base
+        base = f"{base}{is_template}"
         base = sections.get('Container', {}).get('ServiceName', [base])[-1]
     elif ext == ".image":
-        base = f"{base}-image"
+        base = f"{base}-image{is_template}"
         base = sections.get('Image', {}).get('ServiceName', [base])[-1]
     elif ext == ".network":
-        base = f"{base}-network"
+        base = f"{base}-network{is_template}"
         base = sections.get('Network', {}).get('ServiceName', [base])[-1]
     elif ext == ".pod":
-        base = f"{base}-pod"
+        base = f"{base}-pod{is_template}"
         base = sections.get('Pod', {}).get('ServiceName', [base])[-1]
     elif ext == ".volume":
-        base = f"{base}-volume"
+        base = f"{base}-volume{is_template}"
         base = sections.get('Volume', {}).get('ServiceName', [base])[-1]
     return f"{base}.service"
 

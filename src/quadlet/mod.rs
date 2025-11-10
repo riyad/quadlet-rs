@@ -22,6 +22,7 @@ use std::ffi::OsString;
 use std::fs::File;
 use std::io;
 use std::io::{BufWriter, Write};
+use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, thiserror::Error)]
@@ -326,6 +327,25 @@ fn get_container_name(container: &SystemdUnitFile) -> String {
     }
 }
 
+// Get the unresolved resource name that may contain '%'.
+fn get_resource_name(quadlet_unit: &SystemdUnitFile, section: &str, key: &str) -> String {
+    let mut resource_name = quadlet_unit.lookup(section, key).unwrap_or_default();
+    if resource_name.is_empty() {
+        resource_name = quad_replace_extension(quadlet_unit.path(), "", "systemd-", "")
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+		// By default, We want to name the resource by the service name.
+        if dbg!(&resource_name).contains('@') {
+            resource_name.pop();
+            resource_name = format!("{resource_name}-%i");
+        }
+    }
+    dbg!(resource_name)
+}
+
 // Get the resolved container name that contains no '%'.
 // Returns an empty string if not resolvable.
 fn get_container_resource_name(container: &SystemdUnitFile) -> String {
@@ -385,12 +405,20 @@ fn get_quadlet_service_name(unit: &SystemdUnitFile, section: &str, name_suffix: 
         return PathBuf::from(service_name);
     }
 
-    quad_replace_extension(
+    let mut service_file_name = quad_replace_extension(
         Path::new(unit.path().file_name().unwrap()),
         "",
         "",
-        name_suffix,
-    )
+        "",
+    );
+    if service_file_name.as_os_str().as_bytes().ends_with(b"@") {
+        let mut name = service_file_name.to_unwrapped_str().to_string();
+        name.pop();
+        service_file_name = PathBuf::from(format!("{name}{name_suffix}@"));
+    } else {
+        service_file_name.as_mut_os_string().push(name_suffix)
+    }
+    service_file_name
 }
 
 fn get_volume_service_name(volume: &SystemdUnitFile) -> PathBuf {

@@ -500,6 +500,16 @@ diff --color -uriN tests/cases.origin/startwithpod_yes.container tests/cases/sta
  # assert-last-key-contains "Unit" "After" "startwithpod-pod.service"
  # assert-last-key-contains "Unit" "BindsTo" "startwithpod-pod.service"
  
+diff --color -uriN tests/cases.origin/template-dependency@.container tests/cases/template-dependency@.container
+--- tests/cases.origin/template-dependency@.container	2025-11-09 23:06:59.511711524 +0100
++++ tests/cases/template-dependency@.container	2025-11-10 01:01:48.890975161 +0100
+@@ -1,3 +1,6 @@
++## depends-on template-dependency@.volume
++## depends-on template-dependency@.network
++
+ ## assert-podman-args-key-val "--mount" "," "type=volume,source=systemd-template-dependency-%i,destination=/path/in/container,ro=true"
+ ## assert-podman-args -v systemd-template-dependency-%i:/container/quadlet
+ ## assert-podman-args "--network" "systemd-template-dependency-%i"
 diff --color -uriN tests/cases.origin/test_subdir/mysleep.container tests/cases/test_subdir/mysleep.container
 --- tests/cases.origin/test_subdir/mysleep.container	2025-11-09 21:08:13.743909277 +0100
 +++ tests/cases/test_subdir/mysleep.container	2025-11-09 21:11:24.261876637 +0100

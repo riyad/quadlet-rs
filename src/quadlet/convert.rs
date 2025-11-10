@@ -950,19 +950,7 @@ pub(crate) fn from_network_unit<'q>(
     let mut service = quadlet_service.service_file;
 
     // Derive network name from unit name (with added prefix), or use user-provided name.
-    let podman_network_name = network
-        .lookup(NETWORK_SECTION, "NetworkName")
-        .unwrap_or_default();
-    let podman_network_name = if podman_network_name.is_empty() {
-        quad_replace_extension(network.path(), "", "systemd-", "")
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_string()
-    } else {
-        podman_network_name.to_string()
-    };
+    let podman_network_name = get_resource_name(network, NETWORK_SECTION, "NetworkName");
 
     if network
         .lookup_bool(NETWORK_SECTION, "NetworkDeleteOnStop")
@@ -1228,19 +1216,7 @@ pub(crate) fn from_volume_unit<'q>(
     let mut service = quadlet_service.service_file;
 
     // Derive volume name from unit name (with added prefix), or use user-provided name.
-    let podman_volume_name = volume
-        .lookup(VOLUME_SECTION, "VolumeName")
-        .unwrap_or_default();
-    let podman_volume_name = if podman_volume_name.is_empty() {
-        quad_replace_extension(volume.path(), "", "systemd-", "")
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_string()
-    } else {
-        podman_volume_name.to_string()
-    };
+    let podman_volume_name = get_resource_name(volume, VOLUME_SECTION, "VolumeName");
     // Store the name of the created resource
     units_info_map
         .get_mut_source_unit_info(volume)
