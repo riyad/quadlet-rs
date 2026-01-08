@@ -4,14 +4,14 @@ pub mod iterators;
 pub(crate) mod logger;
 pub(crate) mod podman_command;
 
-use convert::quad_replace_extension;
+use ere::prelude::*;
 use log::debug;
 use log::warn;
-use regex_lite::Regex;
 
 use crate::systemd_unit;
 use crate::systemd_unit::PathExt;
 use crate::systemd_unit::SystemdUnitFile;
+use convert::quad_replace_extension;
 
 pub(crate) use self::constants::*;
 pub(crate) use self::iterators::*;
@@ -471,8 +471,8 @@ fn is_unambiguous_name(image_name: &str) -> bool {
 
 fn is_url(maybe_url: &str) -> bool {
     // this is a shortcut to keep binary size small, we don't need a full URL parser here
-    let re = Regex::new("^((https?)|(git)://)|(github\\.com/).+$").unwrap();
-    re.is_match(maybe_url)
+    const URL_REGEX: Regex<2> = compile_regex!(r"^(:?https?|git)://|github\\.com/.+$");
+    URL_REGEX.test(maybe_url)
 }
 
 // warns if input is an ambiguous name, i.e. a partial image id or a short
