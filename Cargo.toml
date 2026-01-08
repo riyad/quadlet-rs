@@ -15,12 +15,9 @@ categories = ["command-line-utilities", "config", "parser-implementations"]
 [dependencies]
 csv = { version = "1.3", default-features = false }
 dirs = { version = "6.0", default-features = false }
+ere = "0.2.4"
 log = { version = "0.4.22", features = ['std'] }
 ordered-multimap = "0.7"
-regex-lite = { version = "0.1.6", default-features = false, features = [
-  'std',
-  'string',
-] }
 thiserror = { version = "2.0.1", default-features = false }
 users = { version = "0.11", default-features = false }
 walkdir = { version = "2", default-features = false }

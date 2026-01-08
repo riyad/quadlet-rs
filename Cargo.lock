@@ -92,6 +92,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "ere"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ced253a70c1159bac921dc672edbb5530c35fbca23a7f1b9f03641f39e4172f1"
+dependencies = [
+ "ere-core",
+ "ere-macros",
+]
+
+[[package]]
+name = "ere-core"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6639aa08d01ec59ec0509e9b79b4e17b953131b053d1a9a6b449150e58c9706d"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+ "thiserror",
+ "utf8-ranges",
+]
+
+[[package]]
+name = "ere-macros"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9a41368e568caa1ee19d8dfa943d7f2f3ddabc0d9c0965cc37d76e0146c6b89"
+dependencies = [
+ "ere-core",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "errno"
 version = "0.3.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -233,9 +267,9 @@ version = "0.3.0"
 dependencies = [
  "csv",
  "dirs",
+ "ere",
  "log",
  "ordered-multimap",
- "regex-lite",
  "serial_test",
  "tempfile",
  "thiserror",
@@ -271,12 +305,6 @@ dependencies = [
  "libredox",
  "thiserror",
 ]
-
-[[package]]
-name = "regex-lite"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d942b98df5e658f56f20d592c7f868833fe38115e65c33003d8cd224b0155da"
 
 [[package]]
 name = "rustix"
@@ -443,6 +471,12 @@ checksum = "24cc0f6d6f267b73e5a2cadf007ba8f9bc39c6a6f9666f8cf25ea809a153b032"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "utf8-ranges"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fcfc827f90e53a02eaef5e535ee14266c1d569214c6aa70133a624d8a3164ba"
 
 [[package]]
 name = "walkdir"
