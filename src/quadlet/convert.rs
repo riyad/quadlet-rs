@@ -2104,75 +2104,9 @@ fn init_service_unit_file<'q>(
 }
 
 fn is_port_range(port: &str) -> bool {
-    // NOTE: We chose to implement a parser ouselves, because pulling in the regex crate just for this
-    // increases the binary size by at least 0.5M. :/
-    // But if we were to use the regex crate, all this function does is this:
-    // const RE: Lazy<Regex> = Lazy::new(|| Regex::new("\\d+(-\\d+)?(/udp|/tcp)?$").unwrap());
-    // return RE.is_match(port)
-
-    if port.is_empty() {
-        return false;
-    }
-
-    let mut chars = port.chars();
-    let mut cur: Option<char>;
-    let mut digits; // count how many digits we've read
-
-    // necessary "\\d+" part
-    digits = 0;
-    loop {
-        cur = chars.next();
-        match cur {
-            Some(c) if c.is_ascii_digit() => digits += 1,
-            // start of next part
-            Some('-' | '/') if digits > 0 => break,
-            // illegal character
-            Some(_) => return false,
-            // string has ended, just make sure we've seen at least one digit
-            None => return digits > 0,
-        }
-    }
-
-    // parse optional "(-\\d+)?" part
-    if cur.unwrap() == '-' {
-        digits = 0;
-        loop {
-            cur = chars.next();
-            match cur {
-                Some(c) if c.is_ascii_digit() => digits += 1,
-                // start of next part
-                Some('/') => break,
-                // illegal character
-                Some(_) => return false,
-                // string has ended, just make sure we've seen at least one digit
-                None => return digits > 0,
-            }
-        }
-    }
-
-    // parse optional "(/udp|/tcp)?" part
-    let mut tcp = 0; // count how many characters we've read
-    let mut udp = 0; // count how many characters we've read
-    loop {
-        cur = chars.next();
-        match cur {
-            // parse "tcp"
-            Some('t') if tcp == 0 && udp == 0 => tcp += 1,
-            Some('c') if tcp == 1 => tcp += 1,
-            Some('p') if tcp == 2 => break,
-            // parse "udp"
-            Some('u') if udp == 0 && tcp == 0 => udp += 1,
-            Some('d') if udp == 1 => udp += 1,
-            Some('p') if udp == 2 => break,
-            // illegal character
-            Some(_) => return false,
-            // string has ended, just after '/' or in the middle of "tcp" or "udp"
-            None => return false,
-        }
-    }
-
-    // make sure we're at the end of the string
-    chars.next().is_none()
+    //const PORT_RANGE_REGEX: Regex<3> = compile_regex!(r"^\d+(-\d+)?(/tcp|/udp)?$");
+    const PORT_RANGE_REGEX: Regex<3> = compile_regex!(r"^[1-9][0-9]{0,4}(-[1-9][0-9]{0,4})?(/tcp|/udp)?$");
+    return PORT_RANGE_REGEX.test(port)
 }
 
 fn lookup_and_add_all_key_vals(
@@ -2336,9 +2270,13 @@ mod tests {
         }
 
         #[test]
-        // FIXME: maybe it should't pass
-        fn succeeds_with_too_large_port_number() {
-            assert!(is_port_range("123456"))
+        fn fails_with_too_large_port_number() {
+            assert!(!is_port_range("123456"))
+        }
+
+        #[test]
+        fn fails_when_port_number_starts_with_zero() {
+            assert!(!is_port_range("0123"))
         }
 
         #[test]
