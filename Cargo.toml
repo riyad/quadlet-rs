@@ -36,7 +36,6 @@ lto = "fat"
 panic = "abort"
 codegen-units = 1
 opt-level = "s"
-inline-threshold = 7 # adapted from "Tighten Rust's Belt, Ayers et al., 2022"
 
 [profile.dev]
 split-debuginfo = "unpacked"
