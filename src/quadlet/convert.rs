@@ -2125,7 +2125,7 @@ fn is_port_range(port: &str) -> bool {
         match cur {
             Some(c) if c.is_ascii_digit() => digits += 1,
             // start of next part
-            Some('-' | '/') => break,
+            Some('-' | '/') if digits > 0 => break,
             // illegal character
             Some(_) => return false,
             // string has ended, just make sure we've seen at least one digit
@@ -2321,4 +2321,69 @@ fn warn_if_unsupported_service_keys(quadlet_file: &SystemdUnitFile) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod is_port_range {
+        use super::*;
+
+        #[test]
+        fn fails_with_empty_string() {
+            assert!(!is_port_range(""))
+        }
+
+        #[test]
+        fn succeeds_with_port() {
+            assert!(is_port_range("80"))
+        }
+
+        #[test]
+        // FIXME: maybe it should't pass
+        fn succeeds_with_too_large_port_number() {
+            assert!(is_port_range("123456"))
+        }
+
+        #[test]
+        fn succeeds_with_port_range() {
+            assert!(is_port_range("1-5"))
+        }
+
+        #[test]
+        fn fails_with_missing_range_start() {
+            assert!(!is_port_range("-10"))
+        }
+
+        #[test]
+        fn fails_with_missing_range_end() {
+            assert!(!is_port_range("2000-"))
+        }
+
+        #[test]
+        fn succeeds_with_tcp_port() {
+            assert!(is_port_range("443/tcp"))
+        }
+
+        #[test]
+        fn succeeds_with_udp_port() {
+            assert!(is_port_range("443/udp"))
+        }
+
+        #[test]
+        fn fails_without_port_number() {
+            assert!(!is_port_range("/tcp"))
+        }
+
+        #[test]
+        fn fails_without_unknown_protocol() {
+            assert!(!is_port_range("/icmp"))
+        }
+
+        #[test]
+        fn succeeds_with_port_range_and_protocol() {
+            assert!(is_port_range("32000-32100/tcp"))
+        }
+
+        #[test]
+        fn fails_with_bogus_at_the_end() {
+            assert!(!is_port_range("32000/tcpppp"))
+        }
+    }
 }
