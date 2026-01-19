@@ -30,12 +30,13 @@ tempfile = { version = "3.12.0", default-features = false }
 
 # optimize with tips from https://github.com/johnthagen/min-sized-rust
 [profile.release]
-# unpotimized file size with rustc 1.76.0: 1.1M
-strip = true         # no changes to binary size
+# unpotimized file size with Rust 1.92.0: 1.1M
+strip = true
 lto = "fat"
 panic = "abort"
 codegen-units = 1
 opt-level = "s"
+# file size with all these options: 748K
 
 [profile.dev]
 split-debuginfo = "unpacked"
