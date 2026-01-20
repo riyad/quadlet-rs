@@ -158,9 +158,20 @@ impl SystemdUnitFile {
             .collect()
     }
 
+    pub fn is_plain_unit(&self) -> bool {
+        !self.path().file_stem().unwrap_or_default().as_encoded_bytes().contains(&b'@')
+    }
+
+    pub fn is_template_instance_unit(&self) -> bool {
+        match self.path().file_name_template_parts() {
+            (Some(_), Some(_)) => true,
+            _ => false,
+        }
+    }
+
     pub fn is_template_unit(&self) -> bool {
         match self.path().file_name_template_parts() {
-            (Some(_), _) => true,
+            (Some(_), None) => true,
             _ => false,
         }
     }
@@ -327,6 +338,94 @@ mod tests {
         }
     }
 
+    mod is_plain_unit {
+        use super::*;
+
+        #[test]
+        fn with_empty_path() {
+            let unit_file = SystemdUnitFile {
+                path: PathBuf::new(),
+                ..Default::default()
+            };
+
+            assert!(unit_file.is_plain_unit());
+        }
+
+        #[test]
+        fn with_simple_path() {
+            let unit_file = SystemdUnitFile {
+                path: PathBuf::from("foo/bar.timer"),
+                ..Default::default()
+            };
+
+            assert!(unit_file.is_plain_unit());
+        }
+
+        #[test]
+        fn with_template_base_path() {
+            let unit_file = SystemdUnitFile {
+                path: PathBuf::from("foo/bar@.netdev"),
+                ..Default::default()
+            };
+
+            assert!(!unit_file.is_plain_unit());
+        }
+
+        #[test]
+        fn with_template_instance_path() {
+            let unit_file = SystemdUnitFile {
+                path: PathBuf::from("foo/bar@baz.netdev"),
+                ..Default::default()
+            };
+
+            assert!(!unit_file.is_plain_unit());
+        }
+    }
+
+    mod is_template_instance_unit {
+        use super::*;
+
+        #[test]
+        fn with_empty_path() {
+            let unit_file = SystemdUnitFile {
+                path: PathBuf::new(),
+                ..Default::default()
+            };
+
+            assert!(!unit_file.is_template_instance_unit());
+        }
+
+        #[test]
+        fn with_simple_path() {
+            let unit_file = SystemdUnitFile {
+                path: PathBuf::from("foo/bar.timer"),
+                ..Default::default()
+            };
+
+            assert!(!unit_file.is_template_instance_unit());
+        }
+
+        #[test]
+        fn with_template_base_path() {
+            let unit_file = SystemdUnitFile {
+                path: PathBuf::from("foo/bar@.netdev"),
+                ..Default::default()
+            };
+
+            assert!(!unit_file.is_template_instance_unit());
+        }
+
+        #[test]
+        fn with_template_instance_path() {
+            let unit_file = SystemdUnitFile {
+                path: PathBuf::from("foo/bar@baz.netdev"),
+                ..Default::default()
+            };
+
+            assert!(unit_file.is_template_instance_unit());
+        }
+    }
+
     mod is_template_unit {
         use super::*;
 
@@ -367,7 +466,7 @@ mod tests {
                 ..Default::default()
             };
 
-            assert!(unit_file.is_template_unit());
+            assert!(!unit_file.is_template_unit());
         }
     }
 

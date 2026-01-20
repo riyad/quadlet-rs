@@ -318,7 +318,7 @@ fn get_container_name(container: &SystemdUnitFile) -> String {
         container_name
     } else {
         // By default, We want to name the container by the service name
-        if container.is_template_unit() {
+        if container.is_template_unit() || container.is_template_instance_unit() {
             "systemd-%p_%i"
         } else {
             "systemd-%N"
