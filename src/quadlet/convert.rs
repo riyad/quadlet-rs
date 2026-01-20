@@ -1573,13 +1573,13 @@ fn handle_podman_args(unit_file: &SystemdUnitData, section: &str, podman: &mut P
 }
 
 fn handle_pod(
-    quadlet_unit: &SystemdUnitData,
+    quadlet_unit_file: &SystemdUnitFile,
     service_unit_file: &mut SystemdUnitFile,
     section: &str,
     units_info_map: &mut UnitsInfoMap,
     podman: &mut PodmanCommand,
 ) -> Result<(), ConversionError> {
-    if let Some(pod) = quadlet_unit.lookup(section, "Pod") {
+    if let Some(pod) = quadlet_unit_file.lookup(section, "Pod") {
         if !pod.is_empty() {
             if !pod.ends_with(".pod") {
                 return Err(ConversionError::InvalidPod(pod));
@@ -1602,7 +1602,8 @@ fn handle_pod(
 
             // If we want to start the container with the pod, we add it to this list.
             // This creates corresponding Wants=/Before= statements in the pod service.
-            if quadlet_unit
+            // Do not add this for template units as dependency cannot be created for them.
+            if !quadlet_unit_file.is_template_unit() && quadlet_unit_file
                 .lookup_bool(section, "StartWithPod")
                 .unwrap_or(true)
             {
