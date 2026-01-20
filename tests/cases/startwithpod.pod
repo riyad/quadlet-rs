@@ -1,10 +1,18 @@
 ## depends-on startwithpod_no.container
 ## depends-on startwithpod_yes.container
+## depends-on startwithpod@.container
+## depends-on startwithpod@foo.container
 
-## assert-last-key-contains "Unit" "Wants" "startwithpod_yes.service"
-## assert-last-key-contains "Unit" "Before" "startwithpod_yes.service"
+## assert-key-contains "Unit" "Before" "startwithpod_yes.service"
+## assert-key-contains "Unit" "Wants" "startwithpod_yes.service"
 
-## !assert-last-key-contains "Unit" "Wants" "startwithpod_no.service"
-## !assert-last-key-contains "Unit" "Before" "startwithpod_no.service"
+## !assert-key-contains "Unit" "Wants" "startwithpod_no.service"
+## !assert-key-contains "Unit" "Before" "startwithpod_no.service"
+
+## !assert-key-contains "Unit" "Wants" "startwithpod@.service"
+## !assert-key-contains "Unit" "Before" "startwithpod@.service"
+
+## assert-key-contains "Unit" "Wants" "startwithpod@foo.service"
+## assert-key-contains "Unit" "Before" "startwithpod@foo.service"
 
 [Pod]
