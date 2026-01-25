@@ -139,7 +139,7 @@ impl SystemdUnitData {
         &self,
         section: &str,
         key: &str,
-    ) -> impl DoubleEndedIterator<Item = &EntryValue> {
+    ) -> impl DoubleEndedIterator<Item = &EntryValue> + use<'_> {
         self.sections
             .get(section)
             .unwrap_or_default()

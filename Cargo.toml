@@ -2,7 +2,7 @@
 name = "quadlet-rs"
 version = "0.3.0"
 authors = ["Riyad Preukschas <riyad@informatik.uni-bremen.de>"]
-edition = "2021"
+edition = "2024"
 description = "A Systemd generator that converts Podman Quadlet files to Systemd units"
 readme = "README.md"
 repository = "https://github.com/riyad/quadlet-rs"

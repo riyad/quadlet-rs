@@ -428,14 +428,17 @@ mod tests {
                 // remember global state
                 let _systemd_scope = env::var("SYSTEMD_SCOPE");
 
-                env::remove_var("SYSTEMD_SCOPE");
+                // SAFETY: test ist run serially with other tests
+                unsafe { env::remove_var("SYSTEMD_SCOPE") };
 
                 assert_eq!(CliOptions::from_systemd_env().is_user, false);
 
-                // restore global setate
+                // restore global state
                 match _systemd_scope {
-                    Ok(val) => env::set_var("SYSTEMD_SCOPE", val),
-                    Err(_) => env::remove_var("SYSTEMD_SCOPE"),
+                    // SAFETY: test ist run serially with other tests
+                    Ok(val) => unsafe { env::set_var("SYSTEMD_SCOPE", val) },
+                    // SAFETY: test ist run serially with other tests
+                    Err(_) => unsafe { env::remove_var("SYSTEMD_SCOPE") },
                 }
             }
 
@@ -445,14 +448,17 @@ mod tests {
                 // remember global state
                 let _systemd_scope = env::var("SYSTEMD_SCOPE");
 
-                env::set_var("SYSTEMD_SCOPE", "system");
+                // SAFETY: test ist run serially with other tests
+                unsafe { env::set_var("SYSTEMD_SCOPE", "system") };
 
                 assert_eq!(CliOptions::from_systemd_env().is_user, false);
 
-                // restore global setate
+                // restore global state
                 match _systemd_scope {
-                    Ok(val) => env::set_var("SYSTEMD_SCOPE", val),
-                    Err(_) => env::remove_var("SYSTEMD_SCOPE"),
+                    // SAFETY: test ist run serially with other tests
+                    Ok(val) => unsafe { env::set_var("SYSTEMD_SCOPE", val) },
+                    // SAFETY: test ist run serially with other tests
+                    Err(_) => unsafe { env::remove_var("SYSTEMD_SCOPE") },
                 }
             }
 
@@ -462,14 +468,17 @@ mod tests {
                 // remember global state
                 let _systemd_scope = env::var("SYSTEMD_SCOPE");
 
-                env::set_var("SYSTEMD_SCOPE", "user");
+                // SAFETY: test ist run serially with other tests
+                unsafe { env::set_var("SYSTEMD_SCOPE", "user") };
 
                 assert_eq!(CliOptions::from_systemd_env().is_user, true);
 
-                // restore global setate
+                // restore global state
                 match _systemd_scope {
-                    Ok(val) => env::set_var("SYSTEMD_SCOPE", val),
-                    Err(_) => env::remove_var("SYSTEMD_SCOPE"),
+                    // SAFETY: test ist run serially with other tests
+                    Ok(val) => unsafe { env::set_var("SYSTEMD_SCOPE", val) },
+                    // SAFETY: test ist run serially with other tests
+                    Err(_) => unsafe { env::remove_var("SYSTEMD_SCOPE") },
                 }
             }
 
@@ -479,14 +488,17 @@ mod tests {
                 // remember global state
                 let _systemd_log_level = env::var("SYSTEMD_LOG_LEVEL");
 
-                env::set_var("SYSTEMD_LOG_LEVEL", "foo");
+                // SAFETY: test ist run serially with other tests
+                unsafe { env::set_var("SYSTEMD_LOG_LEVEL", "foo") };
 
                 assert_eq!(CliOptions::from_systemd_env().verbose, false);
 
-                // restore global setate
+                // restore global state
                 match _systemd_log_level {
-                    Ok(val) => env::set_var("SYSTEMD_LOG_LEVEL", val),
-                    Err(_) => env::remove_var("SYSTEMD_LOG_LEVEL"),
+                    // SAFETY: test ist run serially with other tests
+                    Ok(val) => unsafe { env::set_var("SYSTEMD_LOG_LEVEL", val) },
+                    // SAFETY: test ist run serially with other tests
+                    Err(_) => unsafe { env::remove_var("SYSTEMD_LOG_LEVEL") },
                 }
             }
 
@@ -496,14 +508,17 @@ mod tests {
                 // remember global state
                 let _systemd_log_level = env::var("SYSTEMD_LOG_LEVEL");
 
-                env::set_var("SYSTEMD_LOG_LEVEL", "debug");
+                // SAFETY: test ist run serially with other tests
+                unsafe { env::set_var("SYSTEMD_LOG_LEVEL", "debug") };
 
                 assert_eq!(CliOptions::from_systemd_env().verbose, true);
 
-                // restore global setate
+                // restore global state
                 match _systemd_log_level {
-                    Ok(val) => env::set_var("SYSTEMD_LOG_LEVEL", val),
-                    Err(_) => env::remove_var("SYSTEMD_LOG_LEVEL"),
+                    // SAFETY: test ist run serially with other tests
+                    Ok(val) => unsafe { env::set_var("SYSTEMD_LOG_LEVEL", val) },
+                    // SAFETY: test ist run serially with other tests
+                    Err(_) => unsafe { env::remove_var("SYSTEMD_LOG_LEVEL") },
                 }
             }
         }

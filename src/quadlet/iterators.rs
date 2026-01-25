@@ -424,16 +424,19 @@ mod tests {
                 let _quadlet_unit_dirs = env::var("QUADLET_UNIT_DIRS");
 
                 let temp_dir = tempfile::tempdir().expect("cannot create temp dir");
-                env::set_var("QUADLET_UNIT_DIRS", temp_dir.path());
+                // SAFETY: test ist run serially with other tests
+                unsafe { env::set_var("QUADLET_UNIT_DIRS", temp_dir.path()) };
 
                 let expected = [temp_dir.path()];
 
                 assert_eq!(UnitSearchDirs::from_env().build().0, expected);
 
-                // restore global setate
+                // restore global state
                 match _quadlet_unit_dirs {
-                    Ok(val) => env::set_var("QUADLET_UNIT_DIRS", val),
-                    Err(_) => env::remove_var("QUADLET_UNIT_DIRS"),
+                    // SAFETY: test ist run serially with other tests
+                    Ok(val) => unsafe { env::set_var("QUADLET_UNIT_DIRS", val) },
+                    // SAFETY: test ist run serially with other tests
+                    Err(_) => unsafe { env::remove_var("QUADLET_UNIT_DIRS") },
                 }
             }
 
@@ -452,7 +455,8 @@ mod tests {
                 fs::create_dir(inner_dir).expect("cannot create inner dir");
                 os::unix::fs::symlink(actual_dir, symlink).expect("cannot create symlink");
 
-                env::set_var("QUADLET_UNIT_DIRS", symlink);
+                // SAFETY: test ist run serially with other tests
+                unsafe { env::set_var("QUADLET_UNIT_DIRS", symlink) };
 
                 let expected = [actual_dir.as_path(), inner_dir.as_path()];
 
@@ -461,10 +465,12 @@ mod tests {
                 // cleanup
                 fs::remove_dir_all(temp_dir.path()).expect("cannot remove temp dir");
 
-                // restore global setate
+                // restore global state
                 match _quadlet_unit_dirs {
-                    Ok(val) => env::set_var("QUADLET_UNIT_DIRS", val),
-                    Err(_) => env::remove_var("QUADLET_UNIT_DIRS"),
+                    // SAFETY: test ist run serially with other tests
+                    Ok(val) => unsafe { env::set_var("QUADLET_UNIT_DIRS", val) },
+                    // SAFETY: test ist run serially with other tests
+                    Err(_) => unsafe { env::remove_var("QUADLET_UNIT_DIRS") },
                 }
             }
         }
