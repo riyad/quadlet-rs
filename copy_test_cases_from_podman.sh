@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # create patch file with:
-#> git diff --no-index --color=always ./tests/cases.origin ./tests/cases > ./tests/cases.patch
+#> git diff --no-index ./tests/cases.origin ./tests/cases > ./tests/cases.patch
 
 podman_repo_root="./tmp/podman"
 
