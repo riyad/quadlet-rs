@@ -1306,6 +1306,10 @@ pub(crate) fn from_volume_unit<'q>(
         }
     }
 
+
+    let string_keys = [("GID", "--gid"), ("UID", "--uid")];
+    lookup_and_add_string(&volume, VOLUME_SECTION, &string_keys, &mut podman);
+
     let all_key_val_keys = [("Label", "--label")];
     lookup_and_add_all_key_vals(volume, VOLUME_SECTION, &all_key_val_keys, &mut podman);
 

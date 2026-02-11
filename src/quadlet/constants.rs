@@ -282,11 +282,12 @@ pub static UNSUPPORTED_SERVICE_KEYS: [&str; 3] = ["DynamicUser", "Group", "User"
 
 pub static SUPPORTED_SERVICE_KEYS: [&str; 1] = ["WorkingDirectory"];
 
-pub static SUPPORTED_VOLUME_KEYS: [&str; 14] = [
+pub static SUPPORTED_VOLUME_KEYS: [&str; 16] = [
     "ContainersConfModule",
     "Copy",
     "Device",
     "Driver",
+    "GID",
     "GlobalArgs",
     "Group",
     "Image",
@@ -296,6 +297,7 @@ pub static SUPPORTED_VOLUME_KEYS: [&str; 14] = [
     "ServiceName",
     "Type",
     "User",
+    "UID",
     "VolumeName",
 ];
 
