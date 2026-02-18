@@ -1178,8 +1178,11 @@ pub(crate) fn from_pod_unit<'q>(
     service.add(SERVICE_SECTION, "Environment", "PODMAN_SYSTEMD_UNIT=%n");
 
     service.add(SERVICE_SECTION, "Type", "forking");
-    service.add(SERVICE_SECTION, "Restart", "on-failure");
     service.add(SERVICE_SECTION, "PIDFile", "%t/%N.pid");
+
+    if pod.lookup(SERVICE_SECTION, "Restart").is_none() {
+        service.add(SERVICE_SECTION, "Restart", "on-failure");
+    }
 
     if let Some(unit_info) = units_info_map.get_mut_source_unit_info(pod) {
         // Store the name of the created resource

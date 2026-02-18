@@ -71,13 +71,14 @@ index 5892fe7..880c67f 100644
  ## assert-key-is "Unit" "RequiresMountsFor" "%t/containers"
  ## assert-key-is "Service" "KillMode" "mixed"
 diff --git a/./tests/cases.origin/basic.pod b/./tests/cases/basic.pod
-index 08e1049..3ff55c3 100644
+index fb2c638..3ff55c3 100644
 --- a/./tests/cases.origin/basic.pod
 +++ b/./tests/cases/basic.pod
-@@ -1,7 +1,7 @@
+@@ -1,8 +1,7 @@
  ## assert-key-is Unit RequiresMountsFor "%t/containers"
  ## assert-key-is Service Type forking
  ## assert-key-is Service SyslogIdentifier "%N"
+-## assert-key-is Service Restart on-failure
 -## assert-key-is-regex Service ExecStartPre ".*/podman pod create --infra-conmon-pidfile=%t/%N.pid --replace --exit-policy stop --infra-name systemd-basic-infra --name systemd-basic"
 +## assert-key-is-regex Service ExecStartPre ".*/podman pod create --infra-conmon-pidfile=%t/%N.pid --replace --exit-policy=stop --infra-name systemd-basic-infra --name systemd-basic"
  ## assert-key-is-regex Service ExecStart ".*/podman pod start systemd-basic"
