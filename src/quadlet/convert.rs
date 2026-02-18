@@ -152,9 +152,10 @@ pub(crate) fn from_build_unit<'q>(
     // The `--pull` flag has to be handled separately and the `=` sign must be present
     // see https://github.com/containers/podman/issues/24599
     if let Some(pull) = build.lookup(BUILD_SECTION, "Pull")
-        && !pull.is_empty() {
-            podman.add(format!("--pull={pull}"));
-        }
+        && !pull.is_empty()
+    {
+        podman.add(format!("--pull={pull}"));
+    }
 
     let string_keys = [
         ("Arch", "--arch"),
@@ -227,11 +228,11 @@ pub(crate) fn from_build_unit<'q>(
         (None, None, "") => return Err(ConversionError::NoSetWorkingDirectoryNorFileKeySpecified),
         (None, None, _) => ("", ""),
         (Some(""), None, "") => {
-            return Err(ConversionError::NoSetWorkingDirectoryNorFileKeySpecified)
+            return Err(ConversionError::NoSetWorkingDirectoryNorFileKeySpecified);
         }
         (Some(wd), None, _) => (wd, ""),
         (None, Some(""), "") => {
-            return Err(ConversionError::NoSetWorkingDirectoryNorFileKeySpecified)
+            return Err(ConversionError::NoSetWorkingDirectoryNorFileKeySpecified);
         }
         (None, Some(fp), _) => ("", fp),
         (Some(wd), Some(fp), _) => (wd, fp),
@@ -592,11 +593,12 @@ pub(crate) fn from_container_unit<'q>(
     )?;
 
     if let Some(update) = container.lookup(CONTAINER_SECTION, "AutoUpdate")
-        && !update.is_empty() {
-            let mut labels = HashMap::new();
-            labels.insert(AUTO_UPDATE_LABEL.to_string(), Some(update.to_string()));
-            podman.add_keys("--label", &labels);
-        }
+        && !update.is_empty()
+    {
+        let mut labels = HashMap::new();
+        labels.insert(AUTO_UPDATE_LABEL.to_string(), Some(update.to_string()));
+        podman.add_keys("--label", &labels);
+    }
 
     for exposed_port in container.lookup_all(CONTAINER_SECTION, "ExposeHostPort") {
         let exposed_port = exposed_port.trim(); // Allow whitespaces before and after
@@ -744,11 +746,7 @@ pub(crate) fn from_image_unit<'q>(
     handle_one_shot_service_section(&mut service, true);
 
     let podman_image_name = if let Some(image) = image.lookup(IMAGE_SECTION, "ImageTag") {
-        if !image.is_empty() {
-            image
-        } else {
-            image_name
-        }
+        if !image.is_empty() { image } else { image_name }
     } else {
         image_name
     };
@@ -838,9 +836,10 @@ pub(crate) fn from_kube_unit<'q>(
     ]);
 
     if let Some(ecp) = kube.lookup(KUBE_SECTION, "ExitCodePropagation")
-        && !ecp.is_empty() {
-            podman_start.add(format!("--service-exit-code-propagation={ecp}"));
-        }
+        && !ecp.is_empty()
+    {
+        podman_start.add(format!("--service-exit-code-propagation={ecp}"));
+    }
 
     handle_log_driver(kube, KUBE_SECTION, &mut podman_start);
     handle_log_opt(kube, KUBE_SECTION, &mut podman_start);
@@ -1278,30 +1277,32 @@ pub(crate) fn from_volume_unit<'q>(
         let device_valid = !device.is_empty();
 
         if let Some(dev_type) = volume.lookup(VOLUME_SECTION, "Type")
-            && !dev_type.is_empty() {
-                if device_valid {
-                    podman.add("--opt");
-                    podman.add(format!("type={dev_type}"));
-                    if dev_type == "bind" {
-                        service.add_raw(
-                            UNIT_SECTION,
-                            "RequiresMountsFor",
-                            quote_word(device.as_str()).as_str(),
-                        )?;
-                    }
-                } else {
-                    return Err(ConversionError::InvalidDeviceType);
+            && !dev_type.is_empty()
+        {
+            if device_valid {
+                podman.add("--opt");
+                podman.add(format!("type={dev_type}"));
+                if dev_type == "bind" {
+                    service.add_raw(
+                        UNIT_SECTION,
+                        "RequiresMountsFor",
+                        quote_word(device.as_str()).as_str(),
+                    )?;
                 }
+            } else {
+                return Err(ConversionError::InvalidDeviceType);
             }
+        }
 
         if let Some(mount_opts) = volume.lookup(VOLUME_SECTION, "Options")
-            && !mount_opts.is_empty() {
-                if device_valid {
-                    opts.push(mount_opts);
-                } else {
-                    return Err(ConversionError::InvalidDeviceOptions);
-                }
+            && !mount_opts.is_empty()
+        {
+            if device_valid {
+                opts.push(mount_opts);
+            } else {
+                return Err(ConversionError::InvalidDeviceOptions);
             }
+        }
 
         if !opts.is_empty() {
             podman.add("--opt");
@@ -1309,9 +1310,8 @@ pub(crate) fn from_volume_unit<'q>(
         }
     }
 
-
     let string_keys = [("GID", "--gid"), ("UID", "--uid")];
-    lookup_and_add_string(&volume, VOLUME_SECTION, &string_keys, &mut podman);
+    lookup_and_add_string(volume, VOLUME_SECTION, &string_keys, &mut podman);
 
     let all_key_val_keys = [("Label", "--label")];
     lookup_and_add_all_key_vals(volume, VOLUME_SECTION, &all_key_val_keys, &mut podman);
@@ -1429,10 +1429,11 @@ fn handle_health(unit_file: &SystemdUnitData, section: &str, podman: &mut Podman
 
     for key_arg in key_arg_map {
         if let Some(val) = unit_file.lookup(section, key_arg[0])
-            && !val.is_empty() {
-                podman.add(format!("--health-{}", key_arg[1]));
-                podman.add(val);
-            }
+            && !val.is_empty()
+        {
+            podman.add(format!("--health-{}", key_arg[1]));
+            podman.add(val);
+        }
     }
 }
 
@@ -1577,38 +1578,40 @@ fn handle_pod(
     podman: &mut PodmanCommand,
 ) -> Result<(), ConversionError> {
     if let Some(pod) = quadlet_unit_file.lookup(section, "Pod")
-        && !pod.is_empty() {
-            if !pod.ends_with(".pod") {
-                return Err(ConversionError::InvalidPod(pod));
-            }
+        && !pod.is_empty()
+    {
+        if !pod.ends_with(".pod") {
+            return Err(ConversionError::InvalidPod(pod));
+        }
 
-            let pod_info = units_info_map
-                .0
-                .get_mut(&OsString::from(&pod))
-                .ok_or(ConversionError::PodNotFound(pod))?;
-            podman.add("--pod");
-            podman.add(&pod_info.resource_name);
+        let pod_info = units_info_map
+            .0
+            .get_mut(&OsString::from(&pod))
+            .ok_or(ConversionError::PodNotFound(pod))?;
+        podman.add("--pod");
+        podman.add(&pod_info.resource_name);
 
-            let pod_service_name = pod_info
-                .get_service_file_name()
-                .to_str()
-                .expect("pod service name is not a valid UTF-8 string")
-                .to_string();
-            service_unit_file.add(UNIT_SECTION, "BindsTo", &pod_service_name);
-            service_unit_file.add(UNIT_SECTION, "After", &pod_service_name);
+        let pod_service_name = pod_info
+            .get_service_file_name()
+            .to_str()
+            .expect("pod service name is not a valid UTF-8 string")
+            .to_string();
+        service_unit_file.add(UNIT_SECTION, "BindsTo", &pod_service_name);
+        service_unit_file.add(UNIT_SECTION, "After", &pod_service_name);
 
-            // If we want to start the container with the pod, we add it to this list.
-            // This creates corresponding Wants=/Before= statements in the pod service.
-            // Do not add this for template units as dependency cannot be created for them.
-            if !quadlet_unit_file.is_template_unit() && quadlet_unit_file
+        // If we want to start the container with the pod, we add it to this list.
+        // This creates corresponding Wants=/Before= statements in the pod service.
+        // Do not add this for template units as dependency cannot be created for them.
+        if !quadlet_unit_file.is_template_unit()
+            && quadlet_unit_file
                 .lookup_bool(section, "StartWithPod")
                 .unwrap_or(true)
-            {
-                pod_info
-                    .containers_to_start
-                    .push(service_unit_file.path.clone());
-            }
+        {
+            pod_info
+                .containers_to_start
+                .push(service_unit_file.path.clone());
         }
+    }
     Ok(())
 }
 
@@ -1695,9 +1698,10 @@ fn handle_set_working_directory(
     if !relative_to_file.as_os_str().is_empty() && !is_url(context) {
         // If WorkingDirectory is already set in the Service section do not change it
         if let Some(working_dir) = quadlet_unit_file.lookup(SERVICE_SECTION, "WorkingDirectory")
-            && !working_dir.is_empty() {
-                return Ok(String::default());
-            }
+            && !working_dir.is_empty()
+        {
+            return Ok(String::default());
+        }
 
         let file_in_workingdir = relative_to_file.absolute_from_unit(quadlet_unit_file);
 
@@ -1845,11 +1849,12 @@ fn handle_user_mappings(
     let mut mappings_defined = false;
 
     if let Some(userns) = unit_file.lookup(section, "UserNS")
-        && !userns.is_empty() {
-            podman.add("--userns");
-            podman.add(userns);
-            mappings_defined = true;
-        }
+        && !userns.is_empty()
+    {
+        podman.add("--userns");
+        podman.add(userns);
+        mappings_defined = true;
+    }
 
     for uid_map in unit_file.lookup_all_strv(section, "UIDMap") {
         podman.add("--uidmap");
@@ -1864,18 +1869,20 @@ fn handle_user_mappings(
     }
 
     if let Some(sub_uid_map) = unit_file.lookup(section, "SubUIDMap")
-        && !sub_uid_map.is_empty() {
-            podman.add("--subuidname");
-            podman.add(sub_uid_map);
-            mappings_defined = true;
-        }
+        && !sub_uid_map.is_empty()
+    {
+        podman.add("--subuidname");
+        podman.add(sub_uid_map);
+        mappings_defined = true;
+    }
 
     if let Some(sub_gid_map) = unit_file.lookup(section, "SubGIDMap")
-        && !sub_gid_map.is_empty() {
-            podman.add("--subgidname");
-            podman.add(sub_gid_map);
-            mappings_defined = true;
-        }
+        && !sub_gid_map.is_empty()
+    {
+        podman.add("--subgidname");
+        podman.add(sub_gid_map);
+        mappings_defined = true;
+    }
 
     if mappings_defined {
         let has_remap_uid = unit_file.lookup(section, "RemapUid").is_some();
@@ -2098,7 +2105,8 @@ fn init_service_unit_file<'q>(
 
 fn is_port_range(port: &str) -> bool {
     //const PORT_RANGE_REGEX: Regex<3> = compile_regex!(r"^\d+(-\d+)?(/tcp|/udp)?$");
-    const PORT_RANGE_REGEX: Regex<3> = compile_regex!(r"^[1-9][0-9]{0,4}(-[1-9][0-9]{0,4})?(/tcp|/udp)?$");
+    const PORT_RANGE_REGEX: Regex<3> =
+        compile_regex!(r"^[1-9][0-9]{0,4}(-[1-9][0-9]{0,4})?(/tcp|/udp)?$");
     PORT_RANGE_REGEX.test(port)
 }
 
@@ -2156,10 +2164,11 @@ fn lookup_and_add_string(
 ) {
     for (key, flag) in keys {
         if let Some(val) = unit.lookup(section, key)
-            && !val.is_empty() {
-                podman.add(*flag);
-                podman.add(val);
-            }
+            && !val.is_empty()
+        {
+            podman.add(*flag);
+            podman.add(val);
+        }
     }
 }
 

@@ -57,11 +57,7 @@ impl<'a> SplitStrv<'a> {
             self.bump();
         }
 
-        if word.is_empty() {
-            None
-        } else {
-            Some(word)
-        }
+        if word.is_empty() { None } else { Some(word) }
     }
 
     fn parse_until_none_of(&mut self, end: &[char]) -> String {
@@ -169,11 +165,7 @@ impl<'a> SplitWord<'a> {
         //     // otherwise we'd have to push it onto `word`
         // }
 
-        if word.is_empty() {
-            None
-        } else {
-            Some(word)
-        }
+        if word.is_empty() { None } else { Some(word) }
     }
 
     fn parse_escape_sequence(&mut self) -> Result<char, String> {

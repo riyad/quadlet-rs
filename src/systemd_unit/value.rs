@@ -1,6 +1,6 @@
+use super::Error;
 use super::quoted::{escape_value, unescape_value};
 use super::split::{SplitStrv, SplitWord};
-use super::Error;
 use core::fmt;
 use ordered_multimap::ListOrderedMultimap;
 use std::str::FromStr;

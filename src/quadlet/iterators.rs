@@ -7,9 +7,9 @@ use std::{env, fs};
 use log::{debug, info};
 use walkdir::WalkDir;
 
+use super::RuntimeError;
 use super::constants::*;
 use super::systemd_unit::UnitSearchPaths;
-use super::RuntimeError;
 
 pub static QUADLET_UNIT_DIRS_ENV: &str = "QUADLET_UNIT_DIRS";
 
@@ -33,7 +33,7 @@ impl UnitFiles {
                     return Some(Err(RuntimeError::Io(
                         "Can't read directory entry".to_string(),
                         e,
-                    )))
+                    )));
                 }
             };
 
@@ -125,9 +125,10 @@ impl UnitSearchDirsBuilder {
 
     pub(crate) fn from_env_or_system() -> UnitSearchDirsBuilder {
         if let Ok(quadlet_unit_dirs) = env::var(QUADLET_UNIT_DIRS_ENV)
-            && !quadlet_unit_dirs.is_empty() {
-                return Self::from_env();
-            }
+            && !quadlet_unit_dirs.is_empty()
+        {
+            return Self::from_env();
+        }
 
         UnitSearchDirsBuilder {
             dirs: None,

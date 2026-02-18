@@ -288,13 +288,14 @@ fn process(cfg: CliOptions) -> Vec<RuntimeError> {
     }
 
     if !cfg.dry_run
-        && let Err(e) = fs::create_dir_all(&cfg.output_path) {
-            prev_errors.push(RuntimeError::Io(
-                format!("Can't create dir {:?}", cfg.output_path),
-                e,
-            ));
-            return prev_errors;
-        }
+        && let Err(e) = fs::create_dir_all(&cfg.output_path)
+    {
+        prev_errors.push(RuntimeError::Io(
+            format!("Can't create dir {:?}", cfg.output_path),
+            e,
+        ));
+        return prev_errors;
+    }
 
     // Key: Extension
     // Value: Processing order for resource naming dependencies

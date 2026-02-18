@@ -1,12 +1,12 @@
 use std::env;
 use std::fs::{File, OpenOptions};
-use std::io::{stderr, Write};
+use std::io::{Write, stderr};
 use std::os::unix::fs::OpenOptionsExt;
 use std::process;
-use std::sync::atomic::AtomicBool;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
 
-use log::{debug, Level, Metadata, Record};
+use log::{Level, Metadata, Record, debug};
 
 pub(crate) struct KmsgLogger {
     pub(crate) debug_enabled: bool,
@@ -27,14 +27,16 @@ impl KmsgLogger {
 
         // see https://www.freedesktop.org/software/systemd/man/devel/systemd.generator.html#Examples
         if let Ok(systed_log_level) = env::var("SYSTEMD_LOG_LEVEL")
-            && systed_log_level == "debug" {
-                kmsg_logger.debug_enabled = true;
-            }
+            && systed_log_level == "debug"
+        {
+            kmsg_logger.debug_enabled = true;
+        }
         // see https://mastodon.social/@pid_eins/113548790734704600
         if let Ok(debug_invocation_env) = env::var("DEBUG_INVOCATION")
-            && !debug_invocation_env.is_empty() {
-                kmsg_logger.debug_enabled = true;
-            }
+            && !debug_invocation_env.is_empty()
+        {
+            kmsg_logger.debug_enabled = true;
+        }
 
         kmsg_logger
     }
@@ -95,10 +97,11 @@ impl KmsgLogger {
         }
 
         if let Some(file) = kmsg_file.as_mut()
-            && file.write_all(msg.as_bytes()).is_err() {
-                *kmsg_file = None;
-                return false;
-            }
+            && file.write_all(msg.as_bytes()).is_err()
+        {
+            *kmsg_file = None;
+            return false;
+        }
 
         true
     }

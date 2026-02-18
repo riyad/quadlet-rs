@@ -138,7 +138,7 @@ impl<'a> Quoted<'a> {
                         None => {
                             return Err(Error::Unquoting(
                                 "expecting escape sequence, but found EOF.".into(),
-                            ))
+                            ));
                         }
                         // line continuation (i.e. value continues on the next line)
                         Some(_) => result.push(self.parse_escape_sequence()?),
@@ -190,7 +190,7 @@ impl<'a> Quoted<'a> {
                 c => {
                     return Err(Error::Unquoting(format!(
                         "expecting escape sequence, but found {c:?}."
-                    )))
+                    )));
                 }
             };
 
@@ -337,7 +337,7 @@ mod tests {
     }
 
     mod unquote_value {
-        use super::super::{unescape_value, Error};
+        use super::super::{Error, unescape_value};
 
         #[test]
         fn removes_outer_quotes() {

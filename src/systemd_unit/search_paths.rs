@@ -111,9 +111,10 @@ impl UnitSearchPathsBuilder {
 
     pub fn from_env_or_system(env_var_name: &str) -> Self {
         if let Ok(quadlet_unit_dirs) = env::var(env_var_name)
-            && !quadlet_unit_dirs.is_empty() {
-                return Self::from_env(env_var_name);
-            }
+            && !quadlet_unit_dirs.is_empty()
+        {
+            return Self::from_env(env_var_name);
+        }
 
         Self {
             dirs: Self::get_system_unit_paths().dirs().to_owned(),

@@ -4,11 +4,11 @@ use std::collections::HashMap;
 use std::io;
 use std::str::FromStr;
 
-use super::parser::ParseError;
-use super::parser::Parser;
 use super::Entries;
 use super::EntryValue;
 use super::SectionKey;
+use super::parser::ParseError;
+use super::parser::Parser;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SystemdUnitData {

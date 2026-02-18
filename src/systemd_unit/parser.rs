@@ -134,12 +134,12 @@ impl<'a> Parser<'a> {
             Some(c) => {
                 return Err(self.error(format!(
                     "expected '[' as start of section header, but found {c:?}"
-                )))
+                )));
             }
             None => {
                 return Err(
                     self.error("expected '[' as start of section header, but found EOF".into())
-                )
+                );
             }
         }
 
@@ -150,12 +150,12 @@ impl<'a> Parser<'a> {
             Some(c) => {
                 return Err(self.error(format!(
                     "expected ']' as end of section header, but found {c:?}"
-                )))
+                )));
             }
             None => {
                 return Err(
                     self.error("expected ']' as end of section header, but found EOF".into())
-                )
+                );
             }
         }
 

@@ -11,10 +11,10 @@ use log::debug;
 use log::warn;
 use walkdir::WalkDir;
 
+use super::INSTALL_SECTION;
 use super::path_buf_ext::PathBufExt;
 use super::path_ext::PathExt;
 use super::unit_data::SystemdUnitData;
-use super::INSTALL_SECTION;
 
 #[derive(Debug, thiserror::Error)]
 pub enum IoError {
@@ -66,16 +66,17 @@ impl SystemdUnitFile {
         // DefaultInstance is given. Otherwise we ignore the Install group, but
         // it is still useful when instantiating the unit via a symlink.
         if let Some(template_base) = template_base
-            && template_instance.is_none() {
-                if let Some(default_instance) = self.lookup(INSTALL_SECTION, "DefaultInstance") {
-                    service_name = OsString::from(format!(
-                        "{template_base}@{default_instance}.{}",
-                        self.unit_type()
-                    ));
-                } else {
-                    service_name = OsString::default();
-                }
+            && template_instance.is_none()
+        {
+            if let Some(default_instance) = self.lookup(INSTALL_SECTION, "DefaultInstance") {
+                service_name = OsString::from(format!(
+                    "{template_base}@{default_instance}.{}",
+                    self.unit_type()
+                ));
+            } else {
+                service_name = OsString::default();
             }
+        }
 
         if !service_name.is_empty() {
             symlinks.append(
@@ -149,7 +150,12 @@ impl SystemdUnitFile {
     }
 
     pub fn is_plain_unit(&self) -> bool {
-        !self.path().file_stem().unwrap_or_default().as_encoded_bytes().contains(&b'@')
+        !self
+            .path()
+            .file_stem()
+            .unwrap_or_default()
+            .as_encoded_bytes()
+            .contains(&b'@')
     }
 
     pub fn is_template_instance_unit(&self) -> bool {

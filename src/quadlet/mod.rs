@@ -56,7 +56,9 @@ pub(crate) enum ConversionError {
     InvalidKillMode(String),
     #[error("{0}")]
     InvalidMountCsv(#[from] csv::Error),
-    #[error("incorrect mount format {0:?}: should be Mount=type=<bind|glob|tmpfs|volume>,[src=<host-dir|volume-name>,]target=<ctr-dir>[,options]")]
+    #[error(
+        "incorrect mount format {0:?}: should be Mount=type=<bind|glob|tmpfs|volume>,[src=<host-dir|volume-name>,]target=<ctr-dir>[,options]"
+    )]
     InvalidMountFormat(String),
     #[error("source cannot be empty")]
     InvalidMountSource,
@@ -337,7 +339,7 @@ fn get_resource_name(quadlet_unit: &SystemdUnitFile, section: &str, key: &str) -
             .to_str()
             .unwrap()
             .to_string();
-		// By default, We want to name the resource by the service name.
+        // By default, We want to name the resource by the service name.
         if dbg!(&resource_name).contains('@') {
             resource_name.pop();
             resource_name = format!("{resource_name}-%i");
@@ -405,12 +407,8 @@ fn get_quadlet_service_name(unit: &SystemdUnitFile, section: &str, name_suffix: 
         return PathBuf::from(service_name);
     }
 
-    let mut service_file_name = quad_replace_extension(
-        Path::new(unit.path().file_name().unwrap()),
-        "",
-        "",
-        "",
-    );
+    let mut service_file_name =
+        quad_replace_extension(Path::new(unit.path().file_name().unwrap()), "", "", "");
     if service_file_name.as_os_str().as_bytes().ends_with(b"@") {
         let mut name = service_file_name.to_unwrapped_str().to_string();
         name.pop();
@@ -493,7 +491,9 @@ pub(crate) fn warn_if_ambiguous_image_name(unit: &SystemdUnitFile, section: &str
         }
         if !is_unambiguous_name(&image_name) {
             let file_name = unit.file_name();
-            warn!("{file_name:?} specifies the image {image_name:?} which not a fully qualified image name. This is not ideal for performance and security reasons. See the podman-pull manpage discussion of short-name-aliases.conf for details.");
+            warn!(
+                "{file_name:?} specifies the image {image_name:?} which not a fully qualified image name. This is not ideal for performance and security reasons. See the podman-pull manpage discussion of short-name-aliases.conf for details."
+            );
         }
     }
 }
