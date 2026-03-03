@@ -1297,11 +1297,7 @@ pub(crate) fn from_volume_unit<'q>(
         if let Some(mount_opts) = volume.lookup(VOLUME_SECTION, "Options")
             && !mount_opts.is_empty()
         {
-            if device_valid {
-                opts.push(mount_opts);
-            } else {
-                return Err(ConversionError::InvalidDeviceOptions);
-            }
+            opts.push(mount_opts);
         }
 
         if !opts.is_empty() {
