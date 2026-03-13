@@ -26,12 +26,7 @@ impl SystemdUnitData {
     }
 
     /// Appends `key=value` to last instance of `section`
-    pub fn add_raw<S, K>(
-        &mut self,
-        section: S,
-        key: K,
-        raw_value: &str,
-    ) -> Result<(), super::Error>
+    pub fn add_raw<S, K>(&mut self, section: S, key: K, raw_value: &str) -> Result<(), super::Error>
     where
         S: Into<String>,
         K: Into<String>,
@@ -94,11 +89,7 @@ impl SystemdUnitData {
     }
 
     /// Look up 'Environment' style key-value keys
-    pub fn lookup_all_key_val(
-        &self,
-        section: &str,
-        key: &str,
-    ) -> HashMap<String, Option<String>> {
+    pub fn lookup_all_key_val(&self, section: &str, key: &str) -> HashMap<String, Option<String>> {
         let all_key_vals = self.lookup_all_values(section, key);
 
         let mut res = HashMap::with_capacity(all_key_vals.len());
@@ -285,12 +276,7 @@ impl SystemdUnitData {
     }
 
     /// Updates the last ocurrence of key to value
-    pub fn set_raw<S, K>(
-        &mut self,
-        section: S,
-        key: K,
-        value: &str,
-    ) -> Result<(), super::Error>
+    pub fn set_raw<S, K>(&mut self, section: S, key: K, value: &str) -> Result<(), super::Error>
     where
         S: Into<String>,
         K: Into<String>,
@@ -1500,8 +1486,7 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
 
                 let unit = SystemdUnitData::from_str(input).unwrap();
 
-                let exec_start =
-                    unit.lookup_last_value(crate::SERVICE_SECTION, "ExecStart");
+                let exec_start = unit.lookup_last_value(crate::SERVICE_SECTION, "ExecStart");
                 assert_eq!(
                     exec_start.map(|ev| ev.raw().as_str()),
                     Some("/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'")
@@ -1529,8 +1514,7 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
 
                 let mut unit = SystemdUnitData::from_str(input).unwrap();
 
-                let exec_start =
-                    unit.lookup_last_value(crate::SERVICE_SECTION, "ExecStart");
+                let exec_start = unit.lookup_last_value(crate::SERVICE_SECTION, "ExecStart");
                 assert_eq!(
                     exec_start.map(|ev| ev.raw().as_str()),
                     Some("/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'")
@@ -1557,11 +1541,7 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
                     "/usr/bin/podman test /some/path \"an arg\" \"a;b\\nc\\td\'e\" \"a;b\\nc\\td\" \"a\\\"b\""
                 );
 
-                let _ = unit.set_raw(
-                    crate::SERVICE_SECTION,
-                    "ExecStart",
-                    new_exec_start.as_str(),
-                );
+                let _ = unit.set_raw(crate::SERVICE_SECTION, "ExecStart", new_exec_start.as_str());
 
                 let mut output = Vec::new();
                 let res = unit.write_to(&mut output);

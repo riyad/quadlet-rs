@@ -8,10 +8,10 @@ use ere::prelude::*;
 use log::debug;
 use log::warn;
 
+use convert::quad_replace_extension;
 use systemd_unit;
 use systemd_unit::PathExt;
 use systemd_unit::SystemdUnitFile;
-use convert::quad_replace_extension;
 
 pub use self::constants::*;
 pub use self::iterators::*;
