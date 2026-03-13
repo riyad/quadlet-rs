@@ -390,11 +390,17 @@ pub(crate) fn from_container_unit<'q>(
     podman.add("--cgroups");
     podman.add(cgroups_mode);
 
+    // Entrypoint needs special handling: an empty value is valid and means
+    // "clear the image entrypoint" (podman run --entrypoint ""), so it
+    // cannot go through lookupAndAddString which skips empty values.
+    if let Some(entrypoint) = container.lookup(CONTAINER_SECTION, "Entrypoint") {
+        podman.add(format!("--entrypoint={entrypoint}"));
+    }
+
     let string_keys = [
         ("Timezone", "--tz"),
         ("PidsLimit", "--pids-limit"),
         ("ShmSize", "--shm-size"),
-        ("Entrypoint", "--entrypoint"),
         ("WorkingDir", "--workdir"),
         ("IP", "--ip"),
         ("IP6", "--ip6"),
