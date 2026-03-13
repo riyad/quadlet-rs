@@ -63,3 +63,33 @@ impl PodmanCommand {
         quote_words(self.args.iter().map(|s| s.as_str()))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod podman_command {
+        use super::*;
+
+        mod to_escaped_string {
+            use super::*;
+            use systemd_unit::EntryValue;
+
+            #[test]
+            fn with_word_splitting_and_setting_constructed_command() {
+                let input = "/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
+                let exec_start = EntryValue::from_raw(input);
+
+                let mut command = PodmanCommand::new();
+                command.add("test");
+                command.extend(exec_start.split_words().into_iter());
+
+                let new_exec_start = command.to_escaped_string();
+                assert_eq!(
+                    new_exec_start,
+                    "/usr/bin/podman test /some/path \"an arg\" \"a;b\\nc\\td\'e\" \"a;b\\nc\\td\" \"a\\\"b\""
+                );
+            }
+        }
+    }
+}
