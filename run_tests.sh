@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#cargo test
+#cargo test --workspace
 cargo build --verbose && ./tests/testcase-runner.py ./tests/cases "${CARGO_TARGET_DIR:-.}/debug/quadlet-rs"
 
 ### run tests on selected cases
