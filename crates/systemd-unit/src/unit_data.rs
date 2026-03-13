@@ -12,12 +12,12 @@ use super::parser::Parser;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SystemdUnitData {
-    pub(crate) sections: ListOrderedMultimap<SectionKey, Entries>,
+    pub sections: ListOrderedMultimap<SectionKey, Entries>,
 }
 
 impl SystemdUnitData {
     /// Appends `key=value` to last instance of `section`
-    pub(crate) fn add<S, K>(&mut self, section: S, key: K, value: &str)
+    pub fn add<S, K>(&mut self, section: S, key: K, value: &str)
     where
         S: Into<String>,
         K: Into<String>,
@@ -26,7 +26,7 @@ impl SystemdUnitData {
     }
 
     /// Appends `key=value` to last instance of `section`
-    pub(crate) fn add_raw<S, K>(
+    pub fn add_raw<S, K>(
         &mut self,
         section: S,
         key: K,
@@ -54,14 +54,14 @@ impl SystemdUnitData {
             .append(key, value);
     }
 
-    pub(crate) fn has_key(&self, section: &str, key: &str) -> bool {
+    pub fn has_key(&self, section: &str, key: &str) -> bool {
         self.sections
             .get(section)
             .is_some_and(|e| e.data.contains_key(key))
     }
 
     /// Retrun `true` if there's an (non-empty) instance of section `name`
-    pub(crate) fn has_section(&self, name: &str) -> bool {
+    pub fn has_section(&self, name: &str) -> bool {
         self.sections.contains_key(name)
     }
 
@@ -79,14 +79,14 @@ impl SystemdUnitData {
     }
 
     /// Get an interator of values for all `key`s in all instances of `section`
-    pub(crate) fn lookup_all(&self, section: &str, key: &str) -> Vec<String> {
+    pub fn lookup_all(&self, section: &str, key: &str) -> Vec<String> {
         self.lookup_all_values(section, key)
             .iter()
             .map(|v| v.unquote())
             .collect()
     }
 
-    pub(crate) fn lookup_all_args(&self, section: &str, key: &str) -> Vec<String> {
+    pub fn lookup_all_args(&self, section: &str, key: &str) -> Vec<String> {
         self.lookup_all_values(section, key)
             .iter()
             .flat_map(|v| v.split_words())
@@ -94,7 +94,7 @@ impl SystemdUnitData {
     }
 
     /// Look up 'Environment' style key-value keys
-    pub(crate) fn lookup_all_key_val(
+    pub fn lookup_all_key_val(
         &self,
         section: &str,
         key: &str,
@@ -116,7 +116,7 @@ impl SystemdUnitData {
         res
     }
 
-    pub(crate) fn lookup_all_strv(&self, section: &str, key: &str) -> Vec<String> {
+    pub fn lookup_all_strv(&self, section: &str, key: &str) -> Vec<String> {
         self.lookup_all_values(section, key)
             .iter()
             .flat_map(|v| v.split_strv())
@@ -125,7 +125,7 @@ impl SystemdUnitData {
 
     /// Get a Vec of values for all `key`s in all instances of `section`
     /// This mimics quadlet's behavior in that empty values reset the list.
-    pub(crate) fn lookup_all_values(&self, section: &str, key: &str) -> Vec<&EntryValue> {
+    pub fn lookup_all_values(&self, section: &str, key: &str) -> Vec<&EntryValue> {
         let values = self.lookup_all_values_raw(section, key);
 
         // size_hint.0 is not optimal, but may prevent forseeable growing
@@ -141,7 +141,7 @@ impl SystemdUnitData {
     }
 
     /// Get an interator of values for all `key`s in all instances of `section`
-    pub(crate) fn lookup_all_values_raw(
+    pub fn lookup_all_values_raw(
         &self,
         section: &str,
         key: &str,
@@ -153,11 +153,11 @@ impl SystemdUnitData {
             .get_all(key)
     }
 
-    pub(crate) fn lookup(&self, section: &str, key: &str) -> Option<String> {
+    pub fn lookup(&self, section: &str, key: &str) -> Option<String> {
         self.lookup_last(section, key)
     }
 
-    pub(crate) fn lookup_bool(&self, section: &str, key: &str) -> Option<bool> {
+    pub fn lookup_bool(&self, section: &str, key: &str) -> Option<bool> {
         self.lookup_last_value(section, key)
             .map(|v| v.to_bool().unwrap_or(false))
     }
@@ -168,14 +168,14 @@ impl SystemdUnitData {
     //TODO: lookup_gid()
 
     // Get the last value for `key` in all instances of `section`
-    pub(crate) fn lookup_last(&self, section: &str, key: &str) -> Option<String> {
+    pub fn lookup_last(&self, section: &str, key: &str) -> Option<String> {
         self.lookup_last_value(section, key).map(|v| v.unquote())
     }
 
     // TODO: lookup_last_args()
 
     // Get the last value for `key` in all instances of `section`
-    pub(crate) fn lookup_last_value(&self, section: &str, key: &str) -> Option<&EntryValue> {
+    pub fn lookup_last_value(&self, section: &str, key: &str) -> Option<&EntryValue> {
         self.sections
             .get(section)
             .unwrap_or_default()
@@ -184,13 +184,13 @@ impl SystemdUnitData {
             .next_back()
     }
 
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         SystemdUnitData {
             sections: Default::default(),
         }
     }
 
-    pub(crate) fn merge_from(&mut self, other: &SystemdUnitData) {
+    pub fn merge_from(&mut self, other: &SystemdUnitData) {
         for (section, entries) in other.sections.iter() {
             for (key, value) in entries.data.iter() {
                 self.add_entry_value(section.clone(), key.clone(), value.clone());
@@ -199,7 +199,7 @@ impl SystemdUnitData {
     }
 
     /// Prepends `key=value` to last instance of `section`
-    pub(crate) fn prepend<S, K>(&mut self, section: S, key: K, value: &str)
+    pub fn prepend<S, K>(&mut self, section: S, key: K, value: &str)
     where
         S: Into<String>,
         K: Into<String>,
@@ -220,7 +220,7 @@ impl SystemdUnitData {
         }
     }
 
-    pub(crate) fn remove_entries(&mut self, section: &str, key: &str) {
+    pub fn remove_entries(&mut self, section: &str, key: &str) {
         self.sections
             .entry(section.into())
             .or_insert_entry(Entries::default())
@@ -229,11 +229,11 @@ impl SystemdUnitData {
             .remove(key);
     }
 
-    pub(crate) fn remove_section(&mut self, section: &str) {
+    pub fn remove_section(&mut self, section: &str) {
         self.sections.remove_all(section);
     }
 
-    pub(crate) fn rename_section<S: Into<String>>(&mut self, from: S, to: S) {
+    pub fn rename_section<S: Into<String>>(&mut self, from: S, to: S) {
         let from_key = from.into();
 
         if !self.sections.contains_key(&from_key) {
@@ -255,7 +255,7 @@ impl SystemdUnitData {
             .extend(from_aggregated_data);
     }
 
-    pub(crate) fn section_entries<S: Into<String>>(
+    pub fn section_entries<S: Into<String>>(
         &self,
         name: S,
     ) -> impl DoubleEndedIterator<Item = (&str, String)> {
@@ -263,7 +263,7 @@ impl SystemdUnitData {
             .map(|(k, v)| (k, v.unquote()))
     }
 
-    pub(crate) fn section_entry_values<S: Into<String>>(
+    pub fn section_entry_values<S: Into<String>>(
         &self,
         name: S,
     ) -> impl DoubleEndedIterator<Item = (&str, &EntryValue)> {
@@ -276,7 +276,7 @@ impl SystemdUnitData {
     }
 
     /// Updates the last ocurrence of key to value
-    pub(crate) fn set<S, K>(&mut self, section: S, key: K, value: &str)
+    pub fn set<S, K>(&mut self, section: S, key: K, value: &str)
     where
         S: Into<String>,
         K: Into<String>,
@@ -285,7 +285,7 @@ impl SystemdUnitData {
     }
 
     /// Updates the last ocurrence of key to value
-    pub(crate) fn set_raw<S, K>(
+    pub fn set_raw<S, K>(
         &mut self,
         section: S,
         key: K,
@@ -319,7 +319,7 @@ impl SystemdUnitData {
     }
 
     /// Write to a writer
-    pub(crate) fn write_to<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
+    pub fn write_to<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
         for (section, entries) in &self.sections {
             writeln!(writer, "[{section}]")?;
             for (k, v) in &entries.data {
@@ -460,7 +460,7 @@ KeyOne=value 2.1";
         }
 
         mod from_str {
-            use crate::systemd_unit::Error;
+            use crate::Error;
 
             use super::*;
 
@@ -1500,7 +1500,7 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
                 let unit = SystemdUnitData::from_str(input).unwrap();
 
                 let exec_start =
-                    unit.lookup_last_value(crate::systemd_unit::SERVICE_SECTION, "ExecStart");
+                    unit.lookup_last_value(crate::SERVICE_SECTION, "ExecStart");
                 assert_eq!(
                     exec_start.map(|ev| ev.raw().as_str()),
                     Some("/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'")
@@ -1523,7 +1523,7 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
 
             #[test]
             fn with_word_splitting_and_setting_constructed_command() {
-                use crate::quadlet::podman_command::PodmanCommand;
+                use quadlet::podman_command::PodmanCommand;
 
                 let input = "[Service]
 ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
@@ -1531,7 +1531,7 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
                 let mut unit = SystemdUnitData::from_str(input).unwrap();
 
                 let exec_start =
-                    unit.lookup_last_value(crate::systemd_unit::SERVICE_SECTION, "ExecStart");
+                    unit.lookup_last_value(crate::SERVICE_SECTION, "ExecStart");
                 assert_eq!(
                     exec_start.map(|ev| ev.raw().as_str()),
                     Some("/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'")
@@ -1561,7 +1561,7 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
                 );
 
                 let _ = unit.set_raw(
-                    crate::systemd_unit::SERVICE_SECTION,
+                    crate::SERVICE_SECTION,
                     "ExecStart",
                     new_exec_start.as_str(),
                 );

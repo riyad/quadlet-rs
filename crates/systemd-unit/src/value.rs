@@ -7,8 +7,8 @@ use std::str::FromStr;
 use std::sync::OnceLock;
 
 #[derive(Clone, Debug, Default, PartialEq)]
-pub(crate) struct Entries {
-    pub(crate) data: ListOrderedMultimap<EntryKey, EntryValue>,
+pub struct Entries {
+    pub data: ListOrderedMultimap<EntryKey, EntryValue>,
 }
 
 impl Default for &Entries {
@@ -18,9 +18,9 @@ impl Default for &Entries {
     }
 }
 
-pub(crate) type EntryKey = String;
+pub type EntryKey = String;
 
-pub(crate) type EntryRawValue = String;
+pub type EntryRawValue = String;
 
 #[derive(Clone, Default, Debug, PartialEq)]
 pub struct EntryValue(EntryRawValue);
@@ -34,7 +34,7 @@ impl EntryValue {
         Self(escape_value(unquoted))
     }
 
-    pub(crate) fn raw(&self) -> &String {
+    pub fn raw(&self) -> &String {
         &self.0
     }
 
@@ -103,7 +103,7 @@ impl fmt::Display for EntryValue {
     }
 }
 
-pub(crate) type SectionKey = String;
+pub type SectionKey = String;
 
 fn parse_bool(s: &str) -> Result<bool, Error> {
     if ["1", "yes", "true", "on"].contains(&s) {

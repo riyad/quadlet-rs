@@ -1,22 +1,22 @@
 use std::collections::HashMap;
 
-use crate::systemd_unit::quote_words;
+use systemd_unit::quote_words;
 
 use super::get_podman_binary;
 
-pub(crate) struct PodmanCommand {
-    pub(crate) args: Vec<String>,
+pub struct PodmanCommand {
+    pub args: Vec<String>,
 }
 
 impl PodmanCommand {
-    pub(crate) fn add<S>(&mut self, arg: S)
+    pub fn add<S>(&mut self, arg: S)
     where
         S: Into<String>,
     {
         self.args.push(arg.into());
     }
 
-    pub(crate) fn add_bool<S>(&mut self, arg: S, val: bool)
+    pub fn add_bool<S>(&mut self, arg: S, val: bool)
     where
         S: Into<String>,
     {
@@ -27,7 +27,7 @@ impl PodmanCommand {
         }
     }
 
-    pub(crate) fn add_keys(&mut self, prefix: &str, env: &HashMap<String, Option<String>>) {
+    pub fn add_keys(&mut self, prefix: &str, env: &HashMap<String, Option<String>>) {
         for (key, value) in env {
             self.add(prefix);
             if let Some(value) = value {
@@ -38,28 +38,28 @@ impl PodmanCommand {
         }
     }
 
-    pub(crate) fn add_slice(&mut self, args: &[&str]) {
+    pub fn add_slice(&mut self, args: &[&str]) {
         self.args.reserve(args.len());
         for arg in args {
             self.args.push(arg.to_string())
         }
     }
 
-    pub(crate) fn extend<I>(&mut self, args: I)
+    pub fn extend<I>(&mut self, args: I)
     where
         I: IntoIterator<Item = String>,
     {
         self.args.extend(args);
     }
 
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         let mut v = Vec::with_capacity(10);
         v.push(get_podman_binary());
 
         PodmanCommand { args: v }
     }
 
-    pub(crate) fn to_escaped_string(&self) -> String {
+    pub fn to_escaped_string(&self) -> String {
         quote_words(self.args.iter().map(|s| s.as_str()))
     }
 }

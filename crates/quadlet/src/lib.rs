@@ -1,20 +1,20 @@
 mod constants;
-pub(crate) mod convert;
+pub mod convert;
 pub mod iterators;
-pub(crate) mod logger;
-pub(crate) mod podman_command;
+pub mod logger;
+pub mod podman_command;
 
 use ere::prelude::*;
 use log::debug;
 use log::warn;
 
-use crate::systemd_unit;
-use crate::systemd_unit::PathExt;
-use crate::systemd_unit::SystemdUnitFile;
+use systemd_unit;
+use systemd_unit::PathExt;
+use systemd_unit::SystemdUnitFile;
 use convert::quad_replace_extension;
 
-pub(crate) use self::constants::*;
-pub(crate) use self::iterators::*;
+pub use self::constants::*;
+pub use self::iterators::*;
 
 use std::collections::HashMap;
 use std::env;
@@ -25,10 +25,33 @@ use std::io::{BufWriter, Write};
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 
+#[derive(Debug, Default, PartialEq)]
+pub struct CliOptions {
+    pub dry_run: bool,
+    pub is_user: bool,
+    pub no_kmsg: bool,
+    pub output_path: PathBuf,
+    pub verbose: bool,
+    pub version: bool,
+}
+
+impl CliOptions {
+    pub fn from_systemd_env() -> Self {
+        Self {
+            dry_run: false,
+            is_user: env::var("SYSTEMD_SCOPE").is_ok_and(|scope| scope == "user"),
+            no_kmsg: false,
+            output_path: PathBuf::new(),
+            verbose: env::var("SYSTEMD_LOG_LEVEL").is_ok_and(|log_level| log_level == "debug"),
+            version: false,
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
-pub(crate) enum RuntimeError {
+pub enum RuntimeError {
     #[error("Missing output directory argument")]
-    CliMissingOutputDirectory(crate::CliOptions),
+    CliMissingOutputDirectory(CliOptions),
     #[error("{0}: {1}")]
     Io(String, #[source] io::Error),
     #[error("{0}: {1}")]
@@ -37,7 +60,7 @@ pub(crate) enum RuntimeError {
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
-pub(crate) enum ConversionError {
+pub enum ConversionError {
     #[error("requested Quadlet image {0:?} was not found")]
     ImageNotFound(String),
     #[error("internal error while processing {0} {1:?}")]
@@ -121,7 +144,7 @@ impl From<systemd_unit::IoError> for ConversionError {
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[non_exhaustive]
-pub(crate) enum QuadletType {
+pub enum QuadletType {
     Artifact,
     Build,
     Container,
@@ -133,7 +156,7 @@ pub(crate) enum QuadletType {
 }
 
 impl QuadletType {
-    pub(crate) fn from_path(path: &Path) -> Result<QuadletType, ConversionError> {
+    pub fn from_path(path: &Path) -> Result<QuadletType, ConversionError> {
         match path
             .extension()
             .map(|e| e.to_str().unwrap_or_default())
@@ -153,22 +176,22 @@ impl QuadletType {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct QuadletSourceUnitFile {
-    pub(crate) unit_file: SystemdUnitFile,
-    pub(crate) quadlet_type: QuadletType,
+pub struct QuadletSourceUnitFile {
+    pub unit_file: SystemdUnitFile,
+    pub quadlet_type: QuadletType,
 
     // The name of the generated systemd service unit
-    pub(crate) service_name: String,
+    pub service_name: String,
     // The name of the podman resource created by the service
-    pub(crate) resource_name: String,
+    pub resource_name: String,
 
     // For .pod units
     // List of containers to start with the pod
-    pub(crate) containers_to_start: Vec<PathBuf>,
+    pub containers_to_start: Vec<PathBuf>,
 }
 
 impl QuadletSourceUnitFile {
-    pub(crate) fn from_unit_file(
+    pub fn from_unit_file(
         unit_file: SystemdUnitFile,
     ) -> Result<QuadletSourceUnitFile, ConversionError> {
         let quadlet_type = QuadletType::from_path(unit_file.path())?;
@@ -227,7 +250,7 @@ impl QuadletSourceUnitFile {
         })
     }
 
-    pub(crate) fn get_service_file_name(&self) -> OsString {
+    pub fn get_service_file_name(&self) -> OsString {
         PathBuf::from(format!("{}.service", self.service_name))
             .file_name()
             .expect("should have a file name")
@@ -236,15 +259,15 @@ impl QuadletSourceUnitFile {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct QuadletServiceUnitFile<'q> {
-    pub(crate) quadlet: &'q QuadletSourceUnitFile,
+pub struct QuadletServiceUnitFile<'q> {
+    pub quadlet: &'q QuadletSourceUnitFile,
 
     // The generated systemd service unit
-    pub(crate) service_file: SystemdUnitFile,
+    pub service_file: SystemdUnitFile,
 }
 
 impl QuadletServiceUnitFile<'_> {
-    pub(crate) fn generate_service_file(&self) -> io::Result<()> {
+    pub fn generate_service_file(&self) -> io::Result<()> {
         let out_filename = self.service_file.path();
 
         debug!("Writing {out_filename:?}");
@@ -262,10 +285,10 @@ impl QuadletServiceUnitFile<'_> {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct UnitsInfoMap(HashMap<OsString, QuadletSourceUnitFile>);
+pub struct UnitsInfoMap(HashMap<OsString, QuadletSourceUnitFile>);
 
 impl UnitsInfoMap {
-    pub(crate) fn from_quadlet_units(quadlet_units: Vec<QuadletSourceUnitFile>) -> UnitsInfoMap {
+    pub fn from_quadlet_units(quadlet_units: Vec<QuadletSourceUnitFile>) -> UnitsInfoMap {
         let mut units_info_map = UnitsInfoMap::default();
 
         for quadlet in quadlet_units {
@@ -277,14 +300,14 @@ impl UnitsInfoMap {
         units_info_map
     }
 
-    pub(crate) fn get_source_unit_info(
+    pub fn get_source_unit_info(
         &self,
         quadlet: &SystemdUnitFile,
     ) -> Option<&QuadletSourceUnitFile> {
         self.0.get(quadlet.file_name())
     }
 
-    pub(crate) fn get_mut_source_unit_info(
+    pub fn get_mut_source_unit_info(
         &mut self,
         quadlet: &SystemdUnitFile,
     ) -> Option<&mut QuadletSourceUnitFile> {
@@ -483,7 +506,7 @@ fn is_url(maybe_url: &str) -> bool {
 //
 // We implement a simple version of this from scratch here to avoid
 // a huge dependency in the generator just for a warning.
-pub(crate) fn warn_if_ambiguous_image_name(unit: &SystemdUnitFile, section: &str) {
+pub fn warn_if_ambiguous_image_name(unit: &SystemdUnitFile, section: &str) {
     if let Some(image_name) = unit.lookup_last(section, "Image") {
         let unit_path_extension = unit.path().extension().unwrap_or_default();
         if unit_path_extension == "build" || unit_path_extension == "image" {

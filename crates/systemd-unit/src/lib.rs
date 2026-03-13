@@ -16,7 +16,7 @@ pub use self::quoted::{quote_word, quote_words};
 pub use self::search_paths::*;
 pub use self::unit_data::*;
 pub use self::unit_file::*;
-pub(crate) use self::value::*;
+pub use self::value::*;
 
 // TODO: mimic https://doc.rust-lang.org/std/num/enum.IntErrorKind.html
 #[derive(Debug, PartialEq, thiserror::Error)]

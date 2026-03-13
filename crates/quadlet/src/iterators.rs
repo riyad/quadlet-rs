@@ -9,11 +9,11 @@ use walkdir::WalkDir;
 
 use super::RuntimeError;
 use super::constants::*;
-use super::systemd_unit::UnitSearchPaths;
+use systemd_unit::UnitSearchPaths;
 
 pub static QUADLET_UNIT_DIRS_ENV: &str = "QUADLET_UNIT_DIRS";
 
-pub(crate) struct UnitFiles {
+pub struct UnitFiles {
     inner: Box<dyn Iterator<Item = Result<fs::DirEntry, RuntimeError>>>,
 }
 
@@ -62,7 +62,7 @@ impl Iterator for UnitFiles {
 }
 
 #[derive(Default)]
-pub(crate) struct UnitSearchDirsBuilder {
+pub struct UnitSearchDirsBuilder {
     dirs: Option<Vec<PathBuf>>,
     rootless: bool,
 }
@@ -70,7 +70,7 @@ pub(crate) struct UnitSearchDirsBuilder {
 type FilterFn = dyn Fn(&walkdir::DirEntry, bool) -> bool;
 
 impl UnitSearchDirsBuilder {
-    pub(crate) fn build(mut self) -> UnitSearchPaths {
+    pub fn build(mut self) -> UnitSearchPaths {
         if let Some(dirs) = self.dirs.take() {
             self.build_from_dirs(dirs)
         } else {
@@ -78,7 +78,7 @@ impl UnitSearchDirsBuilder {
         }
     }
 
-    pub(crate) fn build_from_dirs(self, dirs: Vec<PathBuf>) -> UnitSearchPaths {
+    pub fn build_from_dirs(self, dirs: Vec<PathBuf>) -> UnitSearchPaths {
         UnitSearchPaths::new(
             dirs.into_iter()
                 .filter(|p| {
@@ -94,7 +94,7 @@ impl UnitSearchDirsBuilder {
         )
     }
 
-    pub(crate) fn build_from_system(self) -> UnitSearchPaths {
+    pub fn build_from_system(self) -> UnitSearchPaths {
         let resolved_unit_dir_admin_user = Self::resolve_unit_dir_admin_user();
         let user_level_filter = get_user_level_filter_func(resolved_unit_dir_admin_user.clone());
 
@@ -113,7 +113,7 @@ impl UnitSearchDirsBuilder {
         UnitSearchPaths::new(self.get_root_dirs(&user_level_filter))
     }
 
-    pub(crate) fn from_env() -> UnitSearchDirsBuilder {
+    pub fn from_env() -> UnitSearchDirsBuilder {
         UnitSearchDirsBuilder {
             // Allow overdiding source dir, this is mainly for the CI tests
             dirs: env::var(QUADLET_UNIT_DIRS_ENV)
@@ -123,7 +123,7 @@ impl UnitSearchDirsBuilder {
         }
     }
 
-    pub(crate) fn from_env_or_system() -> UnitSearchDirsBuilder {
+    pub fn from_env_or_system() -> UnitSearchDirsBuilder {
         if let Ok(quadlet_unit_dirs) = env::var(QUADLET_UNIT_DIRS_ENV)
             && !quadlet_unit_dirs.is_empty()
         {
@@ -190,7 +190,7 @@ impl UnitSearchDirsBuilder {
         }
     }
 
-    pub(crate) fn rootless(mut self, rootless: bool) -> Self {
+    pub fn rootless(mut self, rootless: bool) -> Self {
         self.rootless = rootless;
         self
     }
@@ -309,7 +309,7 @@ fn get_user_level_filter_func(
     })
 }
 
-pub(crate) struct UnitSearchDirsIterator<'a> {
+pub struct UnitSearchDirsIterator<'a> {
     inner: std::slice::Iter<'a, PathBuf>,
 }
 

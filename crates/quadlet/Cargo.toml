@@ -1,0 +1,23 @@
+[package]
+name = "quadlet"
+version = "0.3.0"
+authors = ["Riyad Preukschas <riyad@informatik.uni-bremen.de>"]
+edition = "2024"
+description = "Quadlet conversion engine for Podman Quadlet files"
+license = "MPL-2.0"
+
+[dependencies]
+systemd-unit = { path = "../systemd-unit" }
+csv = { version = "1.3", default-features = false }
+dirs = { version = "6.0", default-features = false }
+ere = "0.2.4"
+log = { version = "0.4.22", features = ['std'] }
+thiserror = { version = "2.0.1", default-features = false }
+users = { version = "0.11", default-features = false }
+walkdir = { version = "2", default-features = false }
+
+[dev-dependencies]
+serial_test = { version = "*", default-features = false, features = [
+  "logging",
+] }
+tempfile = { version = "3.12.0", default-features = false }

@@ -2,7 +2,7 @@ use std::env;
 use std::path::{Component, Path, PathBuf};
 
 use super::path_ext::PathExt;
-use crate::systemd_unit::SystemdUnitFile;
+use super::unit_file::SystemdUnitFile;
 
 pub trait PathBufExt<T> {
     fn absolute_from(&self, new_root: &Path) -> T;

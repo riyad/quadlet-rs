@@ -1,3 +1,11 @@
+[workspace]
+members = [
+    ".",
+    "crates/systemd-unit",
+    "crates/quadlet",
+]
+resolver = "2"
+
 [package]
 name = "quadlet-rs"
 version = "0.3.0"
@@ -17,20 +25,14 @@ default = []
 log = []
 
 [dependencies]
-csv = { version = "1.3", default-features = false }
-dirs = { version = "6.0", default-features = false }
-ere = "0.2.4"
+quadlet = { path = "crates/quadlet" }
+systemd-unit = { path = "crates/systemd-unit" }
 log = { version = "0.4.22", features = ['std'] }
-ordered-multimap = "0.7"
-thiserror = { version = "2.0.1", default-features = false }
-users = { version = "0.11", default-features = false }
-walkdir = { version = "2", default-features = false }
 
 [dev-dependencies]
 serial_test = { version = "*", default-features = false, features = [
   "logging",
 ] } # ignore `async` and `futures`
-tempfile = { version = "3.12.0", default-features = false }
 
 # optimize with tips from https://github.com/johnthagen/min-sized-rust
 [profile.release]

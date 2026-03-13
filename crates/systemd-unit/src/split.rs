@@ -19,7 +19,7 @@ impl<'a> SplitStrv<'a> {
         self.c = self.chars.next();
     }
 
-    pub(crate) fn new(src: &'a str) -> Self {
+    pub fn new(src: &'a str) -> Self {
         let mut s = Self {
             chars: src.chars(),
             c: None,
@@ -106,7 +106,7 @@ impl<'a> SplitWord<'a> {
         self.c = self.chars.next();
     }
 
-    pub(crate) fn new(src: &'a str) -> Self {
+    pub fn new(src: &'a str) -> Self {
         let mut s = Self {
             chars: src.chars(),
             c: None,

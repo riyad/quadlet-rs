@@ -261,19 +261,29 @@ dependencies = [
 ]
 
 [[package]]
-name = "quadlet-rs"
+name = "quadlet"
 version = "0.3.0"
 dependencies = [
  "csv",
  "dirs",
  "ere",
  "log",
- "ordered-multimap",
  "serial_test",
+ "systemd-unit",
  "tempfile",
  "thiserror",
  "users",
  "walkdir",
+]
+
+[[package]]
+name = "quadlet-rs"
+version = "0.3.0"
+dependencies = [
+ "log",
+ "quadlet",
+ "serial_test",
+ "systemd-unit",
 ]
 
 [[package]]
@@ -413,6 +423,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "systemd-unit"
+version = "0.3.0"
+dependencies = [
+ "log",
+ "ordered-multimap",
+ "quadlet",
+ "serial_test",
+ "tempfile",
+ "thiserror",
+ "walkdir",
 ]
 
 [[package]]

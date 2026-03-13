@@ -8,13 +8,13 @@ type ParseResult<T> = Result<T, ParseError>;
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 #[error("{line}:{col} {msg}")]
 pub struct ParseError {
-    pub(crate) line: usize,
-    pub(crate) col: usize,
-    pub(crate) msg: String,
+    pub line: usize,
+    pub col: usize,
+    pub msg: String,
 }
 
 #[derive(Debug)]
-pub(crate) struct Parser<'a> {
+pub struct Parser<'a> {
     cur: Option<char>,
     buf: Chars<'a>,
     line: usize,
@@ -56,7 +56,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub(crate) fn parse(&mut self) -> ParseResult<SystemdUnitData> {
+    pub fn parse(&mut self) -> ParseResult<SystemdUnitData> {
         self.parse_unit()
     }
 

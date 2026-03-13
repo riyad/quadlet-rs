@@ -8,16 +8,16 @@ use std::sync::atomic::AtomicBool;
 
 use log::{Level, Metadata, Record, debug};
 
-pub(crate) struct KmsgLogger {
-    pub(crate) debug_enabled: bool,
-    pub(crate) dry_run: bool,
+pub struct KmsgLogger {
+    pub debug_enabled: bool,
+    pub dry_run: bool,
     kmsg_file: Mutex<Option<File>>,
-    pub(crate) kmsg_enabled: AtomicBool,
+    pub kmsg_enabled: AtomicBool,
 }
 
 impl KmsgLogger {
     // Honor Systemd telling us to use DEBUG log level
-    pub(crate) fn from_systemd_env() -> Self {
+    pub fn from_systemd_env() -> Self {
         let mut kmsg_logger = Self {
             debug_enabled: false,
             dry_run: false,
@@ -41,7 +41,7 @@ impl KmsgLogger {
         kmsg_logger
     }
 
-    pub(crate) fn init(self) -> Result<(), log::SetLoggerError> {
+    pub fn init(self) -> Result<(), log::SetLoggerError> {
         let max_log_level = if self.debug_enabled {
             log::LevelFilter::Debug
         } else {

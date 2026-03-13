@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-use crate::systemd_unit::*;
+use systemd_unit::*;
 
 use super::constants::*;
 use super::podman_command::PodmanCommand;
@@ -63,7 +63,7 @@ fn find_mount_type(input: &str) -> Result<(String, Vec<String>), ConversionError
     Ok((mount_type, tokens))
 }
 
-pub(crate) fn from_artifact_unit<'q>(
+pub fn from_artifact_unit<'q>(
     artifact_source: &'q QuadletSourceUnitFile,
     units_info_map: &mut UnitsInfoMap,
     is_user: bool,
@@ -125,7 +125,7 @@ pub(crate) fn from_artifact_unit<'q>(
     Ok(quadlet_service)
 }
 
-pub(crate) fn from_build_unit<'q>(
+pub fn from_build_unit<'q>(
     build_source: &'q QuadletSourceUnitFile,
     units_info_map: &mut UnitsInfoMap,
     is_user: bool,
@@ -274,7 +274,7 @@ pub(crate) fn from_build_unit<'q>(
 // Convert a quadlet container file (unit file with a Container group) to a systemd
 // service file (unit file with Service group) based on the options in the Container group.
 // The original Container group is kept around as X-Container.
-pub(crate) fn from_container_unit<'q>(
+pub fn from_container_unit<'q>(
     container_source: &'q QuadletSourceUnitFile,
     units_info_map: &mut UnitsInfoMap,
     is_user: bool,
@@ -693,7 +693,7 @@ pub(crate) fn from_container_unit<'q>(
     Ok(quadlet_service)
 }
 
-pub(crate) fn from_image_unit<'q>(
+pub fn from_image_unit<'q>(
     image_source: &'q QuadletSourceUnitFile,
     units_info_map: &mut UnitsInfoMap,
     is_user: bool,
@@ -766,7 +766,7 @@ pub(crate) fn from_image_unit<'q>(
     Ok(quadlet_service)
 }
 
-pub(crate) fn from_kube_unit<'q>(
+pub fn from_kube_unit<'q>(
     kube_source: &'q QuadletSourceUnitFile,
     units_info_map: &mut UnitsInfoMap,
     is_user: bool,
@@ -935,7 +935,7 @@ pub(crate) fn from_kube_unit<'q>(
 // The original Network group is kept around as X-Network.
 // Also returns the canonical network name, either auto-generated or user-defined via the
 // NetworkName key-value.
-pub(crate) fn from_network_unit<'q>(
+pub fn from_network_unit<'q>(
     network_source: &'q QuadletSourceUnitFile,
     units_info_map: &mut UnitsInfoMap,
     is_user: bool,
@@ -1044,7 +1044,7 @@ pub(crate) fn from_network_unit<'q>(
     Ok(quadlet_service)
 }
 
-pub(crate) fn from_pod_unit<'q>(
+pub fn from_pod_unit<'q>(
     pod_source: &'q QuadletSourceUnitFile,
     units_info_map: &mut UnitsInfoMap,
     is_user: bool,
@@ -1204,7 +1204,7 @@ pub(crate) fn from_pod_unit<'q>(
 // The original Volume group is kept around as X-Volume.
 // Also returns the canonical volume name, either auto-generated or user-defined via the VolumeName
 // key-value.
-pub(crate) fn from_volume_unit<'q>(
+pub fn from_volume_unit<'q>(
     volume_source: &'q QuadletSourceUnitFile,
     units_info_map: &mut UnitsInfoMap,
     is_user: bool,
@@ -2174,7 +2174,7 @@ fn lookup_and_add_string(
     }
 }
 
-pub(crate) fn quad_replace_extension(
+pub fn quad_replace_extension(
     file: &Path,
     new_extension: &str,
     extra_prefix: &str,

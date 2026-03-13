@@ -26,7 +26,7 @@ pub enum IoError {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SystemdUnitFile {
-    pub(crate) path: PathBuf,
+    pub path: PathBuf,
     data: SystemdUnitData,
 }
 

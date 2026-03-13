@@ -1,12 +1,9 @@
-mod quadlet;
-mod systemd_unit;
-
 use log::{debug, error};
 
-use self::quadlet::logger::*;
-use self::quadlet::*;
+use quadlet::logger::*;
+use quadlet::*;
 
-use self::systemd_unit::*;
+use systemd_unit::*;
 
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
@@ -16,33 +13,10 @@ use std::ffi::OsString;
 use std::fs;
 use std::io;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process;
 
 static QUADLET_VERSION: &str = "0.3.0-dev";
-
-#[derive(Debug, Default, PartialEq)]
-pub(crate) struct CliOptions {
-    dry_run: bool,
-    is_user: bool,
-    no_kmsg: bool,
-    output_path: PathBuf,
-    verbose: bool,
-    version: bool,
-}
-
-impl CliOptions {
-    fn from_systemd_env() -> Self {
-        Self {
-            dry_run: false,
-            is_user: env::var("SYSTEMD_SCOPE").is_ok_and(|scope| scope == "user"),
-            no_kmsg: false,
-            output_path: PathBuf::new(),
-            verbose: env::var("SYSTEMD_LOG_LEVEL").is_ok_and(|log_level| log_level == "debug"),
-            version: false,
-        }
-    }
-}
 
 fn help() {
     println!(
@@ -405,10 +379,10 @@ fn convert<'q>(
         QuadletType::Volume => {
             warn_if_ambiguous_image_name(&quadlet.unit_file, VOLUME_SECTION);
             convert::from_volume_unit(quadlet, units_info_map, is_user)
-        } // _ => {
-          //     warn!("Unsupported file type {:?}", unit.path());
-          //     continue;
-          // }
+        }
+        _ => Err(ConversionError::UnsupportedQuadletType(
+            quadlet.unit_file.path().to_path_buf(),
+        )),
     }
 }
 
