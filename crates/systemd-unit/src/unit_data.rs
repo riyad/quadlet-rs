@@ -1491,6 +1491,7 @@ KeyOne=value 3";
 
         mod round_trip {
             use super::*;
+            use crate::quote_words;
 
             #[test]
             fn read_write_round_trip_without_modifications() {
@@ -1523,8 +1524,6 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
 
             #[test]
             fn with_word_splitting_and_setting_constructed_command() {
-                use quadlet::podman_command::PodmanCommand;
-
                 let input = "[Service]
 ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
 
@@ -1550,11 +1549,9 @@ ExecStart=/some/path \"an arg\" \"a;b\\nc\\td\'e\" a;b\\nc\\td \'a\"b\'";
                 assert_eq!(split.next(), Some(&"a\"b".into()));
                 assert_eq!(split.next(), None);
 
-                let mut command = PodmanCommand::new();
-                command.add("test");
-                command.extend(split_words.into_iter());
-
-                let new_exec_start = command.to_escaped_string();
+                let mut new_exec_start = quote_words(["/usr/bin/podman", "test"].into_iter());
+                new_exec_start.push(' ');
+                new_exec_start.push_str(&quote_words(split_words.iter().map(String::as_str)));
                 assert_eq!(
                     new_exec_start,
                     "/usr/bin/podman test /some/path \"an arg\" \"a;b\\nc\\td\'e\" \"a;b\\nc\\td\" \"a\\\"b\""
