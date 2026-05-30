@@ -65,6 +65,11 @@ impl SystemdUnitData {
         self.sections.keys_len()
     }
 
+    /// true when there not sections defined or all sections are empty
+    pub fn is_empty(&self) -> bool {
+        self.sections.iter().all(|(_k, v)| v.data.is_empty())
+    }
+
     /// Load from a string
     pub fn parse(data: &str) -> Result<Self, ParseError> {
         let mut parser = Parser::new(data);
@@ -539,6 +544,70 @@ KeyOne=value 1
                 let unit = SystemdUnitData::parse(input).unwrap();
 
                 assert!(!unit.has_section("foo"));
+            }
+        }
+
+        mod is_empty {
+            use super::*;
+
+            #[test]
+            fn with_empty_file() {
+                let input = "";
+
+                let unit = SystemdUnitData::parse(input).unwrap();
+
+                assert!(unit.is_empty());
+            }
+
+            #[test]
+            fn with_non_empty_sections() {
+                let input = "[Section A]
+KeyOne=value 1
+[section B]
+KeyTwo=value 2";
+
+                let unit = SystemdUnitData::parse(input).unwrap();
+
+                assert!(!unit.is_empty());
+            }
+
+            #[test]
+            fn with_empty_sections() {
+                let input = "[Section A]
+
+[Section B]";
+
+                let unit = SystemdUnitData::parse(input).unwrap();
+
+                assert!(unit.is_empty());
+            }
+
+            #[test]
+            fn repeated_empty_sections_are_not_counted() {
+                let input = "[Section A]
+[Section A]
+[Section B]
+[Section A]
+[Section C]
+[Section B]";
+
+                let unit = SystemdUnitData::parse(input).unwrap();
+
+                assert!(unit.is_empty());
+            }
+
+            #[test]
+            fn one_value_among_multiple_empty_sections() {
+                let input = "[Section A]
+[Section A]
+KeyOne=value 1
+[Section B]
+[Section B]
+[Section A]";
+
+                let unit = SystemdUnitData::parse(input).unwrap();
+
+                assert!(!unit.is_empty());
             }
         }
 
