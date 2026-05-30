@@ -5,6 +5,20 @@ authors = ["Riyad Preukschas <riyad@informatik.uni-bremen.de>"]
 edition = "2024"
 description = "Quadlet conversion engine for Podman Quadlet files"
 license = "MPL-2.0"
+keywords = ["containers", "podman", "quadlet", "systemd"]
+categories = ["command-line-utilities", "config", "parser-implementations"]
+
+[features]
+default = []
+log = []
+
+[[bin]]
+name = "quadlet-rs"
+path = "main.rs"
+doc = false
+
+[lib]
+path = "lib.rs"
 
 [dependencies]
 systemd-unit = { workspace = true }
@@ -17,5 +31,5 @@ users = { workspace = true }
 walkdir = { workspace = true }
 
 [dev-dependencies]
-serial_test = { workspace = true }
+serial_test = { workspace = true }  # ignore `async` and `futures`
 tempfile = { workspace = true }

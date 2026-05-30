@@ -5,6 +5,11 @@ authors = ["Riyad Preukschas <riyad@informatik.uni-bremen.de>"]
 edition = "2024"
 description = "Systemd unit file parser"
 license = "MPL-2.0"
+keywords = ["systemd"]
+categories = ["config", "parser-implementations"]
+
+[lib]
+path = "lib.rs"
 
 [features]
 log = []
