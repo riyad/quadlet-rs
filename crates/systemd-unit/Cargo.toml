@@ -10,11 +10,11 @@ license = "MPL-2.0"
 log = []
 
 [dependencies]
-log = { version = "0.4.22", features = ['std'] }
-ordered-multimap = "0.7"
-thiserror = { version = "2.0.1", default-features = false }
-walkdir = { version = "2", default-features = false }
+log = { workspace = true }
+ordered-multimap = { workspace = true }
+thiserror = { workspace = true }
+walkdir = { workspace = true }
 
 [dev-dependencies]
-serial_test = { version = "*", default-features = false, features = ["logging"] }
-tempfile = { version = "3.12.0", default-features = false }
+serial_test = { workspace = true }
+tempfile = { workspace = true }
