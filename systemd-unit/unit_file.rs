@@ -11,18 +11,12 @@ use log::debug;
 use log::warn;
 use walkdir::WalkDir;
 
+use crate::{Error, IoError};
+
 use super::INSTALL_SECTION;
 use super::path_buf_ext::PathBufExt;
 use super::path_ext::PathExt;
 use super::unit_data::SystemdUnitData;
-
-#[derive(Debug, thiserror::Error)]
-pub enum IoError {
-    #[error("{0}")]
-    Io(#[from] io::Error),
-    #[error("{0}")]
-    Unit(#[from] super::Error),
-}
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SystemdUnitFile {
@@ -171,7 +165,7 @@ impl SystemdUnitFile {
 
         Ok(SystemdUnitFile {
             path: path.into(),
-            data: SystemdUnitData::parse(buf.as_str()).map_err(super::Error::Unit)?,
+            data: SystemdUnitData::parse(buf.as_str()).map_err(Error::Unit)?,
         })
     }
 
