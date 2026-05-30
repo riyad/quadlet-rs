@@ -83,8 +83,8 @@ pub enum ConversionError {
         "incorrect mount format {0:?}: should be Mount=type=<bind|glob|tmpfs|volume>,[src=<host-dir|volume-name>,]target=<ctr-dir>[,options]"
     )]
     InvalidMountFormat(String),
-    #[error("source cannot be empty")]
-    InvalidMountSource,
+    #[error("source parameter is required for mount type {0}")]
+    InvalidMountSourceRequiredForMountType(String),
     #[error("extra options are not supported when joining another container's network")]
     InvalidNetworkOptions,
     #[error("pod {0:?} is not Quadlet based")]
@@ -115,6 +115,8 @@ pub enum ConversionError {
     NoFileKeySpecified,
     #[error("neither SetWorkingDirectory, nor File key specified")]
     NoSetWorkingDirectoryNorFileKeySpecified,
+    #[error("source cannot be empty")]
+    NoMountSourceSpecified,
     #[error("no Yaml key specified")]
     NoYamlKeySpecified,
     #[error("failed parsing unit file: {0}")]

@@ -1772,7 +1772,11 @@ fn handle_storage_source(
 ) -> Result<String, ConversionError> {
     let mut source = match source {
         Some(source) => source.to_owned(),
-        None => return Err(ConversionError::InvalidMountSource),
+        None => {
+            return Err(ConversionError::InvalidMountFormat(
+                "source cannot be empty".to_string(),
+            ));
+        }
     };
 
     if source.starts_with('.') {
@@ -2214,7 +2218,7 @@ fn resolve_container_mount_params(
             if let Some((_k, v)) = token.split_once('=') {
                 original_source = Some(v);
             } else {
-                return Err(ConversionError::InvalidMountSource);
+                unreachable!()
             }
         } else {
             // we're only interested in the mount source
@@ -2223,14 +2227,20 @@ fn resolve_container_mount_params(
         }
     }
 
-    let resolved_source = handle_storage_source(
-        container_unit_file,
-        service_unit_file,
-        original_source,
-        units_info_map,
-        true,
-    )?;
-    csv_writer.write_field(format!("source={resolved_source}"))?;
+    if original_source.is_some() {
+        let resolved_source = handle_storage_source(
+            container_unit_file,
+            service_unit_file,
+            original_source,
+            units_info_map,
+            true,
+        )?;
+        csv_writer.write_field(format!("source={resolved_source}"))?;
+    } else if mount_type != "volume" {
+        return Err(ConversionError::InvalidMountSourceRequiredForMountType(
+            mount_type,
+        ));
+    }
 
     // NOTE: we explicitly don't call `csv_writer.write_record()` in order to prevent '\n' to be added to the line
 
