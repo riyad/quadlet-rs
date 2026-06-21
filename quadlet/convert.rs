@@ -411,6 +411,7 @@ pub fn from_container_unit<'q>(
         ("Memory", "--memory"),
         ("Retry", "--retry"),
         ("RetryDelay", "--retry-delay"),
+        ("ImageVolume", "--image-volume"),
     ];
     lookup_and_add_string(container, CONTAINER_SECTION, &string_keys, &mut podman);
 

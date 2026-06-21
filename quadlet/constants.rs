@@ -86,7 +86,7 @@ pub static SUPPORTED_BUILD_KEYS: [&str; 28] = [
     "Volume",
 ];
 
-pub static SUPPORTED_CONTAINER_KEYS: [&str; 91] = [
+pub static SUPPORTED_CONTAINER_KEYS: [&str; 92] = [
     "AddCapability",
     "AddDevice",
     "AddHost",
@@ -124,6 +124,7 @@ pub static SUPPORTED_CONTAINER_KEYS: [&str; 91] = [
     "HostName",
     "HttpProxy",
     "Image",
+    "ImageVolume",
     "IP",
     "IP6",
     "Label",
