@@ -80,6 +80,7 @@ impl UnitSearchPaths {
 
 pub struct UnitSearchPathsBuilder {
     dirs: Vec<PathBuf>,
+    recursive: bool,
 }
 
 impl UnitSearchPathsBuilder {
@@ -94,7 +95,7 @@ impl UnitSearchPathsBuilder {
                     }
                     p.is_absolute()
                 })
-                .flat_map(Self::subdirs_for_search_dir)
+                .flat_map(|path| Self::subdirs_for_search_dir(path, self.recursive))
                 .collect(),
         )
     }
@@ -106,6 +107,7 @@ impl UnitSearchPathsBuilder {
                 .ok()
                 .map(|unit_dirs_env| env::split_paths(&unit_dirs_env).collect())
                 .unwrap_or_default(),
+            recursive: true,
         }
     }
 
@@ -118,6 +120,7 @@ impl UnitSearchPathsBuilder {
 
         Self {
             dirs: Self::get_system_unit_paths().dirs().to_owned(),
+            recursive: true,
         }
     }
 
@@ -151,11 +154,16 @@ impl UnitSearchPathsBuilder {
         )
     }
 
-    fn new(dirs: Vec<PathBuf>) -> Self {
-        Self { dirs }
+    fn new(dirs: Vec<PathBuf>, recursive: bool) -> Self {
+        Self { dirs, recursive }
     }
 
-    fn subdirs_for_search_dir(path: PathBuf) -> Vec<PathBuf> {
+    pub fn recursive(mut self, recursive: bool) -> Self {
+        self.recursive = recursive;
+        self
+    }
+
+    fn subdirs_for_search_dir(path: PathBuf, recursive: bool) -> Vec<PathBuf> {
         let path = if path.is_symlink() {
             match path.read_link() {
                 Ok(path) => path,
@@ -178,7 +186,12 @@ impl UnitSearchPathsBuilder {
             return dirs;
         }
 
+        // Add the current directory
         dirs.push(path.clone());
+
+        if !recursive {
+            return dirs;
+        }
 
         for entry in fs::read_dir(&path).expect("cannot access search directory") {
             match entry {
@@ -235,7 +248,10 @@ mod tests {
                 let expected: Vec<PathBuf> = vec![];
 
                 let dirs = vec![PathBuf::from("./foo/bar")];
-                assert_eq!(UnitSearchPathsBuilder::new(dirs).build().dirs(), &expected)
+                assert_eq!(
+                    UnitSearchPathsBuilder::new(dirs, true).build().dirs(),
+                    &expected
+                )
             }
 
             #[test]
@@ -253,7 +269,10 @@ mod tests {
                 let expected = [actual_dir.as_path(), inner_dir.as_path()];
 
                 let dirs = vec![symlink];
-                assert_eq!(UnitSearchPathsBuilder::new(dirs).build().dirs(), &expected);
+                assert_eq!(
+                    UnitSearchPathsBuilder::new(dirs, true).build().dirs(),
+                    &expected
+                );
 
                 // cleanup
                 fs::remove_dir_all(temp_dir.path()).expect("cannot remove temp dir");
@@ -274,7 +293,31 @@ mod tests {
                 let expected = vec![actual_dir.as_path(), inner_dir.as_path()];
 
                 let dirs = vec![actual_dir.to_owned()];
-                assert_eq!(UnitSearchPathsBuilder::new(dirs).build().dirs(), &expected)
+                assert_eq!(
+                    UnitSearchPathsBuilder::new(dirs, true).build().dirs(),
+                    &expected
+                )
+            }
+
+            #[test]
+            #[serial_test::parallel]
+            fn should_not_recurse_beyond_search_dirs() {
+                // setup
+                let temp_dir = tempfile::tempdir().expect("cannot create temp dir");
+                let actual_dir = temp_dir.path().join("actual");
+                let inner_dir = temp_dir.path().join("actual/inner");
+                let ignored_dir = temp_dir.path().join("actual/inner/ignored");
+                fs::create_dir(&actual_dir).expect("cannot create actual dir");
+                fs::create_dir(&inner_dir).expect("cannot create inner dir");
+                fs::create_dir(&ignored_dir).expect("cannot create inner dir");
+
+                let dirs = vec![actual_dir.to_owned()];
+                let expected = dirs.clone();
+
+                assert_eq!(
+                    UnitSearchPathsBuilder::new(dirs, false).build().dirs(),
+                    &expected
+                )
             }
         }
 
@@ -336,8 +379,10 @@ mod tests {
                 let dirs = vec![temp_dir.path().into()];
 
                 let expected = [temp_dir.path()];
+                let builder = UnitSearchPathsBuilder::new(dirs, true);
 
-                assert_eq!(UnitSearchPathsBuilder::new(dirs).dirs, &expected);
+                assert_eq!(builder.dirs, &expected);
+                assert!(builder.recursive);
             }
         }
 
