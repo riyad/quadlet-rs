@@ -177,19 +177,17 @@ impl SystemdUnitFile {
 
         let mut dropin_dirs: Vec<PathBuf> = Vec::new();
 
+        let mut unit_dropin_dir_name = self.file_name().to_os_string();
+        unit_dropin_dir_name.push(".d");
         for source_path in &source_paths {
-            let mut unit_dropin_dir = self.path().as_os_str().to_os_string();
-            unit_dropin_dir.push(".d");
-            dropin_dirs.push(source_path.join(unit_dropin_dir));
+            dropin_dirs.push(source_path.join(&unit_dropin_dir_name));
         }
 
         // For instantiated templates, also look in the non-instanced template dropin dirs
         if let (Some(template_base), Some(_)) = self.path().file_name_template_parts() {
+            let template_dropin_dir_name = format!("{template_base}@.{}.d", self.unit_type());
             for source_path in &source_paths {
-                let template_dropin_dir = self
-                    .path()
-                    .with_file_name(format!("{template_base}@.{}.d", self.unit_type()));
-                dropin_dirs.push(source_path.join(template_dropin_dir));
+                dropin_dirs.push(source_path.join(&template_dropin_dir_name));
             }
         }
 
@@ -451,6 +449,333 @@ mod tests {
             };
 
             assert!(!unit_file.is_template_unit());
+        }
+    }
+
+    mod load_dropins_from {
+        use super::*;
+        use tempfile::tempdir;
+
+        #[test]
+        fn with_no_source_paths_does_nothing() {
+            let mut unit_file = SystemdUnitFile {
+                path: PathBuf::from("foo.container"),
+                ..Default::default()
+            };
+            unit_file.add("Container", "Image", "example.com/image");
+
+            let result = unit_file.load_dropins_from(std::iter::empty::<&Path>());
+
+            assert!(result.is_ok());
+            assert_eq!(
+                unit_file.lookup("Container", "Image"),
+                Some("example.com/image".to_string())
+            );
+        }
+
+        #[test]
+        fn with_missing_dropin_dir_returns_ok() {
+            let source_dir = tempdir().expect("cannot create temp dir");
+
+            let mut unit_file = SystemdUnitFile {
+                path: PathBuf::from("foo.container"),
+                ..Default::default()
+            };
+
+            let result = unit_file.load_dropins_from([source_dir.path()]);
+
+            assert!(result.is_ok());
+            assert!(unit_file.is_empty());
+        }
+
+        #[test]
+        fn loads_single_dropin_conf_file() {
+            let source_dir = tempdir().expect("cannot create temp dir");
+            let dropin_dir = source_dir.path().join("foo.container.d");
+            fs::create_dir_all(&dropin_dir).expect("cannot create dropin dir");
+            fs::write(
+                dropin_dir.join("10-override.conf"),
+                "[Container]\nImage=example.com/image\n",
+            )
+            .expect("cannot write dropin file");
+
+            let mut unit_file = SystemdUnitFile {
+                path: PathBuf::from("foo.container"),
+                ..Default::default()
+            };
+
+            let result = unit_file.load_dropins_from([source_dir.path()]);
+
+            assert!(result.is_ok());
+            assert_eq!(
+                unit_file.lookup("Container", "Image"),
+                Some("example.com/image".to_string())
+            );
+        }
+
+        #[test]
+        fn ignores_files_without_conf_extension() {
+            let source_dir = tempdir().expect("cannot create temp dir");
+            let dropin_dir = source_dir.path().join("foo.container.d");
+            fs::create_dir_all(&dropin_dir).expect("cannot create dropin dir");
+            fs::write(
+                dropin_dir.join("10-override.txt"),
+                "[Container]\nImage=example.com/image\n",
+            )
+            .expect("cannot write dropin file");
+
+            let mut unit_file = SystemdUnitFile {
+                path: PathBuf::from("foo.container"),
+                ..Default::default()
+            };
+
+            let result = unit_file.load_dropins_from([source_dir.path()]);
+
+            assert!(result.is_ok());
+            assert!(unit_file.is_empty());
+        }
+
+        #[test]
+        fn merges_multiple_dropins_in_alphanumeric_order() {
+            let source_dir = tempdir().expect("cannot create temp dir");
+            let dropin_dir = source_dir.path().join("foo.container.d");
+            fs::create_dir_all(&dropin_dir).expect("cannot create dropin dir");
+            fs::write(
+                dropin_dir.join("10-first.conf"),
+                "[Container]\nImage=first\n",
+            )
+            .expect("cannot write dropin file");
+            fs::write(
+                dropin_dir.join("20-second.conf"),
+                "[Container]\nImage=second\n",
+            )
+            .expect("cannot write dropin file");
+
+            let mut unit_file = SystemdUnitFile {
+                path: PathBuf::from("foo.container"),
+                ..Default::default()
+            };
+
+            let result = unit_file.load_dropins_from([source_dir.path()]);
+
+            assert!(result.is_ok());
+            // entries are merged in, not overwritten
+            assert_eq!(
+                unit_file.lookup_all("Container", "Image"),
+                vec!["first", "second"]
+            );
+            // last merged-in value wins for single-value lookups
+            assert_eq!(
+                unit_file.lookup("Container", "Image"),
+                Some("second".to_string())
+            );
+        }
+
+        #[test]
+        fn first_source_path_wins_for_a_dropin_filename_present_in_multiple_source_paths() {
+            // Same as how a higher-priority unit search dir masks a whole unit
+            // file of the same name in a lower-priority dir, a drop-in file
+            // masks a same-named drop-in file from a lower-priority source
+            // path; it does not get merged in as well.
+            let source_dir1 = tempdir().expect("cannot create temp dir");
+            let source_dir2 = tempdir().expect("cannot create temp dir");
+            let dropin_dir1 = source_dir1.path().join("foo.container.d");
+            let dropin_dir2 = source_dir2.path().join("foo.container.d");
+            fs::create_dir_all(&dropin_dir1).expect("cannot create dropin dir");
+            fs::create_dir_all(&dropin_dir2).expect("cannot create dropin dir");
+            fs::write(
+                dropin_dir1.join("10-override.conf"),
+                "[Container]\nImage=from-dir1\n",
+            )
+            .expect("cannot write dropin file");
+            fs::write(
+                dropin_dir2.join("10-override.conf"),
+                "[Container]\nImage=from-dir2\n",
+            )
+            .expect("cannot write dropin file");
+
+            let mut unit_file = SystemdUnitFile {
+                path: PathBuf::from("foo.container"),
+                ..Default::default()
+            };
+
+            let result = unit_file.load_dropins_from([source_dir1.path(), source_dir2.path()]);
+
+            assert!(result.is_ok());
+            assert_eq!(
+                unit_file.lookup_all("Container", "Image"),
+                vec!["from-dir1"]
+            );
+        }
+
+        #[test]
+        fn instantiated_template_unit_also_loads_generic_template_dropin_dir() {
+            let source_dir = tempdir().expect("cannot create temp dir");
+            let generic_dropin_dir = source_dir.path().join("foo@.container.d");
+            fs::create_dir_all(&generic_dropin_dir).expect("cannot create dropin dir");
+            fs::write(
+                generic_dropin_dir.join("10-override.conf"),
+                "[Container]\nImage=generic\n",
+            )
+            .expect("cannot write dropin file");
+
+            let mut unit_file = SystemdUnitFile {
+                path: PathBuf::from("foo@bar.container"),
+                ..Default::default()
+            };
+
+            let result = unit_file.load_dropins_from([source_dir.path()]);
+
+            assert!(result.is_ok());
+            assert_eq!(
+                unit_file.lookup("Container", "Image"),
+                Some("generic".to_string())
+            );
+        }
+
+        #[test]
+        fn instance_specific_dropin_takes_precedence_over_generic_template_dropin() {
+            let source_dir = tempdir().expect("cannot create temp dir");
+            let instance_dropin_dir = source_dir.path().join("foo@bar.container.d");
+            let generic_dropin_dir = source_dir.path().join("foo@.container.d");
+            fs::create_dir_all(&instance_dropin_dir).expect("cannot create dropin dir");
+            fs::create_dir_all(&generic_dropin_dir).expect("cannot create dropin dir");
+            fs::write(
+                instance_dropin_dir.join("10-override.conf"),
+                "[Container]\nImage=instance\n",
+            )
+            .expect("cannot write dropin file");
+            fs::write(
+                generic_dropin_dir.join("10-override.conf"),
+                "[Container]\nImage=generic\n",
+            )
+            .expect("cannot write dropin file");
+
+            let mut unit_file = SystemdUnitFile {
+                path: PathBuf::from("foo@bar.container"),
+                ..Default::default()
+            };
+
+            let result = unit_file.load_dropins_from([source_dir.path()]);
+
+            assert!(result.is_ok());
+            assert_eq!(
+                unit_file.lookup("Container", "Image"),
+                Some("instance".to_string())
+            );
+            assert_eq!(unit_file.lookup_all("Container", "Image"), vec!["instance"]);
+        }
+
+        #[test]
+        fn instance_specific_dropin_ignores_other_instances_dropins() {
+            let source_dir = tempdir().expect("cannot create temp dir");
+            let instance_dropin_dir = source_dir.path().join("foo@bar.container.d");
+            let other_instance_dropin_dir = source_dir.path().join("foo@other.container.d");
+            fs::create_dir_all(&instance_dropin_dir).expect("cannot create dropin dir");
+            fs::create_dir_all(&other_instance_dropin_dir).expect("cannot create dropin dir");
+            fs::write(
+                instance_dropin_dir.join("10-override.conf"),
+                "[Container]\nImage=instance\n",
+            )
+            .expect("cannot write dropin file");
+            fs::write(
+                other_instance_dropin_dir.join("10-override.conf"),
+                "[Container]\nImage=other\n",
+            )
+            .expect("cannot write dropin file");
+
+            let mut unit_file = SystemdUnitFile {
+                path: PathBuf::from("foo@bar.container"),
+                ..Default::default()
+            };
+
+            let result = unit_file.load_dropins_from([source_dir.path()]);
+
+            assert!(result.is_ok());
+            assert_eq!(unit_file.lookup_all("Container", "Image"), vec!["instance"]);
+        }
+
+        #[test]
+        fn non_template_unit_does_not_check_template_dropin_dirs() {
+            let source_dir = tempdir().expect("cannot create temp dir");
+            let generic_dropin_dir = source_dir.path().join("foo@.container.d");
+            fs::create_dir_all(&generic_dropin_dir).expect("cannot create dropin dir");
+            fs::write(
+                generic_dropin_dir.join("10-override.conf"),
+                "[Container]\nImage=generic\n",
+            )
+            .expect("cannot write dropin file");
+
+            let mut unit_file = SystemdUnitFile {
+                path: PathBuf::from("foo.container"),
+                ..Default::default()
+            };
+
+            let result = unit_file.load_dropins_from([source_dir.path()]);
+
+            assert!(result.is_ok());
+            assert!(unit_file.is_empty());
+        }
+
+        #[test]
+        fn returns_error_for_invalid_dropin_file() {
+            let source_dir = tempdir().expect("cannot create temp dir");
+            let dropin_dir = source_dir.path().join("foo.container.d");
+            fs::create_dir_all(&dropin_dir).expect("cannot create dropin dir");
+            fs::write(
+                dropin_dir.join("10-broken.conf"),
+                // `Key_One` is not a legal key (underscores are not allowed)
+                "[Container]\nKey_One=value\n",
+            )
+            .expect("cannot write dropin file");
+
+            let mut unit_file = SystemdUnitFile {
+                path: PathBuf::from("foo.container"),
+                ..Default::default()
+            };
+
+            let result = unit_file.load_dropins_from([source_dir.path()]);
+
+            assert!(matches!(result, Err(IoError::Unit(_))));
+        }
+
+        #[test]
+        fn with_absolute_unit_path_still_searches_dropin_dirs_in_every_source_path() {
+            let root = tempdir().expect("cannot create temp dir");
+            let source_dir1 = root.path().join("dir1");
+            let source_dir2 = root.path().join("dir2");
+            fs::create_dir_all(&source_dir1).expect("cannot create source dir");
+            fs::create_dir_all(&source_dir2).expect("cannot create source dir");
+
+            let dropin_dir1 = source_dir1.join("foo.container.d");
+            let dropin_dir2 = source_dir2.join("foo.container.d");
+            fs::create_dir_all(&dropin_dir1).expect("cannot create dropin dir");
+            fs::create_dir_all(&dropin_dir2).expect("cannot create dropin dir");
+            fs::write(
+                dropin_dir1.join("10-first.conf"),
+                "[Container]\nImage=from-dir1\n",
+            )
+            .expect("cannot write dropin file");
+            fs::write(
+                dropin_dir2.join("20-second.conf"),
+                "[Container]\nImage=from-dir2\n",
+            )
+            .expect("cannot write dropin file");
+
+            // the unit file itself lives in a third, unrelated directory
+            let mut unit_file = SystemdUnitFile {
+                path: root.path().join("elsewhere").join("foo.container"),
+                ..Default::default()
+            };
+
+            let result =
+                unit_file.load_dropins_from([source_dir1.as_path(), source_dir2.as_path()]);
+
+            assert!(result.is_ok());
+            assert_eq!(
+                unit_file.lookup_all("Container", "Image"),
+                vec!["from-dir1", "from-dir2"]
+            );
         }
     }
 
